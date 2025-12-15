@@ -11,7 +11,9 @@ requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Your Name", email = "you@example.com" }]
 
-dependencies = ["pluggy>=1.4"]
+dependencies = [
+    "pluggy>=1.4",
+]
 
 [tool.setuptools]
 packages = ["plugins", "plugins.plugin1", "plugins.plugin2"]
