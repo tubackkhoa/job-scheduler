@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alpha-miner-plugins"
+version = "0.1.0"
+description = "Plugins for alpha-miner using pluggy"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Your Name", email = "you@example.com" }]
+
+dependencies = ["pluggy>=1.4"]
+
+[tool.setuptools]
+packages = ["plugins", "plugins.plugin1", "plugins.plugin2"]
+
+[tool.setuptools.package-dir]
+"" = "."
