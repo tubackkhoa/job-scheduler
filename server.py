@@ -1,5 +1,6 @@
 import importlib
-from fastapi import FastAPI
+from fastapi import FastAPI, Body
+from fastapi.middleware.cors import CORSMiddleware
 import pluggy
 
 
@@ -19,6 +20,10 @@ class MySpec:
 
     @hookspec
     def schema(self):
+        pass
+
+    @hookspec
+    def config(self):
         pass
 
     @hookspec
@@ -58,8 +63,32 @@ pm.check_pending()
 
 app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/plugins")
+def plugins():    
+    return [plugin_item["package"] + '.' + plugin_item["name"] for plugin_item in plugin_data]
+
 @app.get("/schema/{name}")
 def schema(name:str):    
     module_instance = pm.get_plugin(name)
     if module_instance != None:
-        return module_instance.schema()
+        return {
+            "schema": module_instance.schema(),
+            "data": module_instance.config(),
+        }
+
+@app.post("/config/{name}")
+async def run_plugin(name: str, payload: dict = Body(...)):
+    plugin = pm.get_plugin(name)
+    if not plugin:
+        return {"error": "Plugin not found"}
+
+    result = plugin.migrate(payload)
+    return result

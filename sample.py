@@ -17,7 +17,11 @@ class MySpec:
         pass
 
     @hookspec
-    async def schema(self):
+    def schema(self):
+        pass
+
+    @hookspec
+    def config(self):
         pass
 
     @hookspec
