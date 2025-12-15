@@ -1,6 +1,7 @@
-import asyncio
 import importlib
+from fastapi import FastAPI
 import pluggy
+
 
 PROJECT_NAME = "alpha-miner"
 
@@ -17,7 +18,7 @@ class MySpec:
         pass
 
     @hookspec
-    async def schema(self):
+    def schema(self):
         pass
 
     @hookspec
@@ -55,15 +56,10 @@ for plugin_item in plugin_data:
 # validate implementation
 pm.check_pending()
 
-plugin1_instance = pm.get_plugin("plugins.plugin1.Plugin1")
-if plugin1_instance != None:
-    # migrate config if version is change, for example mapping field from old_fields to new_fields
-    plugin1_instance.migrate({"version":"1.0.1"})
+app = FastAPI()
 
-
-async def main():    
-    results = await asyncio.gather(*pm.hook.run())
-    print(results)
-
-
-asyncio.run(main())
+@app.get("/schema/{name}")
+def schema(name:str):    
+    module_instance = pm.get_plugin(name)
+    if module_instance != None:
+        return module_instance.schema()
