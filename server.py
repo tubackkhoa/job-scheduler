@@ -1,5 +1,4 @@
 import importlib
-import abc
 from typing import Any
 from fastapi import FastAPI, Body
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,32 +10,21 @@ PROJECT_NAME = "alpha-miner"
 hookspec = pluggy.HookspecMarker(PROJECT_NAME)
 
 
-class MySpec(abc.ABC):
+class MySpec:
     @hookspec
-    @abc.abstractmethod
-    def init(self, config) -> dict[str, Any]:
-        """Return awaitables (coroutines)"""
-        pass
+    def init(self, config) -> dict[str, Any]: ...
 
     @hookspec
-    @abc.abstractmethod
-    def migrate(self, new_config) -> dict[str, Any]:
-        pass
+    def migrate(self, new_config) -> dict[str, Any]: ...
 
     @hookspec
-    @abc.abstractmethod
-    def schema(self) -> dict[str, Any]:
-        pass
+    def schema(self) -> dict[str, Any]: ...
 
     @hookspec
-    @abc.abstractmethod
-    def config(self) -> dict[str, Any]:
-        pass
+    def config(self) -> dict[str, Any]: ...
 
     @hookspec
-    @abc.abstractmethod
-    async def run(self) -> Any:
-        pass
+    async def run(self) -> Any: ...
 
 
 pm = pluggy.PluginManager(PROJECT_NAME)
