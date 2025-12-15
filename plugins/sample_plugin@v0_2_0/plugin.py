@@ -12,21 +12,19 @@ class Config(BaseModel):
 
 class Plugin:
 
-    _config = Config()
+    @hookimpl
+    @classmethod
+    def schema(cls):
+        return Config.model_json_schema()
 
     @hookimpl
-    def set_config(self, config):
-        self._config = self._config.model_validate(config)
-        return self._config
+    @classmethod
+    def config(cls, json):
+        if json is None:
+            return Config()
+        return Config.model_validate(json)
 
     @hookimpl
-    def schema(self):
-        return self._config.model_json_schema()
-
-    @hookimpl
-    def config(self):
-        return self._config
-
-    @hookimpl
-    async def run(self):
-        return self._config
+    @classmethod
+    async def run(cls, config: Config):
+        return True

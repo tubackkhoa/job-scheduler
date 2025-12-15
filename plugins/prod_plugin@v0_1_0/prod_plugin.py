@@ -47,21 +47,19 @@ class ProdConfig(BaseModel):
 
 class ProdPlugin:
 
-    _config = ProdConfig()
+    @hookimpl
+    @classmethod
+    def schema(cls):
+        return ProdConfig.model_json_schema()
 
     @hookimpl
-    def set_config(self, config):
-        self._config = self._config.model_validate(config)
-        return self._config
+    @classmethod
+    def config(cls, json):
+        if json is None:
+            return ProdConfig()
+        return ProdConfig.model_validate(json)
 
     @hookimpl
-    def schema(self):
-        return self._config.model_json_schema()
-
-    @hookimpl
-    def config(self):
-        return self._config
-
-    @hookimpl
-    async def run(self):
-        return self._config
+    @classmethod
+    async def run(cls, config: ProdConfig):
+        return True

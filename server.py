@@ -1,11 +1,10 @@
 import importlib
-import pkgutil
 import sys
-from types import ModuleType
 from typing import Any, Optional
 from fastapi import FastAPI, Body
 from fastapi.middleware.cors import CORSMiddleware
 import pluggy
+from pydantic import BaseModel
 
 
 PROJECT_NAME = "alpha-miner"
@@ -14,17 +13,15 @@ hookspec = pluggy.HookspecMarker(PROJECT_NAME)
 
 
 class MySpec:
-    @hookspec
-    def set_config(self, config: dict[str, Any]) -> dict[str, Any]: ...
 
     @hookspec
-    def schema(self) -> dict[str, Any]: ...
+    def schema(cls) -> dict[str, Any]: ...
 
     @hookspec
-    def config(self) -> dict[str, Any]: ...
+    def config(cls, json: Optional[dict[str, Any]] = None) -> dict[str, Any]: ...
 
     @hookspec
-    async def run(self) -> Any: ...
+    async def run(cls, config: BaseModel) -> bool: ...
 
 
 pm = pluggy.PluginManager(PROJECT_NAME)
@@ -52,7 +49,7 @@ def unload_module(module_path: str):
         del sys.modules[mod_name]
 
 
-def load_plugin(name: str, override: bool = False, config: Optional[Any] = None):
+def load_plugin(name: str, override: bool = False, json: Optional[Any] = None):
     module_path, class_name = name.rsplit(".", 1)
 
     if override:
@@ -65,17 +62,15 @@ def load_plugin(name: str, override: bool = False, config: Optional[Any] = None)
 
     # import module
     module = importlib.import_module(module_path)
-    plugin_cls = getattr(module, class_name)
-    instance: MySpec = plugin_cls()
-    if config is not None:
-        instance.set_config(config)
+    plugin: MySpec = getattr(module, class_name)
+    config = plugin.config(json)
 
-    pm.register(instance, name)
+    pm.register(plugin, name)
     config_data[name] = {
-        "version 1.0": instance.config(),
-        "version 2.0": instance.config(),
+        "version 1.0": config,
+        "version 2.0": config,
     }
-    return instance
+    return plugin
 
 
 for name in plugin_items:
@@ -100,19 +95,19 @@ def plugins():
 
 @app.get("/schema/{name}")
 def schema(name: str):
-    module_instance = pm.get_plugin(name)
-    if module_instance != None:
+    plugin: MySpec | None = pm.get_plugin(name)
+    if plugin != None:
         return {
-            "schema": module_instance.schema(),
+            "schema": plugin.schema(),
             "configs": config_data[name],
         }
 
 
 @app.post("/plugin/{name}")
 def update_plugin(name: str):
-    module_instance = load_plugin(name, True)
+    plugin = load_plugin(name, True)
     return {
-        "schema": module_instance.schema(),
+        "schema": plugin.schema(),
         "configs": config_data[name],
     }
 
@@ -122,6 +117,5 @@ def update_config(name: str, version: str, payload: dict = Body(...)):
     plugin: MySpec | None = pm.get_plugin(name)
     if not plugin:
         return {"error": "Plugin not found"}
-    result = plugin.set_config(payload)
-    config_data[name][version] = result
-    return result
+    config_data[name][version] = plugin.config(payload)
+    return payload

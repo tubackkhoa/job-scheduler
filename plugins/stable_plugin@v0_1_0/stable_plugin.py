@@ -47,21 +47,19 @@ class StableConfig(BaseModel):
 
 class StablePlugin:
 
-    _config = StableConfig()
+    @hookimpl
+    @classmethod
+    def schema(cls):
+        return StableConfig.model_json_schema()
 
     @hookimpl
-    def set_config(self, config):
-        self._config = self._config.model_validate(config)
-        return self._config
+    @classmethod
+    def config(cls, json):
+        if json is None:
+            return StableConfig()
+        return StableConfig.model_validate(json)
 
     @hookimpl
-    def schema(self):
-        return self._config.model_json_schema()
-
-    @hookimpl
-    def config(self):
-        return self._config
-
-    @hookimpl
-    async def run(self):
-        return self._config
+    @classmethod
+    async def run(cls, config: StableConfig):
+        return True

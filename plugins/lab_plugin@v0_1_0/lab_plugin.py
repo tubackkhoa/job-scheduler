@@ -47,21 +47,19 @@ class LabConfig(BaseModel):
 
 class LabPlugin:
 
-    _config = LabConfig()
-
     @hookimpl
-    def set_config(self, config):
-        self._config = LabConfig.model_validate(config)
-        return self._config
-
-    @hookimpl
-    def schema(self):
+    @classmethod
+    def schema(cls):
         return LabConfig.model_json_schema()
 
     @hookimpl
-    def config(self):
-        return self._config
+    @classmethod
+    def config(cls, json):
+        if json is None:
+            return LabConfig()
+        return LabConfig.model_validate(json)
 
     @hookimpl
-    async def run(self):
-        return self._config
+    @classmethod
+    async def run(cls, config: LabConfig):
+        return True
