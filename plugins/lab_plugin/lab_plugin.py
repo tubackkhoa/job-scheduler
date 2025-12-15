@@ -14,7 +14,7 @@ hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
 class LabConfig(BaseModel):
     # Sigma Mode Selection
     use_normalized_sigma: bool = False  # Raw Sigma (0-9999 range)
-    
+
     # Strategy Configuration
     data_source: str = "ohlcv_binance-futures"
     timeframe: str = "1h"
@@ -23,7 +23,7 @@ class LabConfig(BaseModel):
     token_blacklist: str = ""
     token_whitelist: str = ""
     direction_type: str = "all"  # All (Long + Short)
-    
+
     # ML Filtering Thresholds
     min_mu_threshold: float = 0.01
     max_mu_threshold: float = 1.1
@@ -31,14 +31,14 @@ class LabConfig(BaseModel):
     ranking_threshold_max: float = 3.0
     min_sigma_threshold: float = 0.0
     max_sigma_threshold: float = 1.0
-    
+
     # Ranking Method
     ranking_method: str = "risk_adjusted"  # Risk-Adjusted (μ - 1.3√σ)
-    
+
     # Take Profit / Stop Loss
     alpha_tp: float = 2.0
     beta_sl: float = 4.0
-    
+
     # Worker Settings
     model_type: str = "all"
     reverse_direction: bool = False
@@ -46,9 +46,13 @@ class LabConfig(BaseModel):
 
 
 class LabPlugin:
+
+    _config = LabConfig()
+
     @hookimpl
     def init(self, config):
         self._config = LabConfig.model_validate(config)
+        return self._config
 
     @hookimpl
     def migrate(self, new_config):
@@ -59,7 +63,7 @@ class LabPlugin:
     @hookimpl
     def schema(self):
         return LabConfig.model_json_schema()
-    
+
     @hookimpl
     def config(self):
         return self._config

@@ -1,4 +1,6 @@
 import importlib
+import abc
+from typing import Any
 from fastapi import FastAPI, Body
 from fastapi.middleware.cors import CORSMiddleware
 import pluggy
@@ -8,78 +10,52 @@ PROJECT_NAME = "alpha-miner"
 
 hookspec = pluggy.HookspecMarker(PROJECT_NAME)
 
-class MySpec:
+
+class MySpec(abc.ABC):
     @hookspec
-    def init(self, config):
+    @abc.abstractmethod
+    def init(self, config) -> dict[str, Any]:
         """Return awaitables (coroutines)"""
         pass
 
     @hookspec
-    def migrate(self, new_config):
+    @abc.abstractmethod
+    def migrate(self, new_config) -> dict[str, Any]:
         pass
 
     @hookspec
-    def schema(self):
+    @abc.abstractmethod
+    def schema(self) -> dict[str, Any]:
         pass
 
     @hookspec
-    def config(self):
+    @abc.abstractmethod
+    def config(self) -> dict[str, Any]:
         pass
 
     @hookspec
-    async def run(self):
+    @abc.abstractmethod
+    async def run(self) -> Any:
         pass
+
 
 pm = pluggy.PluginManager(PROJECT_NAME)
 pm.add_hookspecs(MySpec)
 
 plugin_data = [
-    {
-        "package": "plugins.plugin1",
-        "name": "Plugin1",
-        "config": {
-            "version":"1.0"
-        }
-    },
+    {"package": "plugins.plugin1", "name": "Plugin1"},
     {
         "package": "plugins.plugin2",
         "name": "Plugin2",
-        "config": {
-            "version":"2.0"
-        }
+    },
+    {"package": "plugins.lab_plugin", "name": "LabPlugin"},
+    {
+        "package": "plugins.stable_plugin",
+        "name": "StablePlugin",
     },
     {
-        "package": "plugins.lab_plugin",
-        "name": "LabPlugin",
-        "config": {
-            "version": "1.0",
-
-            "use_normalized_sigma": False,
-
-            "data_source": "ohlcv_binance-futures",
-            "timeframe": "1h",
-            "max_execution_signals": 10,
-            "total_trade_volume": 500,
-            "token_blacklist": "",
-            "token_whitelist": "",
-            "direction_type": "all",
-
-            "min_mu_threshold": 0.01,
-            "max_mu_threshold": 1.1,
-            "ranking_threshold_min": 0.1,
-            "ranking_threshold_max": 3.0,
-            "min_sigma_threshold": 0.0,
-            "max_sigma_threshold": 1.0,
-
-            "ranking_method": "risk_adjusted",
-
-            "alpha_tp": 2.0,
-            "beta_sl": 4.0,
-
-            "model_type": "all",
-            "reverse_direction": False,
-            "max_trading_sessions": 0
-        }
+        "package": "plugins.prod_plugin",
+        "name": "ProdPlugin",
     },
 ]
 
@@ -89,9 +65,10 @@ config_data = {}
 for plugin_item in plugin_data:
     module = importlib.import_module(plugin_item["package"])
     plugin_cls = getattr(module, plugin_item["name"])
-    instance = plugin_cls()
-    instance.init(plugin_item["config"])
-    name = plugin_item["package"] + '.' + plugin_item["name"]
+    instance: MySpec = plugin_cls()
+    if "config" in plugin_item:
+        instance.init(plugin_item["config"])
+    name = plugin_item["package"] + "." + plugin_item["name"]
     pm.register(instance, name)
     config_data[name] = {
         "version 1.0": instance.config(),
@@ -107,16 +84,19 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
-    allow_headers=["*"],
 )
 
 
 @app.get("/plugins")
-def plugins():    
-    return [plugin_item["package"] + '.' + plugin_item["name"] for plugin_item in plugin_data]
+def plugins():
+    return [
+        plugin_item["package"] + "." + plugin_item["name"]
+        for plugin_item in plugin_data
+    ]
+
 
 @app.get("/schema/{name}")
-def schema(name:str):    
+def schema(name: str):
     module_instance = pm.get_plugin(name)
     if module_instance != None:
         return {
@@ -124,11 +104,12 @@ def schema(name:str):
             "configs": config_data[name],
         }
 
+
 @app.post("/config/{name}/{version}")
 def update_config(name: str, version: str, payload: dict = Body(...)):
-    plugin = pm.get_plugin(name)
+    plugin: MySpec | None = pm.get_plugin(name)
     if not plugin:
-        return {"error": "Plugin not found"}    
-    result = plugin.migrate(payload)    
+        return {"error": "Plugin not found"}
+    result = plugin.migrate(payload)
     config_data[name][version] = result
     return result
