@@ -1,1 +1,5 @@
 __pycache__/
+
+uv.lock
+
+alpha_miner_plugins.egg-info

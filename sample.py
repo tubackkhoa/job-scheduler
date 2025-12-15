@@ -36,14 +36,35 @@ plugin_data = [
         "package": "plugins.plugin1",
         "name": "Plugin1",
         "config": {
-            "version":"1.0"
+            "version": "1.0"
         }
     },
     {
         "package": "plugins.plugin2",
         "name": "Plugin2",
         "config": {
-            "version":"2.0"
+            "version": "2.0"
+        }
+    },
+    {
+        "package": "plugins.lab_plugin",
+        "name": "LabPlugin",
+        "config": {
+            "version": "lab-1.0"
+        }
+    },
+    {
+        "package": "plugins.stable_plugin",
+        "name": "StablePlugin",
+        "config": {
+            "version": "stable-1.0"
+        }
+    },
+    {
+        "package": "plugins.prod_plugin",
+        "name": "ProdPlugin",
+        "config": {
+            "version": "prod-1.0"
         }
     }
 ]
