@@ -1,7 +1,34 @@
 import { useEffect, useState } from 'react';
-import Form from '@rjsf/core';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import Form from '@rjsf/mui';
+// import Form from '@rjsf/core';
 import validator from '@rjsf/validator-ajv8';
 import api from './api';
+
+const theme = createTheme({
+  palette: {
+    mode: 'dark', // or "light"
+    primary: {
+      main: '#7C4DFF' // Deep purple
+    },
+    secondary: {
+      main: '#00E5FF' // Cyan accent
+    },
+    background: {
+      default: '#0F1117',
+      paper: '#161A23'
+    }
+  },
+  shape: {
+    borderRadius: 10
+  },
+  typography: {
+    fontFamily: 'Inter, Roboto, sans-serif',
+    h6: {
+      fontWeight: 600
+    }
+  }
+});
 
 export default function App() {
   const [plugins, setPlugins] = useState([]);
@@ -83,17 +110,19 @@ export default function App() {
 
       {schema && (
         <div style={{ marginTop: 24 }}>
-          <Form
-            schema={schema}
-            formData={formData}
-            validator={validator}
-            onChange={(e) => setFormData(e.formData)}
-            onSubmit={handleSubmit}
-          >
-            <button type="submit" disabled={submitting}>
-              {submitting ? 'Submitting…' : 'Submit'}
-            </button>
-          </Form>
+          <ThemeProvider theme={theme}>
+            <Form
+              schema={schema}
+              formData={formData}
+              validator={validator}
+              onChange={(e) => setFormData(e.formData)}
+              onSubmit={handleSubmit}
+            >
+              <button type="submit" disabled={submitting}>
+                {submitting ? 'Submitting…' : 'Submit'}
+              </button>
+            </Form>
+          </ThemeProvider>
         </div>
       )}
 
