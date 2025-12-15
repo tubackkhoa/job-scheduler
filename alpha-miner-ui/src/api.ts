@@ -20,14 +20,21 @@ export default {
 
     return res.json();
   },
-  async updateConfig(pluginName: string, payload: Object) {
-    const res = await fetch(`${API_BASE_URL}/config/${pluginName}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
+  async updateConfig(
+    pluginName: string,
+    pluginVersion: string,
+    payload: Object
+  ) {
+    const res = await fetch(
+      `${API_BASE_URL}/config/${pluginName}/${pluginVersion}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      }
+    );
 
     if (!res.ok) {
       const msg = await res.text();

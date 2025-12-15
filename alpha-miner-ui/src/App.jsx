@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { FormControl, InputLabel, Select, MenuItem } from '@mui/material';
+import { FormControl, InputLabel, Select, MenuItem, Box } from '@mui/material';
 import Form from '@rjsf/mui';
 // import Form from '@rjsf/core';
 import validator from '@rjsf/validator-ajv8';
@@ -34,8 +34,9 @@ const theme = createTheme({
 export default function App() {
   const [plugins, setPlugins] = useState([]);
   const [pluginName, setPluginName] = useState('');
+  const [activeVersion, setActiveVersion] = useState('');
+  const [configVersions, setConfigVersions] = useState({});
   const [schema, setSchema] = useState(null);
-  const [formData, setFormData] = useState({});
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
@@ -55,13 +56,13 @@ export default function App() {
     setLoading(true);
     setError(null);
     setSchema(null);
-    setFormData({});
     setResult(null);
 
     try {
-      const { schema, data } = await api.fetchSchema(pluginName);
+      const { schema, configs } = await api.fetchSchema(pluginName);
       setSchema(schema);
-      setFormData(data ?? {});
+      setConfigVersions(configs);
+      setActiveVersion(Object.keys(configs)[0]);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -70,7 +71,6 @@ export default function App() {
   };
 
   const handleSubmit = async ({ formData }) => {
-    console.log(pluginName, formData);
     if (!pluginName) return;
 
     setSubmitting(true);
@@ -78,7 +78,13 @@ export default function App() {
     setResult(null);
 
     try {
-      const response = await api.updateConfig(pluginName, formData);
+      const response = await api.updateConfig(
+        pluginName,
+        activeVersion,
+        formData
+      );
+      configVersions[activeVersion] = response;
+      setConfigVersions(configVersions);
       setResult(response);
     } catch (err) {
       setError(err.message);
@@ -92,22 +98,50 @@ export default function App() {
       <div style={{ padding: 24, fontFamily: 'sans-serif' }}>
         <h1>Alpha Miner – Plugin Config</h1>
 
-        <FormControl fullWidth size="small">
-          <InputLabel>-- Select a plugin --</InputLabel>
-          <Select
-            value={pluginName}
-            onChange={(e) => {
-              loadSchema(e.target.value);
-            }}
-            style={{ width: 360, marginRight: 8 }}
-          >
-            {plugins.map((plugin) => (
-              <MenuItem key={plugin} value={plugin}>
-                {plugin}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 2, // space between items (8px * 2 = 16px)
+            alignItems: 'center', // vertically align inputs
+            flexWrap: 'wrap' // allow wrapping on small screens
+          }}
+        >
+          <FormControl size="small" sx={{ minWidth: 360 }}>
+            <InputLabel id="plugin-select-label">
+              -- Select a plugin --
+            </InputLabel>
+            <Select
+              labelId="plugin-select-label"
+              value={pluginName}
+              label="-- Select a plugin --"
+              onChange={(e) => loadSchema(e.target.value)}
+            >
+              {plugins.map((plugin) => (
+                <MenuItem key={plugin} value={plugin}>
+                  {plugin}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl size="small" sx={{ minWidth: 360 }}>
+            <InputLabel id="config-version-select-label">
+              -- Select a config version --
+            </InputLabel>
+            <Select
+              labelId="config-version-select-label"
+              value={activeVersion}
+              label="-- Select a config version --"
+              onChange={(e) => setActiveVersion(e.target.value)}
+            >
+              {Object.keys(configVersions).map((version) => (
+                <MenuItem key={version} value={version}>
+                  {version}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Box>
 
         {loading && <p>Loading schema...</p>}
         {error && <p style={{ color: 'red' }}>{error}</p>}
@@ -116,9 +150,8 @@ export default function App() {
           <div style={{ marginTop: 24 }}>
             <Form
               schema={schema}
-              formData={formData}
+              formData={configVersions[activeVersion]}
               validator={validator}
-              onChange={(e) => setFormData(e.formData)}
               onSubmit={handleSubmit}
             >
               <button type="submit" disabled={submitting}>

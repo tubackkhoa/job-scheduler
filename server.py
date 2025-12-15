@@ -52,36 +52,38 @@ plugin_data = [
         "package": "plugins.lab_plugin",
         "name": "LabPlugin",
         "config": {
-        "version": "1.0",
+            "version": "1.0",
 
-        "use_normalized_sigma": False,
+            "use_normalized_sigma": False,
 
-        "data_source": "ohlcv_binance-futures",
-        "timeframe": "1h",
-        "max_execution_signals": 10,
-        "total_trade_volume": 500,
-        "token_blacklist": "",
-        "token_whitelist": "",
-        "direction_type": "all",
+            "data_source": "ohlcv_binance-futures",
+            "timeframe": "1h",
+            "max_execution_signals": 10,
+            "total_trade_volume": 500,
+            "token_blacklist": "",
+            "token_whitelist": "",
+            "direction_type": "all",
 
-        "min_mu_threshold": 0.01,
-        "max_mu_threshold": 1.1,
-        "ranking_threshold_min": 0.1,
-        "ranking_threshold_max": 3.0,
-        "min_sigma_threshold": 0.0,
-        "max_sigma_threshold": 1.0,
+            "min_mu_threshold": 0.01,
+            "max_mu_threshold": 1.1,
+            "ranking_threshold_min": 0.1,
+            "ranking_threshold_max": 3.0,
+            "min_sigma_threshold": 0.0,
+            "max_sigma_threshold": 1.0,
 
-        "ranking_method": "risk_adjusted",
+            "ranking_method": "risk_adjusted",
 
-        "alpha_tp": 2.0,
-        "beta_sl": 4.0,
+            "alpha_tp": 2.0,
+            "beta_sl": 4.0,
 
-        "model_type": "all",
-        "reverse_direction": False,
-        "max_trading_sessions": 0
-    }
+            "model_type": "all",
+            "reverse_direction": False,
+            "max_trading_sessions": 0
+        }
     },
 ]
+
+config_data = {}
 
 # 🔥 dynamically load all plugins
 for plugin_item in plugin_data:
@@ -89,7 +91,12 @@ for plugin_item in plugin_data:
     plugin_cls = getattr(module, plugin_item["name"])
     instance = plugin_cls()
     instance.init(plugin_item["config"])
-    pm.register(instance, plugin_item["package"] + '.' + plugin_item["name"])
+    name = plugin_item["package"] + '.' + plugin_item["name"]
+    pm.register(instance, name)
+    config_data[name] = {
+        "version 1.0": instance.config(),
+        "version 2.0": instance.config(),
+    }
 
 # validate implementation
 pm.check_pending()
@@ -114,14 +121,14 @@ def schema(name:str):
     if module_instance != None:
         return {
             "schema": module_instance.schema(),
-            "data": module_instance.config(),
+            "configs": config_data[name],
         }
 
-@app.post("/config/{name}")
-async def run_plugin(name: str, payload: dict = Body(...)):
+@app.post("/config/{name}/{version}")
+def update_config(name: str, version: str, payload: dict = Body(...)):
     plugin = pm.get_plugin(name)
     if not plugin:
-        return {"error": "Plugin not found"}
-
-    result = plugin.migrate(payload)
+        return {"error": "Plugin not found"}    
+    result = plugin.migrate(payload)    
+    config_data[name][version] = result
     return result
