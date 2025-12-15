@@ -15,10 +15,7 @@ hookspec = pluggy.HookspecMarker(PROJECT_NAME)
 
 class MySpec:
     @hookspec
-    def init(self, config) -> dict[str, Any]: ...
-
-    @hookspec
-    def migrate(self, new_config) -> dict[str, Any]: ...
+    def set_config(self, config: dict[str, Any]) -> dict[str, Any]: ...
 
     @hookspec
     def schema(self) -> dict[str, Any]: ...
@@ -34,41 +31,44 @@ pm = pluggy.PluginManager(PROJECT_NAME)
 pm.add_hookspecs(MySpec)
 
 plugin_items = [
-    "plugins.plugin1.Plugin1",
-    "plugins.plugin2.Plugin2",
-    "plugins.lab_plugin.LabPlugin",
-    "plugins.stable_plugin.StablePlugin",
-    "plugins.prod_plugin.ProdPlugin",
+    "plugins.sample_plugin@v0_1_0.Plugin",
+    "plugins.sample_plugin@v0_2_0.Plugin",
+    "plugins.lab_plugin@v0_1_0.LabPlugin",
+    "plugins.stable_plugin@v0_1_0.StablePlugin",
+    "plugins.prod_plugin@v0_1_0.ProdPlugin",
 ]
 
 config_data = {}
+
+
+def unload_module(module_path: str):
+    # clear old code of the module
+    modules_to_remove = [
+        name
+        for name in sys.modules
+        if name == module_path or name.startswith(module_path + ".")
+    ]
+    for mod_name in modules_to_remove:
+        del sys.modules[mod_name]
 
 
 def load_plugin(name: str, override: bool = False, config: Optional[Any] = None):
     module_path, class_name = name.rsplit(".", 1)
 
     if override:
-
         # unregister hook
         existing = pm.get_plugin(name)
         if existing is not None:
             pm.unregister(existing, name)
 
-        # clear old code of the module
-        modules_to_remove = [
-            name
-            for name in sys.modules
-            if name == module_path or name.startswith(module_path + ".")
-        ]
-        for mod_name in modules_to_remove:
-            del sys.modules[mod_name]
+        unload_module(module_path)
 
     # import module
     module = importlib.import_module(module_path)
     plugin_cls = getattr(module, class_name)
     instance: MySpec = plugin_cls()
     if config is not None:
-        instance.init(config)
+        instance.set_config(config)
 
     pm.register(instance, name)
     config_data[name] = {
@@ -122,6 +122,6 @@ def update_config(name: str, version: str, payload: dict = Body(...)):
     plugin: MySpec | None = pm.get_plugin(name)
     if not plugin:
         return {"error": "Plugin not found"}
-    result = plugin.migrate(payload)
+    result = plugin.set_config(payload)
     config_data[name][version] = result
     return result

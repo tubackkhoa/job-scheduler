@@ -10,19 +10,13 @@ class Config(BaseModel):
     version: str = "2.0"
 
 
-class Plugin2:
+class Plugin:
 
     _config = Config()
 
     @hookimpl
-    def init(self, config):
+    def set_config(self, config):
         self._config = self._config.model_validate(config)
-        return self._config
-
-    @hookimpl
-    def migrate(self, new_config):
-        # transform config first
-        self._config = self._config.model_validate(new_config)
         return self._config
 
     @hookimpl

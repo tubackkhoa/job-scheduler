@@ -50,14 +50,8 @@ class StablePlugin:
     _config = StableConfig()
 
     @hookimpl
-    def init(self, config):
+    def set_config(self, config):
         self._config = self._config.model_validate(config)
-        return self._config
-
-    @hookimpl
-    def migrate(self, new_config):
-        # transform config first
-        self._config = self._config.model_validate(new_config)
         return self._config
 
     @hookimpl
