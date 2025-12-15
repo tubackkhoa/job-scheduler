@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { FormControl, InputLabel, Select, MenuItem, Box } from '@mui/material';
+import {
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Box,
+  Button
+} from '@mui/material';
 import Form from '@rjsf/mui';
 // import Form from '@rjsf/core';
 import validator from '@rjsf/validator-ajv8';
@@ -70,6 +77,20 @@ export default function App() {
     }
   };
 
+  const updatePlugin = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { schema, configs } = await api.updatePlugin(pluginName);
+      setSchema(schema);
+      setConfigVersions(configs);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async ({ formData }) => {
     if (!pluginName) return;
 
@@ -123,6 +144,14 @@ export default function App() {
               ))}
             </Select>
           </FormControl>
+
+          <Button
+            disabled={pluginName === ''}
+            variant="outlined"
+            onClick={updatePlugin}
+          >
+            Update Plugin Code
+          </Button>
 
           <FormControl size="small" sx={{ minWidth: 360 }}>
             <InputLabel id="config-version-select-label">

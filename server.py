@@ -1,5 +1,8 @@
 import importlib
-from typing import Any
+import pkgutil
+import sys
+from types import ModuleType
+from typing import Any, Optional
 from fastapi import FastAPI, Body
 from fastapi.middleware.cors import CORSMiddleware
 import pluggy
@@ -30,38 +33,53 @@ class MySpec:
 pm = pluggy.PluginManager(PROJECT_NAME)
 pm.add_hookspecs(MySpec)
 
-plugin_data = [
-    {"package": "plugins.plugin1", "name": "Plugin1"},
-    {
-        "package": "plugins.plugin2",
-        "name": "Plugin2",
-    },
-    {"package": "plugins.lab_plugin", "name": "LabPlugin"},
-    {
-        "package": "plugins.stable_plugin",
-        "name": "StablePlugin",
-    },
-    {
-        "package": "plugins.prod_plugin",
-        "name": "ProdPlugin",
-    },
+plugin_items = [
+    "plugins.plugin1.Plugin1",
+    "plugins.plugin2.Plugin2",
+    "plugins.lab_plugin.LabPlugin",
+    "plugins.stable_plugin.StablePlugin",
+    "plugins.prod_plugin.ProdPlugin",
 ]
 
 config_data = {}
 
-# 🔥 dynamically load all plugins
-for plugin_item in plugin_data:
-    module = importlib.import_module(plugin_item["package"])
-    plugin_cls = getattr(module, plugin_item["name"])
+
+def load_plugin(name: str, override: bool = False, config: Optional[Any] = None):
+    module_path, class_name = name.rsplit(".", 1)
+
+    if override:
+
+        # unregister hook
+        existing = pm.get_plugin(name)
+        if existing is not None:
+            pm.unregister(existing, name)
+
+        # clear old code of the module
+        modules_to_remove = [
+            name
+            for name in sys.modules
+            if name == module_path or name.startswith(module_path + ".")
+        ]
+        for mod_name in modules_to_remove:
+            del sys.modules[mod_name]
+
+    # import module
+    module = importlib.import_module(module_path)
+    plugin_cls = getattr(module, class_name)
     instance: MySpec = plugin_cls()
-    if "config" in plugin_item:
-        instance.init(plugin_item["config"])
-    name = plugin_item["package"] + "." + plugin_item["name"]
+    if config is not None:
+        instance.init(config)
+
     pm.register(instance, name)
     config_data[name] = {
         "version 1.0": instance.config(),
         "version 2.0": instance.config(),
     }
+    return instance
+
+
+for name in plugin_items:
+    load_plugin(name)
 
 # validate implementation
 pm.check_pending()
@@ -77,10 +95,7 @@ app.add_middleware(
 
 @app.get("/plugins")
 def plugins():
-    return [
-        plugin_item["package"] + "." + plugin_item["name"]
-        for plugin_item in plugin_data
-    ]
+    return plugin_items
 
 
 @app.get("/schema/{name}")
@@ -91,6 +106,15 @@ def schema(name: str):
             "schema": module_instance.schema(),
             "configs": config_data[name],
         }
+
+
+@app.post("/plugin/{name}")
+def update_plugin(name: str):
+    module_instance = load_plugin(name, True)
+    return {
+        "schema": module_instance.schema(),
+        "configs": config_data[name],
+    }
 
 
 @app.post("/config/{name}/{version}")

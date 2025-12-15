@@ -42,5 +42,20 @@ export default {
     }
 
     return res.json();
+  },
+  async updatePlugin(pluginName: string) {
+    const res = await fetch(`${API_BASE_URL}/plugin/${pluginName}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!res.ok) {
+      const msg = await res.text();
+      throw new Error(msg || 'Plugin updated failed');
+    }
+
+    return res.json();
   }
 };
