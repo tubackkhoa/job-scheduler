@@ -48,17 +48,22 @@ class LabConfig(BaseModel):
 class LabPlugin:
     @hookimpl
     def init(self, config):
-        self.config = LabConfig.model_validate(config)
+        self._config = LabConfig.model_validate(config)
 
     @hookimpl
     def migrate(self, new_config):
         # transform config first
-        self.config = LabConfig.model_validate(new_config)
+        self._config = LabConfig.model_validate(new_config)
+        return self._config
 
     @hookimpl
     def schema(self):
         return LabConfig.model_json_schema()
+    
+    @hookimpl
+    def config(self):
+        return self._config
 
     @hookimpl
     async def run(self):
-        return self.config
+        return self._config

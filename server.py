@@ -47,7 +47,40 @@ plugin_data = [
         "config": {
             "version":"2.0"
         }
+    },
+    {
+        "package": "plugins.lab_plugin",
+        "name": "LabPlugin",
+        "config": {
+        "version": "1.0",
+
+        "use_normalized_sigma": False,
+
+        "data_source": "ohlcv_binance-futures",
+        "timeframe": "1h",
+        "max_execution_signals": 10,
+        "total_trade_volume": 500,
+        "token_blacklist": "",
+        "token_whitelist": "",
+        "direction_type": "all",
+
+        "min_mu_threshold": 0.01,
+        "max_mu_threshold": 1.1,
+        "ranking_threshold_min": 0.1,
+        "ranking_threshold_max": 3.0,
+        "min_sigma_threshold": 0.0,
+        "max_sigma_threshold": 1.0,
+
+        "ranking_method": "risk_adjusted",
+
+        "alpha_tp": 2.0,
+        "beta_sl": 4.0,
+
+        "model_type": "all",
+        "reverse_direction": False,
+        "max_trading_sessions": 0
     }
+    },
 ]
 
 # 🔥 dynamically load all plugins
