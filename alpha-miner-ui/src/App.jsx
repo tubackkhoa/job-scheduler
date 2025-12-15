@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import Form from '@rjsf/mui';
 // import Form from '@rjsf/core';
 import validator from '@rjsf/validator-ajv8';
@@ -87,30 +88,32 @@ export default function App() {
   };
 
   return (
-    <div style={{ padding: 24, fontFamily: 'sans-serif' }}>
-      <h1>Alpha Miner – Plugin Config</h1>
+    <ThemeProvider theme={theme}>
+      <div style={{ padding: 24, fontFamily: 'sans-serif' }}>
+        <h1>Alpha Miner – Plugin Config</h1>
 
-      <select
-        value={pluginName}
-        onChange={(e) => {
-          loadSchema(e.target.value);
-        }}
-        style={{ width: 360, marginRight: 8 }}
-      >
-        <option value="">-- Select a plugin --</option>
-        {plugins.map((plugin) => (
-          <option key={plugin} value={plugin}>
-            {plugin}
-          </option>
-        ))}
-      </select>
+        <FormControl fullWidth size="small">
+          <InputLabel>-- Select a plugin --</InputLabel>
+          <Select
+            value={pluginName}
+            onChange={(e) => {
+              loadSchema(e.target.value);
+            }}
+            style={{ width: 360, marginRight: 8 }}
+          >
+            {plugins.map((plugin) => (
+              <MenuItem key={plugin} value={plugin}>
+                {plugin}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
 
-      {loading && <p>Loading schema...</p>}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+        {loading && <p>Loading schema...</p>}
+        {error && <p style={{ color: 'red' }}>{error}</p>}
 
-      {schema && (
-        <div style={{ marginTop: 24 }}>
-          <ThemeProvider theme={theme}>
+        {schema && (
+          <div style={{ marginTop: 24 }}>
             <Form
               schema={schema}
               formData={formData}
@@ -122,25 +125,25 @@ export default function App() {
                 {submitting ? 'Submitting…' : 'Submit'}
               </button>
             </Form>
-          </ThemeProvider>
-        </div>
-      )}
+          </div>
+        )}
 
-      {result && (
-        <pre
-          style={{
-            marginTop: 24,
-            background: '#111',
-            color: '#0f0',
-            padding: 16,
-            borderRadius: 6,
-            maxHeight: 400,
-            overflow: 'auto'
-          }}
-        >
-          {JSON.stringify(result, null, 2)}
-        </pre>
-      )}
-    </div>
+        {result && (
+          <pre
+            style={{
+              marginTop: 24,
+              background: '#111',
+              color: '#0f0',
+              padding: 16,
+              borderRadius: 6,
+              maxHeight: 400,
+              overflow: 'auto'
+            }}
+          >
+            {JSON.stringify(result, null, 2)}
+          </pre>
+        )}
+      </div>
+    </ThemeProvider>
   );
 }
