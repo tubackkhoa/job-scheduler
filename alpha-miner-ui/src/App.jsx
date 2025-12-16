@@ -9,7 +9,6 @@ import {
   Button
 } from '@mui/material';
 import Form from '@rjsf/mui';
-// import Form from '@rjsf/core';
 import validator from '@rjsf/validator-ajv8';
 import api from './api';
 
