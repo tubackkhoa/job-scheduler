@@ -3,6 +3,7 @@ Stable Plugin - Proven configurations from Staging.
 Hardcoded configuration for Stable worker.
 """
 
+import logging
 import pluggy
 from pydantic import BaseModel
 
@@ -45,6 +46,9 @@ class StableConfig(BaseModel):
     max_trading_sessions: int = 0  # Unlimited
 
 
+logger = logging.getLogger(__name__)
+
+
 class StablePlugin:
 
     @hookimpl
@@ -60,4 +64,5 @@ class StablePlugin:
     @hookimpl
     @classmethod
     async def run(cls, config: StableConfig):
+        logger.info(f"running with config: {config}")
         return True

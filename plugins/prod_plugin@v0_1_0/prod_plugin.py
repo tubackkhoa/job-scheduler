@@ -3,6 +3,7 @@ Production Plugin - Live trading with critical configurations.
 Hardcoded configuration for Production worker.
 """
 
+import logging
 import pluggy
 from pydantic import BaseModel
 
@@ -45,6 +46,9 @@ class ProdConfig(BaseModel):
     max_trading_sessions: int = 0  # Unlimited
 
 
+logger = logging.getLogger(__name__)
+
+
 class ProdPlugin:
 
     @hookimpl
@@ -60,4 +64,5 @@ class ProdPlugin:
     @hookimpl
     @classmethod
     async def run(cls, config: ProdConfig):
+        logger.info(f"running with config: {config}")
         return True

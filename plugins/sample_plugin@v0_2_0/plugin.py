@@ -1,3 +1,4 @@
+import logging
 import pluggy
 from pydantic import BaseModel
 
@@ -8,6 +9,9 @@ hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
 
 class Config(BaseModel):
     version: str = "2.0"
+
+
+logger = logging.getLogger(__name__)
 
 
 class Plugin:
@@ -25,5 +29,5 @@ class Plugin:
     @hookimpl
     @classmethod
     async def run(cls, config: Config):
-        print(f"[{__name__}] running with config: {config}")
+        logger.info(f"running with config: {config}")
         return True

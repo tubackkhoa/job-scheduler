@@ -7,6 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 import pluggy
 from pydantic import BaseModel
 from apscheduler.schedulers.background import BackgroundScheduler
+import logging
+
+# Configure logging to show INFO and above messages
+logging.basicConfig(level=logging.INFO)
 
 PROJECT_NAME = "alpha-miner"
 

@@ -3,6 +3,7 @@ Lab Plugin - Experimental environment for testing new configurations.
 Hardcoded configuration for Lab worker.
 """
 
+import logging
 import pluggy
 from pydantic import BaseModel, Field
 
@@ -45,6 +46,9 @@ class LabConfig(BaseModel):
     max_trading_sessions: int = 0  # Unlimited
 
 
+logger = logging.getLogger(__name__)
+
+
 class LabPlugin:
 
     @hookimpl
@@ -60,4 +64,5 @@ class LabPlugin:
     @hookimpl
     @classmethod
     async def run(cls, config: LabConfig):
+        logger.info(f"running with config: {config}")
         return True
