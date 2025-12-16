@@ -26,10 +26,9 @@ class MySpec:
 
 class PluginManager:
 
-    pm = pluggy.PluginManager(PROJECT_NAME)
-    config_data = {}
-
     def __init__(self, plugin_items: list[str]) -> None:
+        self.pm = pluggy.PluginManager(PROJECT_NAME)
+        self.config_data = {}
         self.pm.add_hookspecs(MySpec)
         for name in plugin_items:
             self.load_plugin(name)
@@ -48,11 +47,10 @@ class PluginManager:
             del sys.modules[mod_name]
 
     def get_plugin_names(self):
-        return [item[0] for item in self.pm.list_name_plugin()]
+        return [name for name, _ in self.pm.list_name_plugin()]
 
-    def get_plugin(self, name: str):
-        plugin: MySpec | None = self.pm.get_plugin(name)
-        return plugin
+    def get_plugin(self, name: str) -> Optional[MySpec]:
+        return self.pm.get_plugin(name)
 
     def load_plugin(
         self, name: str, override: bool = False, json: Optional[Any] = None
@@ -128,5 +126,6 @@ def update_config(name: str, version: str, payload: dict = Body(...)):
     plugin = plugin_manager.get_plugin(name)
     if not plugin:
         return {"error": "Plugin not found"}
-    plugin_manager.config_data[name][version] = plugin.config(payload)
-    return plugin_manager.config_data[name][version]
+    config = plugin.config(payload)
+    plugin_manager.config_data[name][version] = config
+    return config
