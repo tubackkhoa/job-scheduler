@@ -55,9 +55,7 @@ class ProdPlugin:
     @hookimpl
     @classmethod
     def config(cls, json):
-        if json is None:
-            return ProdConfig()
-        return ProdConfig.model_validate(json)
+        return ProdConfig.model_validate(json or {})
 
     @hookimpl
     @classmethod

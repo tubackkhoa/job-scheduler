@@ -20,9 +20,7 @@ class Plugin:
     @hookimpl
     @classmethod
     def config(cls, json):
-        if json is None:
-            return Config()
-        return Config.model_validate(json)
+        return Config.model_validate(json or {})
 
     @hookimpl
     @classmethod

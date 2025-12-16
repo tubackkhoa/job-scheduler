@@ -55,9 +55,7 @@ class StablePlugin:
     @hookimpl
     @classmethod
     def config(cls, json):
-        if json is None:
-            return StableConfig()
-        return StableConfig.model_validate(json)
+        return StableConfig.model_validate(json or {})
 
     @hookimpl
     @classmethod

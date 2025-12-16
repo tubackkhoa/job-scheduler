@@ -4,7 +4,7 @@ Hardcoded configuration for Lab worker.
 """
 
 import pluggy
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 PROJECT_NAME = "alpha-miner"
 
@@ -18,7 +18,9 @@ class LabConfig(BaseModel):
     # Strategy Configuration
     data_source: str = "ohlcv_binance-futures"
     timeframe: str = "1h"
-    max_execution_signals: int = 10
+    max_execution_signals: int = Field(
+        10, ge=0, le=30
+    )  # add requirement for this field
     total_trade_volume: int = 500
     token_blacklist: str = ""
     token_whitelist: str = ""
@@ -55,9 +57,7 @@ class LabPlugin:
     @hookimpl
     @classmethod
     def config(cls, json):
-        if json is None:
-            return LabConfig()
-        return LabConfig.model_validate(json)
+        return LabConfig.model_validate(json or {})
 
     @hookimpl
     @classmethod
