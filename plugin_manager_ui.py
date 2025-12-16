@@ -2,10 +2,8 @@ from datetime import datetime
 from typing import Optional
 from pytz import timezone
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import JSONResponse
 
 from apscheduler.schedulers.base import BaseScheduler
-from apscheduler.job import Job
 from apscheduler.events import (
     EVENT_ALL,
     JobExecutionEvent,
@@ -17,7 +15,6 @@ from sqlalchemy import create_engine, Column, Integer, String, DateTime
 from sqlalchemy.orm import Session, declarative_base
 
 import os
-from pathlib import Path
 
 
 def get_datetime_now() -> datetime:
@@ -62,8 +59,6 @@ class ScheduleManager:
 
         self.engine = create_engine(db_connection)
         Base.metadata.create_all(self.engine)  # ❌ no drop_all
-
-        self.base_path = Path(__file__).parent
 
         self._init_endpoints()
         self._init_event_listeners()
