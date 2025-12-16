@@ -102,6 +102,7 @@ class PluginManager:
             "interval",
             seconds=interval,
             args=[name, "version 1.0"],
+            name=name + " - (version 1.0)",
             id=name + "/version 1.0",  # unique config id
         )
 

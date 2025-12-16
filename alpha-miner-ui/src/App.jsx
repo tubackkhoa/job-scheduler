@@ -5,6 +5,10 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Box,
   Container,
   Button
@@ -12,6 +16,7 @@ import {
 import Form from '@rjsf/mui';
 import validator from '@rjsf/validator-ajv8';
 import api from './api';
+import ScheduleManager from './ScheduleManager';
 
 const theme = createTheme({
   palette: {
@@ -48,6 +53,7 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [open, setOpen] = useState(false);
 
   // Load plugin list
   useEffect(() => {
@@ -114,11 +120,39 @@ export default function App() {
     }
   };
 
+  const handleClickOpen = () => {
+    setOpen(true);
+  };
+
+  const handleClose = () => {
+    setOpen(false);
+  };
+
   return (
     <ThemeProvider theme={theme}>
+      <Dialog
+        open={open}
+        onClose={handleClose}
+        fullWidth
+        maxWidth="md"
+        sx={{
+          '& .MuiDialog-paper': {
+            width: '100%',
+            maxWidth: '100vw'
+          }
+        }}
+      >
+        <DialogTitle>Jobs Manager</DialogTitle>
+        <DialogContent>
+          <ScheduleManager />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClose}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
       <Container maxWidth="md">
         <h1>Alpha Miner – Plugin Config</h1>
-
         <Box
           sx={{
             display: 'flex',
@@ -151,6 +185,10 @@ export default function App() {
             onClick={updatePlugin}
           >
             Update Plugin Code
+          </Button>
+
+          <Button variant="contained" onClick={handleClickOpen}>
+            Open Scheduler
           </Button>
 
           <FormControl size="small" sx={{ minWidth: 360 }}>

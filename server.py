@@ -1,11 +1,12 @@
 from fastapi import FastAPI, Body, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import logging
+from plugin_manager_ui import ScheduleManager
 
 from plugin_manager import PluginManager
 
 # Configure logging to show INFO and above messages
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.ERROR)
 
 plugin_manager = PluginManager(
     [
@@ -19,8 +20,10 @@ plugin_manager = PluginManager(
 
 plugin_manager.start()
 
-
 app = FastAPI()
+ScheduleManager(
+    app, plugin_manager.scheduler, path="/schedule", require_authentication=False
+)
 
 app.add_middleware(
     CORSMiddleware,
