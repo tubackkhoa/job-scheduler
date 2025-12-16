@@ -5,7 +5,7 @@ Hardcoded configuration for Lab worker.
 
 import logging
 import pluggy
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 PROJECT_NAME = "alpha-miner"
 
@@ -44,6 +44,13 @@ class LabConfig(BaseModel):
     model_type: str = "all"
     reverse_direction: bool = False
     max_trading_sessions: int = 0  # Unlimited
+
+    @field_validator("timeframe")
+    def validate_timeframe(cls, v: str) -> str:
+        # simple validation – can be extended with full Timeframe enum check
+        if v not in ["1h", "4h", "1d"]:
+            raise ValueError("timeframe must be one of the supported values")
+        return v
 
 
 logger = logging.getLogger(__name__)

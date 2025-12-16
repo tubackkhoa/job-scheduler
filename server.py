@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Body
+from fastapi import FastAPI, Body, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 
@@ -58,6 +58,12 @@ def update_config(name: str, version: str, payload: dict = Body(...)):
     plugin = plugin_manager.get_plugin(name)
     if not plugin:
         return {"error": "Plugin not found"}
-    config = plugin.config(payload)
-    plugin_manager.config_data[name][version] = config
-    return config
+    try:
+        config = plugin.config(payload)
+        plugin_manager.config_data[name][version] = config
+        return config
+    except Exception as e:
+        # unexpected errors
+        raise HTTPException(
+            status_code=500, detail=f"Failed to update config: {str(e)}"
+        )
