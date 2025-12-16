@@ -2,7 +2,6 @@ from fastapi import FastAPI, Body, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from plugin_manager_ui import ScheduleManager
-import schedule_manager_ui
 from plugin_manager import PluginManager
 
 # Configure logging to show INFO and above messages
