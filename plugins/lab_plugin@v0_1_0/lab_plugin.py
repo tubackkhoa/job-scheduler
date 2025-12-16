@@ -18,9 +18,7 @@ class LabConfig(BaseModel):
     # Strategy Configuration
     data_source: str = "ohlcv_binance-futures"
     timeframe: str = "1h"
-    max_execution_signals: int = Field(
-        10, ge=0, le=30
-    )  # add requirement for this field
+    max_execution_signals: int = Field(10, ge=0, le=30)
     total_trade_volume: int = 500
     token_blacklist: str = ""
     token_whitelist: str = ""

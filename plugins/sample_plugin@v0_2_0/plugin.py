@@ -25,4 +25,5 @@ class Plugin:
     @hookimpl
     @classmethod
     async def run(cls, config: Config):
+        print(f"[{__name__}] running with config: {config}")
         return True
