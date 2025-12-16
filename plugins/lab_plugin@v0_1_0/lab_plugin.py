@@ -49,7 +49,9 @@ class LabConfig(BaseModel):
     def validate_timeframe(cls, v: str) -> str:
         # simple validation – can be extended with full Timeframe enum check
         if v not in ["1h", "4h", "1d"]:
-            raise ValueError("timeframe must be one of the supported values")
+            raise ValueError(
+                "timeframe must be one of the supported values [1h, 4h, 1d]"
+            )
         return v
 
 
