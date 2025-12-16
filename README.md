@@ -8,4 +8,10 @@ yarn dev
 
 ## Run server
 
-`python server.py`
+```bash
+# for initial data
+python create_data.py
+
+# start server
+python server.py
+```
