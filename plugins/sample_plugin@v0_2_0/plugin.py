@@ -12,6 +12,7 @@ class Config(BaseModel):
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 class Plugin:
@@ -23,11 +24,11 @@ class Plugin:
 
     @hookimpl
     @classmethod
-    def config(cls, json):
+    def config(cls, json=None):
         return Config.model_validate(json or {})
 
     @hookimpl
     @classmethod
     async def run(cls, config: Config):
-        logger.info(f"running with config: {config}")
+        logger.debug(f"running with config: {config}")
         return True

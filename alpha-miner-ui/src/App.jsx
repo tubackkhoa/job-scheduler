@@ -5,18 +5,12 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Box,
-  Container,
-  Button
+  Container
 } from '@mui/material';
 import Form from '@rjsf/mui';
 import validator from '@rjsf/validator-ajv8';
 import api from './api';
-import ScheduleManager from './ScheduleManager';
 
 const theme = createTheme({
   palette: {
@@ -45,15 +39,14 @@ const theme = createTheme({
 
 export default function App() {
   const [plugins, setPlugins] = useState([]);
-  const [pluginName, setPluginName] = useState('');
+  const [pluginId, setPluginId] = useState(0);
   const [activeVersion, setActiveVersion] = useState('');
-  const [configVersions, setConfigVersions] = useState({});
+  const [configVersions, setConfigVersions] = useState([]);
   const [schema, setSchema] = useState(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const [open, setOpen] = useState(false);
 
   // Load plugin list
   useEffect(() => {
@@ -63,33 +56,18 @@ export default function App() {
       .catch((err) => setError(err.message));
   }, []);
 
-  const loadSchema = async (pluginName) => {
-    if (!pluginName) return;
-    setPluginName(pluginName);
+  const loadSchema = async (pluginId) => {
+    setPluginId(pluginId);
     setLoading(true);
     setError(null);
     setSchema(null);
     setResult(null);
 
     try {
-      const { schema, configs } = await api.fetchSchema(pluginName);
+      const { schema, configs } = await api.fetchSchema(pluginId);
       setSchema(schema);
       setConfigVersions(configs);
-      setActiveVersion(Object.keys(configs)[0]);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const updatePlugin = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { schema, configs } = await api.updatePlugin(pluginName);
-      setSchema(schema);
-      setConfigVersions(configs);
+      setActiveVersion(configs[0].id);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -98,19 +76,16 @@ export default function App() {
   };
 
   const handleSubmit = async ({ formData }) => {
-    if (!pluginName) return;
+    if (!pluginId) return;
 
     setSubmitting(true);
     setError(null);
     setResult(null);
 
     try {
-      const response = await api.updateConfig(
-        pluginName,
-        activeVersion,
-        formData
-      );
-      configVersions[activeVersion] = response;
+      const response = await api.updateConfig(activeVersion, formData);
+      configVersions.find((version) => version.id === activeVersion).config =
+        JSON.stringify(response);
       setConfigVersions(configVersions);
       setResult(response);
     } catch (err) {
@@ -120,38 +95,9 @@ export default function App() {
     }
   };
 
-  const handleClickOpen = () => {
-    setOpen(true);
-  };
-
-  const handleClose = () => {
-    setOpen(false);
-  };
-
   return (
     <ThemeProvider theme={theme}>
-      <Dialog
-        open={open}
-        onClose={handleClose}
-        fullWidth
-        maxWidth="md"
-        sx={{
-          '& .MuiDialog-paper': {
-            width: '100%',
-            maxWidth: '100vw'
-          }
-        }}
-      >
-        <DialogTitle>Jobs Manager</DialogTitle>
-        <DialogContent>
-          <ScheduleManager />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose}>Close</Button>
-        </DialogActions>
-      </Dialog>
-
-      <Container maxWidth="md">
+      <Container sx={{ minHeight: '100vh' }}>
         <h1>Alpha Miner – Plugin Config</h1>
         <Box
           sx={{
@@ -167,29 +113,17 @@ export default function App() {
             </InputLabel>
             <Select
               labelId="plugin-select-label"
-              value={pluginName}
+              value={pluginId}
               label="-- Select a plugin --"
-              onChange={(e) => loadSchema(e.target.value)}
+              onChange={(e) => loadSchema(Number(e.target.value))}
             >
               {plugins.map((plugin) => (
-                <MenuItem key={plugin} value={plugin}>
-                  {plugin}
+                <MenuItem key={plugin.id} value={plugin.id}>
+                  {plugin.package}
                 </MenuItem>
               ))}
             </Select>
           </FormControl>
-
-          <Button
-            disabled={pluginName === ''}
-            variant="outlined"
-            onClick={updatePlugin}
-          >
-            Update Plugin Code
-          </Button>
-
-          <Button variant="contained" onClick={handleClickOpen}>
-            Open Scheduler
-          </Button>
 
           <FormControl size="small" sx={{ minWidth: 360 }}>
             <InputLabel id="config-version-select-label">
@@ -201,9 +135,9 @@ export default function App() {
               label="-- Select a config version --"
               onChange={(e) => setActiveVersion(e.target.value)}
             >
-              {Object.keys(configVersions).map((version) => (
-                <MenuItem key={version} value={version}>
-                  {version}
+              {configVersions.map((version) => (
+                <MenuItem key={version.id} value={version.id}>
+                  {version.description}
                 </MenuItem>
               ))}
             </Select>
@@ -217,7 +151,10 @@ export default function App() {
           <div style={{ marginTop: 24 }}>
             <Form
               schema={schema}
-              formData={configVersions[activeVersion]}
+              formData={JSON.parse(
+                configVersions.find((version) => version.id === activeVersion)
+                  .config
+              )}
               validator={validator}
               onSubmit={handleSubmit}
             >

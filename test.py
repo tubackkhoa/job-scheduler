@@ -1,15 +1,12 @@
+# PYTHONPATH=path_to/alpha-miner
 import time
+
+from sqlalchemy import Column, Integer
+from models import Job
 from plugin_manager import PluginManager
 
-# PYTHONPATH=path_to/alpha-miner
-plugin_manager = PluginManager(
-    [
-        {
-            "package": "src.plugins.worker_plugin.WorkerPlugin",
-            "interval": 5,
-        },
-    ]
-)
+
+plugin_manager = PluginManager()
 
 plugin_manager.start()
 

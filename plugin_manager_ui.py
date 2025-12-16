@@ -1,8 +1,14 @@
-from datetime import datetime
 from typing import Optional
-from pytz import timezone
 from fastapi import FastAPI, Request, HTTPException
-
+from datetime import datetime
+from pytz import timezone
+import os
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    DateTime,
+)
 from apscheduler.schedulers.base import BaseScheduler
 from apscheduler.events import (
     EVENT_ALL,
@@ -10,20 +16,18 @@ from apscheduler.events import (
     JobSubmissionEvent,
     SchedulerEvent,
 )
-
-from sqlalchemy import create_engine, Column, Integer, String, DateTime
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, declarative_base
 
 import os
+
+Base = declarative_base()
 
 
 def get_datetime_now() -> datetime:
     if tz := os.environ.get("TZ"):
         return datetime.now(timezone(tz))
     return datetime.now()
-
-
-Base = declarative_base()
 
 
 class APSEvent(Base):
@@ -73,7 +77,10 @@ class ScheduleManager:
             with Session(self.engine) as session:
                 event = (
                     session.query(APSEvent)
-                    .filter_by(job_id=job_id, event_type="EVENT_JOB_EXECUTED")
+                    .filter(
+                        APSEvent.job_id == job_id,
+                        APSEvent.event_type == "EVENT_JOB_EXECUTED",
+                    )
                     .order_by(APSEvent.timestamp.desc())
                     .first()
                 )

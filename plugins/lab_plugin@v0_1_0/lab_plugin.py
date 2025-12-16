@@ -56,6 +56,7 @@ class LabConfig(BaseModel):
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 class LabPlugin:
@@ -67,11 +68,11 @@ class LabPlugin:
 
     @hookimpl
     @classmethod
-    def config(cls, json):
+    def config(cls, json=None):
         return LabConfig.model_validate(json or {})
 
     @hookimpl
     @classmethod
     async def run(cls, config: LabConfig):
-        logger.info(f"running with config: {config}")
+        logger.debug(f"running with config: {config}")
         return True

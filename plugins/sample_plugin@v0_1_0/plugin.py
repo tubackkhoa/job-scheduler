@@ -12,6 +12,7 @@ class Config(BaseModel):
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 class Plugin:
@@ -23,7 +24,7 @@ class Plugin:
 
     @hookimpl
     @classmethod
-    def config(cls, json):
+    def config(cls, json=None):
         return Config.model_validate(json or {})
 
     @hookimpl

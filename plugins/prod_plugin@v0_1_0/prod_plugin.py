@@ -56,6 +56,7 @@ class ProdConfig(BaseModel):
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 class ProdPlugin:
@@ -67,11 +68,11 @@ class ProdPlugin:
 
     @hookimpl
     @classmethod
-    def config(cls, json):
+    def config(cls, json=None):
         return ProdConfig.model_validate(json or {})
 
     @hookimpl
     @classmethod
     async def run(cls, config: ProdConfig):
-        logger.info(f"running with config: {config}")
+        logger.debug(f"running with config: {config}")
         return True

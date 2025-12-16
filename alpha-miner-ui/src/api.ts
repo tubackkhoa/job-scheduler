@@ -1,11 +1,11 @@
 export const API_BASE_URL = 'http://localhost:8000';
 
 export default {
-  async fetchSchema(pluginName: string) {
-    const res = await fetch(`${API_BASE_URL}/schema/${pluginName}`);
+  async fetchSchema(pluginId: number) {
+    const res = await fetch(`${API_BASE_URL}/schema/${pluginId}`);
 
     if (!res.ok) {
-      throw new Error(`Schema not found for ${pluginName}`);
+      throw new Error(`Schema not found for ${pluginId}`);
     }
 
     return res.json();
@@ -20,40 +20,18 @@ export default {
 
     return res.json();
   },
-  async updateConfig(
-    pluginName: string,
-    pluginVersion: string,
-    payload: Object
-  ) {
-    const res = await fetch(
-      `${API_BASE_URL}/config/${pluginName}/${pluginVersion}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      }
-    );
-
-    if (!res.ok) {
-      const msg = await res.text();
-      throw new Error(msg || 'Plugin execution failed');
-    }
-
-    return res.json();
-  },
-  async updatePlugin(pluginName: string) {
-    const res = await fetch(`${API_BASE_URL}/plugin/${pluginName}`, {
+  async updateConfig(jobId: number, payload: Object) {
+    const res = await fetch(`${API_BASE_URL}/config/${jobId}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
-      }
+      },
+      body: JSON.stringify(payload)
     });
 
     if (!res.ok) {
       const msg = await res.text();
-      throw new Error(msg || 'Plugin updated failed');
+      throw new Error(msg || 'Plugin execution failed');
     }
 
     return res.json();
