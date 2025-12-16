@@ -6,6 +6,7 @@ import {
   Select,
   MenuItem,
   Box,
+  Container,
   Button
 } from '@mui/material';
 import Form from '@rjsf/mui';
@@ -115,7 +116,7 @@ export default function App() {
 
   return (
     <ThemeProvider theme={theme}>
-      <div style={{ padding: 24, fontFamily: 'sans-serif' }}>
+      <Container maxWidth="md">
         <h1>Alpha Miner – Plugin Config</h1>
 
         <Box
@@ -204,7 +205,7 @@ export default function App() {
             {JSON.stringify(result, null, 2)}
           </pre>
         )}
-      </div>
+      </Container>
     </ThemeProvider>
   );
 }
