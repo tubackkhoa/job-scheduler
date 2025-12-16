@@ -24,60 +24,71 @@ class MySpec:
     async def run(cls, config: BaseModel) -> bool: ...
 
 
-pm = pluggy.PluginManager(PROJECT_NAME)
-pm.add_hookspecs(MySpec)
+class PluginManager:
 
-plugin_items = [
-    "plugins.sample_plugin@v0_1_0.Plugin",
-    "plugins.sample_plugin@v0_2_0.Plugin",
-    "plugins.lab_plugin@v0_1_0.LabPlugin",
-    "plugins.stable_plugin@v0_1_0.StablePlugin",
-    "plugins.prod_plugin@v0_1_0.ProdPlugin",
-]
+    pm = pluggy.PluginManager(PROJECT_NAME)
+    config_data = {}
 
-config_data = {}
+    def __init__(self, plugin_items: list[str]) -> None:
+        self.pm.add_hookspecs(MySpec)
+        for name in plugin_items:
+            self.load_plugin(name)
+
+        # validate implementation
+        self.pm.check_pending()
+
+    def unload_module(self, module_path: str):
+        # clear old code of the module
+        modules_to_remove = [
+            name
+            for name in sys.modules
+            if name == module_path or name.startswith(module_path + ".")
+        ]
+        for mod_name in modules_to_remove:
+            del sys.modules[mod_name]
+
+    def get_plugin_names(self):
+        return [item[0] for item in self.pm.list_name_plugin()]
+
+    def get_plugin(self, name: str):
+        plugin: MySpec | None = self.pm.get_plugin(name)
+        return plugin
+
+    def load_plugin(
+        self, name: str, override: bool = False, json: Optional[Any] = None
+    ):
+        module_path, class_name = name.rsplit(".", 1)
+
+        if override:
+            # unregister hook
+            existing = self.pm.get_plugin(name)
+            if existing is not None:
+                self.pm.unregister(existing, name)
+
+            self.unload_module(module_path)
+
+        # import module
+        module = importlib.import_module(module_path)
+        plugin: MySpec = getattr(module, class_name)
+        config = plugin.config(json)
+
+        self.pm.register(plugin, name)
+        self.config_data[name] = {
+            "version 1.0": config,
+            "version 2.0": config,
+        }
+        return plugin
 
 
-def unload_module(module_path: str):
-    # clear old code of the module
-    modules_to_remove = [
-        name
-        for name in sys.modules
-        if name == module_path or name.startswith(module_path + ".")
+plugin_manager = PluginManager(
+    [
+        "plugins.sample_plugin@v0_1_0.Plugin",
+        "plugins.sample_plugin@v0_2_0.Plugin",
+        "plugins.lab_plugin@v0_1_0.LabPlugin",
+        "plugins.stable_plugin@v0_1_0.StablePlugin",
+        "plugins.prod_plugin@v0_1_0.ProdPlugin",
     ]
-    for mod_name in modules_to_remove:
-        del sys.modules[mod_name]
-
-
-def load_plugin(name: str, override: bool = False, json: Optional[Any] = None):
-    module_path, class_name = name.rsplit(".", 1)
-
-    if override:
-        # unregister hook
-        existing = pm.get_plugin(name)
-        if existing is not None:
-            pm.unregister(existing, name)
-
-        unload_module(module_path)
-
-    # import module
-    module = importlib.import_module(module_path)
-    plugin: MySpec = getattr(module, class_name)
-    config = plugin.config(json)
-
-    pm.register(plugin, name)
-    config_data[name] = {
-        "version 1.0": config,
-        "version 2.0": config,
-    }
-    return plugin
-
-
-for name in plugin_items:
-    load_plugin(name)
-
-# validate implementation
-pm.check_pending()
+)
 
 app = FastAPI()
 
@@ -90,32 +101,32 @@ app.add_middleware(
 
 @app.get("/plugins")
 def plugins():
-    return plugin_items
+    return plugin_manager.get_plugin_names()
 
 
 @app.get("/schema/{name}")
 def schema(name: str):
-    plugin: MySpec | None = pm.get_plugin(name)
+    plugin = plugin_manager.get_plugin(name)
     if plugin != None:
         return {
             "schema": plugin.schema(),
-            "configs": config_data[name],
+            "configs": plugin_manager.config_data[name],
         }
 
 
 @app.post("/plugin/{name}")
 def update_plugin(name: str):
-    plugin = load_plugin(name, True)
+    plugin = plugin_manager.load_plugin(name, True)
     return {
         "schema": plugin.schema(),
-        "configs": config_data[name],
+        "configs": plugin_manager.config_data[name],
     }
 
 
 @app.post("/config/{name}/{version}")
 def update_config(name: str, version: str, payload: dict = Body(...)):
-    plugin: MySpec | None = pm.get_plugin(name)
+    plugin = plugin_manager.get_plugin(name)
     if not plugin:
         return {"error": "Plugin not found"}
-    config_data[name][version] = plugin.config(payload)
-    return payload
+    plugin_manager.config_data[name][version] = plugin.config(payload)
+    return plugin_manager.config_data[name][version]
