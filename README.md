@@ -1,3 +1,11 @@
-## Run sample
+## Run client
 
-python sample.py
+```bash
+cd alpha-miner-ui
+yarn
+yarn dev
+```
+
+## Run server
+
+`python server.py`
