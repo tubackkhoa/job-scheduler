@@ -19,6 +19,7 @@ def log_callback(message: dict):
     asyncio.run_coroutine_threadsafe(manager.send_log(message), loop)
 
 
+# this code is run in main loop of uvicorn
 plugin_manager = PluginManager(log_callback=log_callback)
 plugin_manager.start()
 app = FastAPI()

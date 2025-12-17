@@ -1,18 +1,22 @@
-# PYTHONPATH=path_to/alpha-miner
-import time
+import asyncio
+import logging
 
-from sqlalchemy import Column, Integer
-from models import Job
 from plugin_manager import PluginManager
 
+logging.basicConfig(level=logging.INFO)
 
-plugin_manager = PluginManager()
 
-plugin_manager.start()
+async def main():
+    plugin_manager = PluginManager()
+    plugin_manager.start()
 
-# Keep the process alive
-try:
-    while True:
-        time.sleep(1)
-except KeyboardInterrupt:
-    print("Shutting down...")
+    try:
+        await asyncio.sleep(3600)  # Keep process alive
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        print("\nShutting down gracefully...")
+    finally:
+        plugin_manager.stop()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

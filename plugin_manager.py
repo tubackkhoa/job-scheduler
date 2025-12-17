@@ -7,7 +7,7 @@ from typing import Any, Callable, Optional
 
 import pluggy
 from pydantic import BaseModel
-from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import create_engine, update
 from sqlalchemy.orm import Session
 
@@ -62,7 +62,7 @@ class PluginManager:
         self.plugin_manager = pluggy.PluginManager(PROJECT_NAME)
         self.engine = create_engine(db_connection)
         # Pass any additional user-provided args
-        self.scheduler = BackgroundScheduler(**(scheduler_kwargs or {}))
+        self.scheduler = AsyncIOScheduler(**(scheduler_kwargs or {}))
         self.plugin_manager.add_hookspecs(PluginSpec)
         self.log_handler = JobLogHandler(log_callback)
 
@@ -101,7 +101,7 @@ class PluginManager:
     def get_plugin_instance(self, package: str) -> Optional[PluginSpec]:
         return self.plugin_manager.get_plugin(package)
 
-    def run_plugin_job_sync(self, package: str, plugin_id: int, user_id: int):
+    async def run_plugin_job_sync(self, package: str, plugin_id: int, user_id: int):
         """
         Wrapper to run a plugin's 'run' method synchronously within asyncio event loop,
         fetching config from the active job for the user/plugin.
@@ -127,7 +127,7 @@ class PluginManager:
             config = plugin.config(json.loads(str(job.config)))
             job_id = f"{package}/{user_id}"
             logger = logging.getLogger(job_id)
-            return asyncio.run(plugin.run(config, logger))
+            return await plugin.run(config, logger)
 
     def unload_plugin(self, package: str):
         module_path, _ = package.rsplit(".", 1)
