@@ -41,6 +41,17 @@ const theme = createTheme({
   }
 });
 
+const users = [
+  {
+    id: 1,
+    fullName: 'Chung Dao'
+  },
+  {
+    id: 2,
+    fullName: 'Ngoc Diep'
+  }
+];
+
 export default function App() {
   const [plugins, setPlugins] = useState([]);
   const [pluginId, setPluginId] = useState(0);
@@ -51,6 +62,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
+  const [userId, setUserId] = useState(users[0].id);
   const [error, setError] = useState(null);
 
   // Load plugin list
@@ -66,14 +78,18 @@ export default function App() {
     setTimeout(() => setResult(null), 3000);
   };
 
-  const loadSchema = async (pluginId, currentJobId) => {
-    setPluginId(pluginId);
+  const loadSchema = async (currentPluginId, currentUserId, currentJobId) => {
+    if (!currentPluginId) return;
+    setPluginId(currentPluginId);
     setLoading(true);
     setError(null);
     setSchema(null);
 
     try {
-      const { schema, configs } = await api.fetchSchema(pluginId);
+      const { schema, configs } = await api.fetchSchema(
+        currentUserId ?? userId,
+        currentPluginId
+      );
       setSchema(schema);
       setConfigVersions(configs);
       const newJobId = currentJobId ?? configs[0].id;
@@ -92,12 +108,17 @@ export default function App() {
     setError(null);
 
     try {
-      const response = await api.updateConfig(jobId, {
+      const jobItem = {
         config: formData,
         description: jobDesc
-      });
+      };
+      if (!jobId) {
+        // add new job
+        Object.assign(jobItem, { userId, pluginId });
+      }
+      const response = await api.updateConfig(jobId, jobItem);
       handleSetResult(response);
-      loadSchema(pluginId, jobId);
+      await loadSchema(pluginId, userId, jobId);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -131,13 +152,38 @@ export default function App() {
     setJobId(newJobId);
     setJobDesc(
       (configs ?? configVersions).find((version) => version.id === newJobId)
-        .description
+        ?.description ?? ''
     );
   };
 
+  const handleChangeUser = async (currentUserId) => {
+    setUserId(currentUserId);
+    // reload schema
+    await loadSchema(pluginId, currentUserId);
+  };
+
+  const handleDeleteJob = async () => {
+    if (!pluginId) return;
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const response = await api.deleteJob(jobId);
+      handleSetResult(response);
+      await loadSchema(pluginId, userId);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const currentConfig = configVersions.find((version) => version.id === jobId);
+
   return (
     <ThemeProvider theme={theme}>
-      <Container sx={{ minHeight: '100vh' }}>
+      <Container sx={{ minHeight: '100vh', padding: 10 }}>
         <h1>Alpha Miner – Plugin Config</h1>
         <Box
           sx={{
@@ -147,6 +193,25 @@ export default function App() {
             flexWrap: 'wrap' // allow wrapping on small screens
           }}
         >
+          <FormControl size="small">
+            <InputLabel id="config-version-select-label">
+              -- Select user --
+            </InputLabel>
+            <Select
+              labelId="config-version-select-label"
+              value={userId}
+              onChange={(e) => {
+                handleChangeUser(e.target.value);
+              }}
+            >
+              {users.map((user) => (
+                <MenuItem key={user.id} value={user.id}>
+                  {user.fullName}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
           <FormControl size="small" sx={{ minWidth: 360 }}>
             <InputLabel id="plugin-select-label">
               -- Select a plugin --
@@ -201,33 +266,46 @@ export default function App() {
             />
           </FormControl>
         )}
-        {schema && (
+        {schema && currentConfig && (
           <Form
             schema={schema}
-            formData={JSON.parse(
-              configVersions.find((version) => version.id === jobId).config
-            )}
+            formData={JSON.parse(currentConfig.config)}
             validator={validator}
             onSubmit={handleSubmit}
           >
             <Box
               sx={{
-                display: 'flex'
+                display: 'flex',
+                justifyContent: 'space-between'
               }}
             >
-              <Button variant="contained" type="submit" disabled={submitting}>
-                {submitting ? 'Saving…' : 'Save'}
-              </Button>
-              <InputLabel>
-                <Checkbox
-                  checked={
-                    configVersions.find((version) => version.id === jobId)
-                      .active
-                  }
-                  onChange={(e) => handleJobActivation(e.target.checked)}
-                />
-                Activate
-              </InputLabel>
+              <Box
+                sx={{
+                  display: 'flex'
+                }}
+              >
+                <Button variant="contained" type="submit" disabled={submitting}>
+                  {submitting ? 'Saving…' : 'Save'}
+                </Button>
+                <InputLabel>
+                  <Checkbox
+                    checked={currentConfig.active}
+                    onChange={(e) => handleJobActivation(e.target.checked)}
+                  />
+                  Activate
+                </InputLabel>
+              </Box>
+
+              {jobId !== 0 && (
+                <Button
+                  variant="contained"
+                  color="error"
+                  disabled={submitting}
+                  onClick={handleDeleteJob}
+                >
+                  Delete
+                </Button>
+              )}
             </Box>
           </Form>
         )}

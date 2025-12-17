@@ -1,8 +1,8 @@
 export const API_BASE_URL = 'http://localhost:8000';
 
 export default {
-  async fetchSchema(pluginId: number) {
-    const res = await fetch(`${API_BASE_URL}/schema/${pluginId}`);
+  async fetchSchema(userId: number, pluginId: number) {
+    const res = await fetch(`${API_BASE_URL}/schema/${userId}/${pluginId}`);
 
     if (!res.ok) {
       throw new Error(`Schema not found for ${pluginId}`);
@@ -47,6 +47,21 @@ export default {
     if (!res.ok) {
       const msg = await res.text();
       throw new Error(msg || 'Plugin activation failed');
+    }
+
+    return res.json();
+  },
+  async deleteJob(jobId: number) {
+    const res = await fetch(`${API_BASE_URL}/delete/${jobId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!res.ok) {
+      const msg = await res.text();
+      throw new Error(msg || 'Plugin deletion failed');
     }
 
     return res.json();

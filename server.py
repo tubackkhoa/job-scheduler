@@ -1,12 +1,11 @@
 from fastapi import FastAPI, Body, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import logging
+from models import Job
 from plugin_manager import PluginManager
 
 # Configure logging to show INFO and above messages
 logging.basicConfig(level=logging.ERROR)
-
-user_id = 1
 
 plugin_manager = PluginManager()
 plugin_manager.start()
@@ -24,15 +23,28 @@ def plugins():
     return plugin_manager.get_all_plugins()
 
 
-@app.get("/schema/{plugin_id}")
-def schema(plugin_id: int):
+@app.get("/schema/{user_id}/{plugin_id}")
+def schema(user_id: int, plugin_id: int):
     plugin_item = plugin_manager.get_plugin_by_id(plugin_id)
     assert plugin_item
     plugin = plugin_manager.get_plugin_instance(str(plugin_item.package))
+    configs = plugin_manager.get_jobs_for_plugin_and_user(plugin_id, user_id)
     if plugin != None:
+        if len(configs) == 0:
+            # add empty config so that when saving it will be new job
+            configs.append(
+                Job(
+                    active=0,
+                    description="",
+                    id=0,
+                    config=plugin.config().model_dump_json(),
+                    plugin_id=plugin_id,
+                    user_id=user_id,
+                )
+            )
         return {
             "schema": plugin.schema(),
-            "configs": plugin_manager.get_jobs_for_plugin_and_user(plugin_id, user_id),
+            "configs": configs,
         }
 
 
@@ -45,20 +57,40 @@ def activate_config(job_id: int, activation: bool):
     return {"success": True}
 
 
+@app.post("/delete/{job_id}")
+def delete_job(job_id: int):
+    plugin_manager.remove_job(job_id)
+    return {"success": True}
+
+
 @app.post("/config/{job_id}")
 def update_config(job_id: int, payload: dict = Body(...)):
-    job_item = plugin_manager.get_job_by_id(job_id)
-    assert job_item
-    plugin_item = plugin_manager.get_plugin_by_id(job_item.plugin_id)  # type: ignore
-    assert plugin_item
-    plugin = plugin_manager.get_plugin_instance(str(plugin_item.package))
-    if not plugin:
-        return {"error": "Plugin not found"}
     try:
+        if job_id == 0:
+            plugin_id = payload["pluginId"]
+        else:
+            job_item = plugin_manager.get_job_by_id(job_id)
+            assert job_item
+            plugin_id = int(job_item.plugin_id)  # type: ignore
+
+        plugin_item = plugin_manager.get_plugin_by_id(plugin_id)
+        assert plugin_item
+        plugin = plugin_manager.get_plugin_instance(str(plugin_item.package))
+        if not plugin:
+            return {"error": "Plugin not found"}
         config = plugin.config(payload.get("config"))
-        plugin_manager.update_job(
-            job_id, config.model_dump_json(), payload.get("description")
-        )
+        if job_id == 0:
+            plugin_manager.add_job(
+                payload["userId"],
+                plugin_id,
+                config.model_dump_json(),
+                payload.get("description"),
+            )
+        else:
+            plugin_manager.update_job(
+                job_id, config.model_dump_json(), payload.get("description")
+            )
+
         return config
     except Exception as e:
         # unexpected errors

@@ -125,7 +125,13 @@ class PluginManager:
 
         return plugin
 
-    def add_job(self, user_id: int, plugin_id: int, config: str, description: str):
+    def add_job(
+        self,
+        user_id: int,
+        plugin_id: int,
+        config: str,
+        description: Optional[str] = None,
+    ):
         with Session(self.engine) as session:
             job = Job(
                 user_id=user_id,
