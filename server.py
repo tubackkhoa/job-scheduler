@@ -55,8 +55,10 @@ def update_config(job_id: int, payload: dict = Body(...)):
     if not plugin:
         return {"error": "Plugin not found"}
     try:
-        config = plugin.config(payload)
-        plugin_manager.update_job(job_id, config.model_dump_json())
+        config = plugin.config(payload.get("config"))
+        plugin_manager.update_job(
+            job_id, config.model_dump_json(), payload.get("description")
+        )
         return config
     except Exception as e:
         # unexpected errors

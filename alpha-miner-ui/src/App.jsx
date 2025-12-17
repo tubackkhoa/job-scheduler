@@ -6,9 +6,11 @@ import {
   Select,
   MenuItem,
   Button,
+  Input,
   Checkbox,
   Box,
-  Container
+  Container,
+  Typography
 } from '@mui/material';
 import Form from '@rjsf/mui';
 import validator from '@rjsf/validator-ajv8';
@@ -43,6 +45,7 @@ export default function App() {
   const [plugins, setPlugins] = useState([]);
   const [pluginId, setPluginId] = useState(0);
   const [jobId, setJobId] = useState('');
+  const [jobDesc, setJobDesc] = useState('');
   const [configVersions, setConfigVersions] = useState([]);
   const [schema, setSchema] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -58,18 +61,23 @@ export default function App() {
       .catch((err) => setError(err.message));
   }, []);
 
-  const loadSchema = async (pluginId) => {
+  const handleSetResult = (ret) => {
+    setResult(ret);
+    setTimeout(() => setResult(null), 3000);
+  };
+
+  const loadSchema = async (pluginId, currentJobId) => {
     setPluginId(pluginId);
     setLoading(true);
     setError(null);
     setSchema(null);
-    setResult(null);
 
     try {
       const { schema, configs } = await api.fetchSchema(pluginId);
       setSchema(schema);
       setConfigVersions(configs);
-      setJobId(configs[0].id);
+      const newJobId = currentJobId ?? configs[0].id;
+      handleChangeJob(newJobId, configs);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -82,15 +90,14 @@ export default function App() {
 
     setSubmitting(true);
     setError(null);
-    setResult(null);
 
     try {
-      const response = await api.updateConfig(jobId, formData);
-      const newConfigVersions = [...configVersions];
-      newConfigVersions.find((version) => version.id === jobId).config =
-        JSON.stringify(response);
-      setConfigVersions(newConfigVersions);
-      setResult(response);
+      const response = await api.updateConfig(jobId, {
+        config: formData,
+        description: jobDesc
+      });
+      handleSetResult(response);
+      loadSchema(pluginId, jobId);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -100,7 +107,6 @@ export default function App() {
 
   const handleJobActivation = async (activation) => {
     setError(null);
-    setResult(null);
     try {
       const response = await api.activateJob(jobId, activation);
       if (response.success) {
@@ -115,10 +121,18 @@ export default function App() {
         }
         setConfigVersions(newConfigVersions);
       }
-      setResult(response);
+      handleSetResult(response);
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  const handleChangeJob = (newJobId, configs) => {
+    setJobId(newJobId);
+    setJobDesc(
+      (configs ?? configVersions).find((version) => version.id === newJobId)
+        .description
+    );
   };
 
   return (
@@ -164,8 +178,7 @@ export default function App() {
               value={jobId}
               label="-- Select a job --"
               onChange={(e) => {
-                setResult(null);
-                setJobId(e.target.value);
+                handleChangeJob(e.target.value);
               }}
             >
               {configVersions.map((version) => (
@@ -179,7 +192,15 @@ export default function App() {
 
         {loading && <p>Loading schema...</p>}
         {error && <p style={{ color: 'red' }}>{error}</p>}
-
+        {schema && (
+          <FormControl sx={{ my: 2 }} fullWidth>
+            <Typography variant="h5">Description</Typography>
+            <Input
+              value={jobDesc}
+              onChange={(e) => setJobDesc(e.target.value)}
+            />
+          </FormControl>
+        )}
         {schema && (
           <Form
             schema={schema}
