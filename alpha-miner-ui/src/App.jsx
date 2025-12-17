@@ -252,7 +252,7 @@ export default function App() {
             >
               {configVersions.map((version) => (
                 <MenuItem key={version.id} value={version.id}>
-                  {version.description}
+                  {version.description} {version.active ? ' (active)' : ''}
                 </MenuItem>
               ))}
             </Select>
