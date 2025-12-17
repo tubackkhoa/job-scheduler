@@ -7,7 +7,7 @@ from plugin_manager import PluginManager
 from ws_manager import WSConnectionManager
 
 # Configure logging to show INFO and above messages
-logging.basicConfig(level=logging.ERROR)
+logging.basicConfig(level=logging.DEBUG, handlers=[logging.NullHandler()])
 
 manager = WSConnectionManager()
 

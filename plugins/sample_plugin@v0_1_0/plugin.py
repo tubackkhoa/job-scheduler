@@ -26,5 +26,7 @@ class Plugin:
     @hookimpl
     @classmethod
     async def run(cls, config: Config, logger: logging.Logger):
+        for i in range(10):
+            logger.info(f"running with step: {i}")
         logger.error(f"running with config: {config}")
         return True

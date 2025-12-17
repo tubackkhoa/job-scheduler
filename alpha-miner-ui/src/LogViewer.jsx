@@ -1,13 +1,28 @@
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Box, Typography, Paper } from '@mui/material';
 
 // Map log levels to MUI color palette or CSS colors
 const levelColors = {
-  ERROR: '#f44336', // Red
-  WARN: '#ff9800', // Orange
-  INFO: '#2196f3', // Blue
-  DEBUG: '#9e9e9e', // Grey
-  TRACE: '#757575' // Dark Grey
+  ERROR: {
+    color: '#ff6b6b',
+    bg: 'rgba(255, 107, 107, 0.15)'
+  },
+  WARN: {
+    color: '#ffb74d',
+    bg: 'rgba(255, 183, 77, 0.15)'
+  },
+  INFO: {
+    color: '#64b5f6',
+    bg: 'rgba(100, 181, 246, 0.15)'
+  },
+  DEBUG: {
+    color: '#b0bec5',
+    bg: 'rgba(176, 190, 197, 0.15)'
+  },
+  TRACE: {
+    color: '#9e9e9e',
+    bg: 'rgba(158, 158, 158, 0.12)'
+  }
 };
 
 export default function LogViewer({ url, jobInstanceId }) {
@@ -67,17 +82,46 @@ export default function LogViewer({ url, jobInstanceId }) {
         <Typography></Typography>
       ) : (
         logs.map((log, idx) => {
-          const color = levelColors[log.level] || '#d4d4d4';
+          const levelStyle = levelColors[log.level] || {
+            color: '#d4d4d4',
+            bg: 'transparent'
+          };
+
           return (
-            <Box key={idx} sx={{ color, mb: 0.5 }}>
+            <Box
+              key={idx}
+              sx={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 1,
+                mb: 0.75
+              }}
+            >
+              {/* Level badge */}
+              <Box
+                sx={{
+                  minWidth: 60,
+                  textAlign: 'center',
+                  px: 1,
+                  py: 0.25,
+                  borderRadius: 1,
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  color: levelStyle.color,
+                  backgroundColor: levelStyle.bg
+                }}
+              >
+                {log.level}
+              </Box>
+
+              {/* Message */}
               <Typography
                 variant="body2"
-                component="span"
-                sx={{ fontWeight: 'bold' }}
+                sx={{
+                  color: '#e0e0e0',
+                  wordBreak: 'break-word'
+                }}
               >
-                {log.level}:
-              </Typography>{' '}
-              <Typography variant="body2" component="span">
                 {log.message}
               </Typography>
             </Box>
