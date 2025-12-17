@@ -125,8 +125,8 @@ class PluginManager:
                 return None
 
             config = plugin.config(json.loads(str(job.config)))
-            job_id = f"{package}/{user_id}"
-            logger = logging.getLogger(job_id)
+            scheduler_job_id = f"{package}/{user_id}"
+            logger = logging.getLogger(scheduler_job_id)
             return await plugin.run(config, logger)
 
     def unload_plugin(self, package: str):
@@ -175,19 +175,19 @@ class PluginManager:
             self.add_job_instance(user_id, plugin)
 
     def add_job_instance(self, user_id: int, plugin: Plugin):
-        job_id = f"{plugin.package}/{user_id}"
-        if self.scheduler.get_job(job_id) is None:
+        scheduler_job_id = f"{plugin.package}/{user_id}"
+        if self.scheduler.get_job(scheduler_job_id) is None:
 
             self.scheduler.add_job(
                 self.run_plugin_job_sync,
                 "interval",
                 seconds=plugin.interval,
                 args=[plugin.package, plugin.id, user_id],
-                id=job_id,
+                id=scheduler_job_id,
             )
 
             # add handler for this logger
-            logger = logging.getLogger(job_id)
+            logger = logging.getLogger(scheduler_job_id)
             logger.addHandler(self.log_handler)
 
     def update_job(self, id: int, config: str, description: Optional[str] = None):
