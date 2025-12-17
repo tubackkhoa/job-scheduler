@@ -55,9 +55,6 @@ class LabConfig(BaseModel):
         return v
 
 
-logger = logging.getLogger(__name__)
-
-
 class LabPlugin:
 
     @hookimpl
@@ -72,6 +69,6 @@ class LabPlugin:
 
     @hookimpl
     @classmethod
-    async def run(cls, config: LabConfig):
+    async def run(cls, config: LabConfig, logger: logging.Logger):
         logger.debug(f"running with config: {config}")
         return True

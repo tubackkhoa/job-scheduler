@@ -1,8 +1,9 @@
 import asyncio
 import importlib
 import json
+import logging
 import sys
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import pluggy
 from pydantic import BaseModel
@@ -25,7 +26,26 @@ class PluginSpec:
     def config(cls, json: Optional[dict[str, Any]] = None) -> BaseModel: ...
 
     @hookspec
-    async def run(cls, config: BaseModel) -> bool: ...
+    async def run(cls, config: BaseModel, logger: logging.Logger) -> bool: ...
+
+
+class JobLogHandler(logging.Handler):
+    def __init__(self, log_callback):
+        super().__init__()
+        self.log_callback = log_callback
+
+    def emit(self, record: logging.LogRecord):
+        if self.log_callback is None:
+            return
+
+        log_entry = self.format(record)
+
+        log_event = {
+            "job_id": record.name,
+            "level": record.levelname,
+            "message": log_entry,
+        }
+        self.log_callback(log_event)
 
 
 class PluginManager:
@@ -36,6 +56,7 @@ class PluginManager:
     def __init__(
         self,
         db_connection: str = "sqlite:///data/apscheduler_events.db",
+        log_callback: Optional[Callable[[dict], Any]] = None,
         scheduler_kwargs: Optional[dict] = None,
     ) -> None:
         self.plugin_manager = pluggy.PluginManager(PROJECT_NAME)
@@ -43,6 +64,7 @@ class PluginManager:
         # Pass any additional user-provided args
         self.scheduler = BackgroundScheduler(**(scheduler_kwargs or {}))
         self.plugin_manager.add_hookspecs(PluginSpec)
+        self.log_handler = JobLogHandler(log_callback)
 
         # Register all plugins from the database
         all_plugins = self.get_all_plugins()
@@ -103,7 +125,9 @@ class PluginManager:
                 return None
 
             config = plugin.config(json.loads(str(job.config)))
-            return asyncio.run(plugin.run(config))
+            job_id = f"{package}/{user_id}"
+            logger = logging.getLogger(job_id)
+            return asyncio.run(plugin.run(config, logger))
 
     def unload_plugin(self, package: str):
         module_path, _ = package.rsplit(".", 1)
@@ -153,6 +177,7 @@ class PluginManager:
     def add_job_instance(self, user_id: int, plugin: Plugin):
         job_id = f"{plugin.package}/{user_id}"
         if self.scheduler.get_job(job_id) is None:
+
             self.scheduler.add_job(
                 self.run_plugin_job_sync,
                 "interval",
@@ -160,6 +185,10 @@ class PluginManager:
                 args=[plugin.package, plugin.id, user_id],
                 id=job_id,
             )
+
+            # add handler for this logger
+            logger = logging.getLogger(job_id)
+            logger.addHandler(self.log_handler)
 
     def update_job(self, id: int, config: str, description: Optional[str] = None):
         with Session(self.engine) as session:
@@ -193,6 +222,10 @@ class PluginManager:
                 assert plugin is not None
                 scheduler_job_id = f"{plugin.package}/{job.user_id}"
                 self.scheduler.remove_job(scheduler_job_id)
+
+                # remove handler for this logger
+                logger = logging.getLogger(scheduler_job_id)
+                logger.removeHandler(self.log_handler)
 
     def activate_job(self, job_id: int):
         with Session(self.engine) as session:

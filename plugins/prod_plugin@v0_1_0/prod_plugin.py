@@ -55,9 +55,6 @@ class ProdConfig(BaseModel):
         return v
 
 
-logger = logging.getLogger(__name__)
-
-
 class ProdPlugin:
 
     @hookimpl
@@ -72,6 +69,6 @@ class ProdPlugin:
 
     @hookimpl
     @classmethod
-    async def run(cls, config: ProdConfig):
+    async def run(cls, config: ProdConfig, logger: logging.Logger):
         logger.debug(f"running with config: {config}")
         return True

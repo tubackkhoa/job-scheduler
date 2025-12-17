@@ -14,7 +14,8 @@ import {
 } from '@mui/material';
 import Form from '@rjsf/mui';
 import validator from '@rjsf/validator-ajv8';
-import api from './api';
+import api, { API_BASE_URL } from './api';
+import LogViewer from './LogViewer';
 
 const theme = createTheme({
   palette: {
@@ -184,6 +185,7 @@ export default function App() {
   };
 
   const currentConfig = configVersions.find((version) => version.id === jobId);
+  const currentPlugin = plugins.find((p) => p.id === pluginId);
 
   return (
     <ThemeProvider theme={theme}>
@@ -258,6 +260,13 @@ export default function App() {
             </Select>
           </FormControl>
         </Box>
+
+        {currentPlugin && userId && (
+          <LogViewer
+            url={API_BASE_URL.replace(/^http/, 'ws') + '/ws/logs'}
+            jobInstanceId={`${currentPlugin.package}/${userId}`}
+          />
+        )}
 
         {loading && <p>Loading schema...</p>}
         {error && <p style={{ color: 'red' }}>{error}</p>}

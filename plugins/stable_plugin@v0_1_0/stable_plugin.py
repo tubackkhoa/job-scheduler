@@ -55,9 +55,6 @@ class StableConfig(BaseModel):
         return v
 
 
-logger = logging.getLogger(__name__)
-
-
 class StablePlugin:
 
     @hookimpl
@@ -72,6 +69,6 @@ class StablePlugin:
 
     @hookimpl
     @classmethod
-    async def run(cls, config: StableConfig):
+    async def run(cls, config: StableConfig, logger: logging.Logger):
         logger.debug(f"running with config: {config}")
         return True

@@ -1,21 +1,46 @@
-from fastapi import FastAPI, Body, HTTPException
+import asyncio
+from fastapi import FastAPI, Body, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from models import Job
 from plugin_manager import PluginManager
+from ws_manager import WSConnectionManager
 
 # Configure logging to show INFO and above messages
 logging.basicConfig(level=logging.ERROR)
 
-plugin_manager = PluginManager()
+manager = WSConnectionManager()
+
+# Schedule async send_log in the event loop safely from sync context
+loop = asyncio.get_event_loop()
+
+
+def log_callback(message: dict):
+    asyncio.run_coroutine_threadsafe(manager.send_log(message), loop)
+
+
+plugin_manager = PluginManager(log_callback=log_callback)
 plugin_manager.start()
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
+    allow_headers=["*"],
 )
+
+
+@app.websocket("/ws/logs")
+async def websocket_logs_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Keep connection alive; you can also handle client messages here if needed
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
 
 
 @app.get("/plugins")

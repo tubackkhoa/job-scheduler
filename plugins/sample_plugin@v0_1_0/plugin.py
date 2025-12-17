@@ -11,9 +11,6 @@ class Config(BaseModel):
     version: str = "1.0"
 
 
-logger = logging.getLogger(__name__)
-
-
 class Plugin:
 
     @hookimpl
@@ -28,6 +25,6 @@ class Plugin:
 
     @hookimpl
     @classmethod
-    async def run(cls, config: Config):
+    async def run(cls, config: Config, logger: logging.Logger):
         logger.error(f"running with config: {config}")
         return True
