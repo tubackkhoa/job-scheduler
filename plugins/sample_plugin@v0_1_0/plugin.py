@@ -12,7 +12,6 @@ class Config(BaseModel):
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 class Plugin:
@@ -30,5 +29,5 @@ class Plugin:
     @hookimpl
     @classmethod
     async def run(cls, config: Config):
-        logger.info(f"running with config: {config}")
+        logger.error(f"running with config: {config}")
         return True

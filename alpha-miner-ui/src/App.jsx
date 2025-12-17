@@ -5,6 +5,8 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Button,
+  Checkbox,
   Box,
   Container
 } from '@mui/material';
@@ -40,7 +42,7 @@ const theme = createTheme({
 export default function App() {
   const [plugins, setPlugins] = useState([]);
   const [pluginId, setPluginId] = useState(0);
-  const [activeVersion, setActiveVersion] = useState('');
+  const [jobId, setJobId] = useState('');
   const [configVersions, setConfigVersions] = useState([]);
   const [schema, setSchema] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -67,7 +69,7 @@ export default function App() {
       const { schema, configs } = await api.fetchSchema(pluginId);
       setSchema(schema);
       setConfigVersions(configs);
-      setActiveVersion(configs[0].id);
+      setJobId(configs[0].id);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -83,15 +85,39 @@ export default function App() {
     setResult(null);
 
     try {
-      const response = await api.updateConfig(activeVersion, formData);
-      configVersions.find((version) => version.id === activeVersion).config =
+      const response = await api.updateConfig(jobId, formData);
+      const newConfigVersions = [...configVersions];
+      newConfigVersions.find((version) => version.id === jobId).config =
         JSON.stringify(response);
-      setConfigVersions(configVersions);
+      setConfigVersions(newConfigVersions);
       setResult(response);
     } catch (err) {
       setError(err.message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleJobActivation = async (activation) => {
+    setError(null);
+    setResult(null);
+    try {
+      const response = await api.activateJob(jobId, activation);
+      if (response.success) {
+        // update the config at local to sync with server
+        const newConfigVersions = [...configVersions];
+        for (const version of newConfigVersions) {
+          if (version.id === jobId) {
+            version.active = activation ? 1 : 0;
+          } else {
+            version.active = 0;
+          }
+        }
+        setConfigVersions(newConfigVersions);
+      }
+      setResult(response);
+    } catch (err) {
+      setError(err.message);
     }
   };
 
@@ -118,8 +144,12 @@ export default function App() {
               onChange={(e) => loadSchema(Number(e.target.value))}
             >
               {plugins.map((plugin) => (
-                <MenuItem key={plugin.id} value={plugin.id}>
-                  {plugin.package}
+                <MenuItem
+                  key={plugin.id}
+                  value={plugin.id}
+                  title={plugin.description}
+                >
+                  {plugin.package} (interval {plugin.interval} seconds)
                 </MenuItem>
               ))}
             </Select>
@@ -127,13 +157,16 @@ export default function App() {
 
           <FormControl size="small" sx={{ minWidth: 360 }}>
             <InputLabel id="config-version-select-label">
-              -- Select a config version --
+              -- Select a job --
             </InputLabel>
             <Select
               labelId="config-version-select-label"
-              value={activeVersion}
-              label="-- Select a config version --"
-              onChange={(e) => setActiveVersion(e.target.value)}
+              value={jobId}
+              label="-- Select a job --"
+              onChange={(e) => {
+                setResult(null);
+                setJobId(e.target.value);
+              }}
             >
               {configVersions.map((version) => (
                 <MenuItem key={version.id} value={version.id}>
@@ -148,21 +181,34 @@ export default function App() {
         {error && <p style={{ color: 'red' }}>{error}</p>}
 
         {schema && (
-          <div style={{ marginTop: 24 }}>
-            <Form
-              schema={schema}
-              formData={JSON.parse(
-                configVersions.find((version) => version.id === activeVersion)
-                  .config
-              )}
-              validator={validator}
-              onSubmit={handleSubmit}
+          <Form
+            schema={schema}
+            formData={JSON.parse(
+              configVersions.find((version) => version.id === jobId).config
+            )}
+            validator={validator}
+            onSubmit={handleSubmit}
+          >
+            <Box
+              sx={{
+                display: 'flex'
+              }}
             >
-              <button type="submit" disabled={submitting}>
-                {submitting ? 'Submitting…' : 'Submit'}
-              </button>
-            </Form>
-          </div>
+              <Button variant="contained" type="submit" disabled={submitting}>
+                {submitting ? 'Saving…' : 'Save'}
+              </Button>
+              <InputLabel>
+                <Checkbox
+                  checked={
+                    configVersions.find((version) => version.id === jobId)
+                      .active
+                  }
+                  onChange={(e) => handleJobActivation(e.target.checked)}
+                />
+                Activate
+              </InputLabel>
+            </Box>
+          </Form>
         )}
 
         {result && (

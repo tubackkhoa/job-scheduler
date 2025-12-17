@@ -12,7 +12,6 @@ class Config(BaseModel):
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 class Plugin:

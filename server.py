@@ -4,7 +4,7 @@ import logging
 from plugin_manager import PluginManager
 
 # Configure logging to show INFO and above messages
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.ERROR)
 
 user_id = 1
 
@@ -34,6 +34,15 @@ def schema(plugin_id: int):
             "schema": plugin.schema(),
             "configs": plugin_manager.get_jobs_for_plugin_and_user(plugin_id, user_id),
         }
+
+
+@app.post("/activate/{job_id}/{activation}")
+def activate_config(job_id: int, activation: bool):
+    if activation:
+        plugin_manager.activate_job(job_id)
+    else:
+        plugin_manager.deactivate_job(job_id)
+    return {"success": True}
 
 
 @app.post("/config/{job_id}")

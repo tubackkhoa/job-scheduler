@@ -35,5 +35,20 @@ export default {
     }
 
     return res.json();
+  },
+  async activateJob(jobId: number, activation: boolean) {
+    const res = await fetch(`${API_BASE_URL}/activate/${jobId}/${activation}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!res.ok) {
+      const msg = await res.text();
+      throw new Error(msg || 'Plugin activation failed');
+    }
+
+    return res.json();
   }
 };
