@@ -34,11 +34,14 @@ class PluginManager:
     """
 
     def __init__(
-        self, db_connection: str = "sqlite:///data/apscheduler_events.db"
+        self,
+        db_connection: str = "sqlite:///data/apscheduler_events.db",
+        scheduler_kwargs: Optional[dict] = None,
     ) -> None:
         self.plugin_manager = pluggy.PluginManager(PROJECT_NAME)
         self.engine = create_engine(db_connection)
-        self.scheduler = BackgroundScheduler()
+        # Pass any additional user-provided args
+        self.scheduler = BackgroundScheduler(**(scheduler_kwargs or {}))
         self.plugin_manager.add_hookspecs(PluginSpec)
 
         # Register all plugins from the database
