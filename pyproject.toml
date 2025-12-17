@@ -1,22 +1,57 @@
-[build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "alpha-miner-plugins"
 version = "0.1.0"
-description = "Plugins for alpha-miner using pluggy"
+description = "A pluggy-based plugin management system for alpha-miner workers"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 license = { text = "MIT" }
-authors = [{ name = "Your Name", email = "you@example.com" }]
-
-dependencies = [
-    "pluggy>=1.4",
+authors = [{ name = "Pham Tu", email = "tu@orai.io" }]
+keywords = [
+    "pluggy",
+    "plugins",
+    "scheduler",
+    "fastapi",
+    "alpha-miner",
+    "trading",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Framework :: FastAPI",
 ]
 
-[tool.setuptools]
-packages = ["plugins", "plugins.plugin1", "plugins.plugin2"]
+dependencies = [
+    "pluggy>=1.0",
+    "pydantic>=2.0",
+    "APScheduler>=3.10",
+    "SQLAlchemy>=2.0",
+    "fastapi>=0.100",
+    "uvicorn[standard]>=0.20",
+]
 
-[tool.setuptools.package-dir]
-"" = "."
+[project.urls]
+"Homepage" = "https://github.com/oraichain/py-plugin-starterkit"
+"Repository" = "https://github.com/oraichain/py-plugin-starterkit.git"
+"Issues" = "https://github.com/oraichain/py-plugin-starterkit/issues"
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "black"]
+
+[project.scripts]
+alpha-miner-plugins-server = "server:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.black]
+line-length = 100
+
+[tool.ruff]
+line-length = 100
+select = ["E", "W", "F", "I", "B", "UP"]
+ignore = []
+
+[tool.pytest.ini_options]
+addopts = "-ra -q"
