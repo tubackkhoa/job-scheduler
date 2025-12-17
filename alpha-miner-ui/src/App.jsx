@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import {
   FormControl,
@@ -55,7 +55,7 @@ const users = [
 export default function App() {
   const [plugins, setPlugins] = useState([]);
   const [pluginId, setPluginId] = useState(0);
-  const [jobId, setJobId] = useState('');
+  const [jobId, setJobId] = useState(0);
   const [jobDesc, setJobDesc] = useState('');
   const [configVersions, setConfigVersions] = useState([]);
   const [schema, setSchema] = useState(null);
@@ -64,6 +64,7 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [userId, setUserId] = useState(users[0].id);
   const [error, setError] = useState(null);
+  const formRef = useRef(null);
 
   // Load plugin list
   useEffect(() => {
@@ -101,7 +102,7 @@ export default function App() {
     }
   };
 
-  const handleSubmit = async ({ formData }) => {
+  const handleSubmit = async ({ formData, saveNew = false }) => {
     if (!pluginId) return;
 
     setSubmitting(true);
@@ -112,11 +113,14 @@ export default function App() {
         config: formData,
         description: jobDesc
       };
-      if (!jobId) {
+      let response;
+      if (!jobId || saveNew) {
         // add new job
-        Object.assign(jobItem, { userId, pluginId });
+        response = await api.updateConfig(0, { ...jobItem, userId, pluginId });
+      } else {
+        response = await api.updateConfig(jobId, jobItem);
       }
-      const response = await api.updateConfig(jobId, jobItem);
+
       handleSetResult(response);
       await loadSchema(pluginId, userId, jobId);
     } catch (err) {
@@ -269,6 +273,7 @@ export default function App() {
         {schema && currentConfig && (
           <Form
             schema={schema}
+            ref={formRef}
             formData={JSON.parse(currentConfig.config)}
             validator={validator}
             onSubmit={handleSubmit}
@@ -281,7 +286,8 @@ export default function App() {
             >
               <Box
                 sx={{
-                  display: 'flex'
+                  display: 'flex',
+                  gap: 2
                 }}
               >
                 <Button variant="contained" type="submit" disabled={submitting}>
@@ -297,14 +303,35 @@ export default function App() {
               </Box>
 
               {jobId !== 0 && (
-                <Button
-                  variant="contained"
-                  color="error"
-                  disabled={submitting}
-                  onClick={handleDeleteJob}
+                <Box
+                  sx={{
+                    display: 'flex',
+                    gap: 2
+                  }}
                 >
-                  Delete
-                </Button>
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    disabled={submitting}
+                    onClick={() => {
+                      handleSubmit({
+                        formData: formRef.current.state.formData,
+                        saveNew: true
+                      });
+                    }}
+                  >
+                    Save as new
+                  </Button>
+
+                  <Button
+                    variant="contained"
+                    color="error"
+                    disabled={submitting}
+                    onClick={handleDeleteJob}
+                  >
+                    Delete
+                  </Button>
+                </Box>
               )}
             </Box>
           </Form>
