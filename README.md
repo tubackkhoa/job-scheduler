@@ -37,9 +37,6 @@ plugin_manager = PluginManager(
                 db=2                   # Redis database index
             )
         },
-        'executors': {
-            'default': ThreadPoolExecutor(max_workers=20)
-        },
         # enforces safe defaults automatically
         'job_defaults': {
             'coalesce': True,      # Merge missed runs into one
