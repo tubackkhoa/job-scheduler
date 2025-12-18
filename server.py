@@ -6,7 +6,10 @@ from log_handler import JobLogHandler
 from models import Job
 from plugin_manager import PluginManager
 from ws_manager import WSConnectionManager
+import os
+import dotenv
 
+dotenv.load_dotenv()
 # Configure logging to show INFO and above messages
 logging.basicConfig(level=logging.DEBUG, handlers=[logging.NullHandler()])
 
@@ -17,7 +20,11 @@ log_handler = JobLogHandler(manager.send_log, asyncio.get_event_loop())
 
 
 # this code is run in main loop of uvicorn
-plugin_manager = PluginManager(log_handler=log_handler)
+module_paths = os.getenv("MODULE_PATH", "").split(":")
+plugin_manager = PluginManager(
+    log_handler=log_handler,
+    module_paths=module_paths,
+)
 plugin_manager.start()
 app = FastAPI()
 
