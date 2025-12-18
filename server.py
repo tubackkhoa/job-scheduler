@@ -15,6 +15,7 @@ manager = WSConnectionManager()
 # Schedule async send_log in the event loop safely from sync context
 log_handler = JobLogHandler(manager.send_log, asyncio.get_event_loop())
 
+
 # this code is run in main loop of uvicorn
 plugin_manager = PluginManager(log_handler=log_handler)
 plugin_manager.start()

@@ -2,28 +2,45 @@ import { useEffect, useState, useRef } from 'react';
 import { Box, Typography, Paper, Button } from '@mui/material';
 
 // Map log levels to MUI color palette or CSS colors
-const levelColors = {
-  ERROR: {
-    color: '#ff6b6b',
-    bg: 'rgba(255, 107, 107, 0.15)'
-  },
-  WARN: {
-    color: '#ffb74d',
-    bg: 'rgba(255, 183, 77, 0.15)'
-  },
-  INFO: {
-    color: '#64b5f6',
-    bg: 'rgba(100, 181, 246, 0.15)'
-  },
-  DEBUG: {
-    color: '#b0bec5',
-    bg: 'rgba(176, 190, 197, 0.15)'
-  },
-  TRACE: {
-    color: '#9e9e9e',
-    bg: 'rgba(158, 158, 158, 0.12)'
-  }
+const LEVEL_STYLES = {
+  INFO: { color: '#4fc3f7', bg: 'rgba(79, 195, 247, 0.15)' },
+  ERROR: { color: '#ef5350', bg: 'rgba(239, 83, 80, 0.15)' },
+  WARN: { color: '#ffb74d', bg: 'rgba(255, 183, 77, 0.15)' },
+  DEBUG: { color: '#ba68c8', bg: 'rgba(186, 104, 200, 0.15)' }
 };
+
+const DEFAULT_STYLE = { color: '#d4d4d4', bg: 'transparent' };
+
+/**
+ * Formats ugly Python datetime repr strings like:
+ * "datetime.datetime(2025, 12, 18, 10, 57, 15, 461066, tzinfo=...)"
+ * → "12/18/2025, 10:57:15 AM"
+ */
+function formatMessage(message) {
+  if (typeof message !== 'string') return message;
+
+  return message.replace(
+    /\[?datetime\.datetime\(([^)]+)\)/g,
+    (match, dtStr) => {
+      try {
+        const parts = dtStr.split(', ').map(Number);
+        const [year, month, day, hour, minute, second] = parts;
+        const date = new Date(year, month - 1, day, hour, minute, second || 0);
+        return date.toLocaleString(undefined, {
+          year: 'numeric',
+          month: 'numeric',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true
+        });
+      } catch {
+        return match; // fallback if parsing fails
+      }
+    }
+  );
+}
 
 export default function LogViewer({ url, jobInstanceId, maxMessages = 500 }) {
   const [logs, setLogs] = useState([]);
@@ -80,27 +97,33 @@ export default function LogViewer({ url, jobInstanceId, maxMessages = 500 }) {
       elevation={3}
       sx={{
         mt: 2,
-        padding: 2,
-        fontFamily: 'monospace',
-        backgroundColor: '#000',
         height: 400,
         display: 'flex',
         flexDirection: 'column',
-        border: '1px solid #444'
+        backgroundColor: '#000',
+        border: '1px solid #444',
+        borderRadius: 2,
+        overflow: 'hidden'
       }}
     >
-      {/* Header / Actions */}
+      {/* Header */}
       <Box
         sx={{
+          px: 2,
+          py: 1,
+          borderBottom: '1px solid #333',
           display: 'flex',
-          justifyContent: 'flex-end',
-          mb: 1
+          justifyContent: 'space-between',
+          alignItems: 'center'
         }}
       >
+        <Typography variant="subtitle2" sx={{ color: '#aaa' }}>
+          Job Execution Logs
+        </Typography>
         <Button
           size="small"
           variant="outlined"
-          onClick={() => setLogs([])}
+          onClick={handleClearLogs}
           disabled={logs.length === 0}
           sx={{
             fontSize: '0.75rem',
@@ -109,7 +132,7 @@ export default function LogViewer({ url, jobInstanceId, maxMessages = 500 }) {
             color: '#ccc',
             '&:hover': {
               borderColor: '#888',
-              backgroundColor: 'rgba(255,255,255,0.05)'
+              backgroundColor: 'rgba(255,255,255,0.08)'
             }
           }}
         >
@@ -117,18 +140,19 @@ export default function LogViewer({ url, jobInstanceId, maxMessages = 500 }) {
         </Button>
       </Box>
 
-      {/* Log list */}
+      {/* Scrollable Log Area */}
       <Box
         sx={{
           flex: 1,
-          overflowY: 'auto'
+          overflowY: 'auto',
+          px: 2,
+          py: 1,
+          fontFamily: 'monospace',
+          fontSize: '0.85rem'
         }}
       >
         {logs.map((log, idx) => {
-          const levelStyle = levelColors[log.level] || {
-            color: '#d4d4d4',
-            bg: 'transparent'
-          };
+          const style = LEVEL_STYLES[log.level] || DEFAULT_STYLE;
 
           return (
             <Box
@@ -136,36 +160,57 @@ export default function LogViewer({ url, jobInstanceId, maxMessages = 500 }) {
               sx={{
                 display: 'flex',
                 alignItems: 'flex-start',
-                gap: 1,
-                mb: 0.75
+                gap: 1.5,
+                py: 0.4,
+                '&:hover': {
+                  backgroundColor: 'rgba(255, 255, 255, 0.03)'
+                }
               }}
             >
-              {/* Level badge */}
+              {/* Level Badge */}
               <Box
                 sx={{
                   minWidth: 60,
                   textAlign: 'center',
                   px: 1,
-                  py: 0.25,
+                  py: 0.3,
                   borderRadius: 1,
                   fontSize: '0.75rem',
                   fontWeight: 700,
-                  color: levelStyle.color,
-                  backgroundColor: levelStyle.bg
+                  color: style.color,
+                  backgroundColor: style.bg,
+                  flexShrink: 0
                 }}
               >
                 {log.level}
               </Box>
 
-              {/* Message */}
+              {/* Timestamp - fixed width + monospace */}
               <Typography
-                variant="body2"
+                variant="caption"
                 sx={{
-                  color: '#e0e0e0',
-                  wordBreak: 'break-word'
+                  minWidth: 135,
+                  color: '#9e9e9e',
+                  fontFamily: 'monospace',
+                  flexShrink: 0
                 }}
               >
-                {log.message}
+                {log.time}
+              </Typography>
+
+              {/* Message - takes remaining space */}
+              <Typography
+                variant="body2"
+                component="div"
+                sx={{
+                  color: '#e0e0e0',
+                  wordBreak: 'break-word',
+                  whiteSpace: 'pre-wrap',
+                  flex: 1,
+                  lineHeight: 1.4
+                }}
+              >
+                {formatMessage(log.message)}
               </Typography>
             </Box>
           );

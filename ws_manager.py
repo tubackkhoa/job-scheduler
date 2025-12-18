@@ -1,4 +1,5 @@
 from fastapi import WebSocket
+from datetime import datetime
 
 
 class WSConnectionManager:
@@ -17,6 +18,8 @@ class WSConnectionManager:
         disconnected = []
         for connection in self.active_connections:
             try:
+                # add time
+                message["time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 await connection.send_json(message)
             except Exception:
                 disconnected.append(connection)

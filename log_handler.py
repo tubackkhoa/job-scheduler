@@ -19,6 +19,7 @@ class JobLogHandler(logging.Handler):
             "level": record.levelname,
             "message": log_entry,
         }
+
         # Schedule async callback safely
         self.loop.call_soon_threadsafe(
             asyncio.create_task,

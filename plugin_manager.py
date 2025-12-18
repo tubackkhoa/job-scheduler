@@ -2,11 +2,19 @@ import importlib
 import json
 import logging
 import sys
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 import pluggy
 from pydantic import BaseModel
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.events import (
+    JobExecutionEvent,
+    EVENT_JOB_EXECUTED,
+    EVENT_JOB_ERROR,
+    EVENT_JOB_SUBMITTED,
+    EVENT_JOB_ADDED,
+    EVENT_JOB_REMOVED,
+)
 from sqlalchemy import create_engine, update
 from sqlalchemy.orm import Session
 
@@ -39,11 +47,20 @@ class PluginManager:
         log_handler: Optional[logging.Handler] = None,
         scheduler_kwargs: Optional[dict] = None,
     ) -> None:
-        self.plugin_manager = pluggy.PluginManager(PROJECT_NAME)
-        self.engine = create_engine(db_connection)
+        self.manager = pluggy.PluginManager(PROJECT_NAME)
+        self.db_engine = create_engine(db_connection)
         # Pass any additional user-provided args
         self.scheduler = AsyncIOScheduler(**(scheduler_kwargs or {}))
-        self.plugin_manager.add_hookspecs(PluginSpec)
+        self.scheduler.add_listener(
+            self.job_listener,
+            EVENT_JOB_ADDED
+            | EVENT_JOB_REMOVED
+            | EVENT_JOB_SUBMITTED
+            | EVENT_JOB_EXECUTED
+            | EVENT_JOB_ERROR,
+        )
+
+        self.manager.add_hookspecs(PluginSpec)
         self.log_handler = log_handler
 
         # Register all plugins from the database
@@ -53,11 +70,40 @@ class PluginManager:
             self.load_plugin(str(plugin.package))
             look_up[plugin.id] = plugin
         # verify plugin implementation
-        self.plugin_manager.check_pending()
+        self.manager.check_pending()
 
         all_jobs = self.get_all_jobs()
         for job in all_jobs:
             self.add_job_instance(job.user_id, look_up[job.plugin_id])  # type: ignore
+
+    def job_listener(self, event: JobExecutionEvent):
+        level = logging.INFO
+        message = ""
+        if event.code == EVENT_JOB_ADDED:
+            message = f"Job added to scheduler (jobstore: {event.jobstore})"
+        elif event.code == EVENT_JOB_REMOVED:
+            message = "Job removed from scheduler"
+        elif event.code == EVENT_JOB_SUBMITTED:
+            message = f"Job submitted to executor (scheduled: {getattr(event, 'scheduled_run_times')})"
+        elif event.code == EVENT_JOB_EXECUTED:
+            message = f"Job executed successfully (return value: {event.retval})"
+        elif event.code == EVENT_JOB_ERROR:
+            level = logging.ERROR
+            message = f"Job failed with exception: {event.exception}"
+
+        log_event = logging.LogRecord(
+            event.job_id,
+            level,
+            pathname="",
+            lineno=-1,
+            args=None,
+            exc_info=None,
+            msg=message,
+        )
+
+        if self.log_handler:
+            self.log_handler.emit(log_event)
+        # TODO: other logic ....
 
     def start(self):
         self.scheduler.start()
@@ -76,10 +122,10 @@ class PluginManager:
             del sys.modules[mod_name]
 
     def get_plugin_names(self):
-        return [name for name, _ in self.plugin_manager.list_name_plugin()]
+        return [name for name, _ in self.manager.list_name_plugin()]
 
     def get_plugin_instance(self, package: str) -> Optional[PluginSpec]:
-        return self.plugin_manager.get_plugin(package)
+        return self.manager.get_plugin(package)
 
     async def run_plugin_job_sync(self, package: str, plugin_id: int, user_id: int):
         """
@@ -90,7 +136,7 @@ class PluginManager:
         if plugin is None:
             return None
 
-        with Session(self.engine) as session:
+        with Session(self.db_engine) as session:
             job = (
                 session.query(Job)
                 .filter(
@@ -112,9 +158,9 @@ class PluginManager:
     def unload_plugin(self, package: str):
         module_path, _ = package.rsplit(".", 1)
 
-        existing_plugin = self.plugin_manager.get_plugin(package)
+        existing_plugin = self.manager.get_plugin(package)
         if existing_plugin:
-            self.plugin_manager.unregister(existing_plugin, package)
+            self.manager.unregister(existing_plugin, package)
 
         self.unload_module(module_path)
 
@@ -124,11 +170,11 @@ class PluginManager:
         if override:
             self.unload_plugin(package)
 
-        plugin: PluginSpec | None = self.plugin_manager.get_plugin(package)
+        plugin: PluginSpec | None = self.manager.get_plugin(package)
         if plugin is None:
             module = importlib.import_module(module_path)
             plugin_class = getattr(module, class_name)
-            self.plugin_manager.register(plugin_class, package)
+            self.manager.register(plugin_class, package)
 
         return plugin
 
@@ -139,7 +185,7 @@ class PluginManager:
         config: str,
         description: Optional[str] = None,
     ):
-        with Session(self.engine) as session:
+        with Session(self.db_engine) as session:
             job = Job(
                 user_id=user_id,
                 plugin_id=plugin_id,
@@ -172,7 +218,7 @@ class PluginManager:
                 logger.addHandler(self.log_handler)
 
     def update_job(self, id: int, config: str, description: Optional[str] = None):
-        with Session(self.engine) as session:
+        with Session(self.db_engine) as session:
             job_item = session.get(Job, id)
             if job_item:
                 job_item.config = config  # type: ignore
@@ -181,7 +227,7 @@ class PluginManager:
                 session.commit()
 
     def remove_job(self, job_id: int):
-        with Session(self.engine) as session:
+        with Session(self.db_engine) as session:
             job = session.get(Job, job_id)
             if not job:
                 return
@@ -210,7 +256,7 @@ class PluginManager:
                     logger.removeHandler(self.log_handler)
 
     def activate_job(self, job_id: int):
-        with Session(self.engine) as session:
+        with Session(self.db_engine) as session:
             job = session.get(Job, job_id)
             if not job:
                 return
@@ -230,7 +276,7 @@ class PluginManager:
             session.commit()
 
     def deactivate_job(self, job_id: int):
-        with Session(self.engine) as session:
+        with Session(self.db_engine) as session:
             job = session.get(Job, job_id)
             if not job:
                 return
@@ -239,7 +285,7 @@ class PluginManager:
             session.commit()
 
     def get_jobs_for_plugin_and_user(self, plugin_id: int, user_id: int):
-        with Session(self.engine) as session:
+        with Session(self.db_engine) as session:
             jobs = (
                 session.query(Job)
                 .filter(
@@ -251,19 +297,19 @@ class PluginManager:
             return jobs
 
     def get_plugin_by_id(self, id: int):
-        with Session(self.engine) as session:
+        with Session(self.db_engine) as session:
             return session.get(Plugin, id)
 
     def get_job_by_id(self, id: int):
-        with Session(self.engine) as session:
+        with Session(self.db_engine) as session:
             return session.get(Job, id)
 
     def get_all_plugins(self):
-        with Session(self.engine) as session:
+        with Session(self.db_engine) as session:
             plugins = session.query(Plugin).all()
             return plugins
 
     def get_all_jobs(self):
-        with Session(self.engine) as session:
+        with Session(self.db_engine) as session:
             jobs = session.query(Job).all()
             return jobs

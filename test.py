@@ -1,13 +1,13 @@
 import asyncio
 import logging
-
+import sys
 from plugin_manager import PluginManager
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.ERROR)
 
 
 async def main():
-    plugin_manager = PluginManager()
+    plugin_manager = PluginManager(log_handler=logging.StreamHandler(sys.stdout))
     plugin_manager.start()
 
     try:
