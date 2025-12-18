@@ -44,9 +44,17 @@ class PluginManager:
     def __init__(
         self,
         db_connection: str = "sqlite:///data/apscheduler_events.db",
+        module_paths: Optional[list[str]] = None,
         log_handler: Optional[logging.Handler] = None,
         scheduler_kwargs: Optional[dict] = None,
     ) -> None:
+
+        # add module path to sys.path to load more plugins
+        if module_paths:
+            for path in module_paths:
+                if path and path not in sys.path:
+                    sys.path.insert(0, path)
+
         self.manager = pluggy.PluginManager(PROJECT_NAME)
         self.db_engine = create_engine(db_connection)
         # Pass any additional user-provided args
@@ -173,8 +181,8 @@ class PluginManager:
         plugin: PluginSpec | None = self.manager.get_plugin(package)
         if plugin is None:
             module = importlib.import_module(module_path)
-            plugin_class = getattr(module, class_name)
-            self.manager.register(plugin_class, package)
+            plugin = getattr(module, class_name)
+            self.manager.register(plugin, package)
 
         return plugin
 
@@ -210,6 +218,7 @@ class PluginManager:
                 seconds=plugin.interval,
                 args=[plugin.package, plugin.id, user_id],
                 id=scheduler_job_id,
+                name=scheduler_job_id,
             )
 
             # add handler for this logger
