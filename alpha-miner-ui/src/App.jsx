@@ -271,7 +271,7 @@ export default function App() {
 
         {loading && <p>Loading schema...</p>}
         {error && <p style={{ color: 'red' }}>{error}</p>}
-        {schema && (
+        {schema && currentConfig && (
           <FormControl sx={{ my: 2 }} fullWidth>
             <Typography variant="h5">Description</Typography>
             <Input

@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.DEBUG, handlers=[logging.NullHandler()])
 manager = WSConnectionManager()
 
 # Schedule async send_log in the event loop safely from sync context
-log_handler = JobLogHandler(manager.send_log, asyncio.get_event_loop())
+log_handler = JobLogHandler(manager.send_log, asyncio.get_running_loop())
 
 
 # this code is run in main loop of uvicorn

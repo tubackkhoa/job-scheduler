@@ -5,7 +5,7 @@ import { Box, Typography, Paper, Button } from '@mui/material';
 const LEVEL_STYLES = {
   INFO: { color: '#4fc3f7', bg: 'rgba(79, 195, 247, 0.15)' },
   ERROR: { color: '#ef5350', bg: 'rgba(239, 83, 80, 0.15)' },
-  WARN: { color: '#ffb74d', bg: 'rgba(255, 183, 77, 0.15)' },
+  WARNING: { color: '#ffb74d', bg: 'rgba(255, 183, 77, 0.15)' },
   DEBUG: { color: '#ba68c8', bg: 'rgba(186, 104, 200, 0.15)' }
 };
 

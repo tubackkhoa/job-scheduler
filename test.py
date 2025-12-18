@@ -15,14 +15,14 @@ async def main():
         module_paths=os.getenv("MODULE_PATH", "").split(":"),
     )
     plugin = plugin_manager.load_plugin(
-        "src.plugins.lab_webhook_worker@v0_1_0.LabWebhookWorkerPlugin"
+        "src.plugins.user_custom_config_worker@v0_1_0.UserCustomConfigPlugin"
     )
     assert plugin
     config = plugin.config()
-    await plugin.run(config, logging.getLogger("worker"))
 
     try:
-        await asyncio.sleep(3600)  # Keep process alive
+        await plugin.run(config, logging.getLogger("worker"))
+        # await asyncio.sleep(3600)  # Keep process alive
     except (KeyboardInterrupt, asyncio.CancelledError):
         print("\nShutting down gracefully...")
     finally:
