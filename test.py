@@ -6,6 +6,7 @@ from plugin_manager import PluginManager
 
 dotenv.load_dotenv()
 logging.basicConfig(level=logging.ERROR)
+logging.getLogger("apscheduler").setLevel(logging.CRITICAL)
 
 
 async def main():
@@ -14,13 +15,12 @@ async def main():
         log_handler=logging.NullHandler(),
         module_paths=module_paths,
     )
-    plugin_manager.start()
-
     plugin = plugin_manager.load_plugin(
         "src.plugins.lab_webhook_worker@v0_1_0.LabWebhookWorkerPlugin"
     )
     assert plugin
-    print(plugin.config())
+    config = plugin.config()
+    await plugin.run(config, logging.getLogger("worker"))
 
     try:
         await asyncio.sleep(3600)  # Keep process alive

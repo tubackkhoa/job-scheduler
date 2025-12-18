@@ -117,7 +117,8 @@ class PluginManager:
         self.scheduler.start()
 
     def stop(self):
-        self.scheduler.shutdown()
+        if self.scheduler.running:
+            self.scheduler.shutdown()
 
     def unload_module(self, module_path: str):
         # Remove module and submodules from sys.modules cache to reload cleanly

@@ -20,10 +20,9 @@ log_handler = JobLogHandler(manager.send_log, asyncio.get_event_loop())
 
 
 # this code is run in main loop of uvicorn
-module_paths = os.getenv("MODULE_PATH", "").split(":")
 plugin_manager = PluginManager(
     log_handler=log_handler,
-    module_paths=module_paths,
+    module_paths=os.getenv("MODULE_PATH", "").split(":"),
 )
 plugin_manager.start()
 app = FastAPI()
