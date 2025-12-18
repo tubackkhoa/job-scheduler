@@ -263,7 +263,7 @@ export default function App() {
 
         {currentPlugin && userId && (
           <LogViewer
-            url={API_BASE_URL.replace(/^http/, 'ws') + '/ws/logs'}
+            url={API_BASE_URL.replace(/^http/, 'ws') + `/ws/logs/${userId}`}
             maxMessages={300}
             jobInstanceId={`${currentPlugin.package}/${userId}`}
           />

@@ -159,10 +159,10 @@ class PluginManager:
                 # No active job means no config to run this plugin instance for this user
                 return None
 
-            config = plugin.config(json.loads(str(job.config)))
-            scheduler_job_id = f"{package}/{user_id}"
-            logger = logging.getLogger(scheduler_job_id)
-            return await plugin.run(config, logger)
+        config = plugin.config(json.loads(str(job.config)))
+        scheduler_job_id = f"{package}/{user_id}"
+        logger = logging.getLogger(scheduler_job_id)
+        return await plugin.run(config, logger)
 
     def unload_plugin(self, package: str):
         module_path, _ = package.rsplit(".", 1)

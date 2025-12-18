@@ -10,10 +10,9 @@ logging.getLogger("apscheduler").setLevel(logging.CRITICAL)
 
 
 async def main():
-    module_paths = os.getenv("MODULE_PATH", "").split(":")
     plugin_manager = PluginManager(
         log_handler=logging.NullHandler(),
-        module_paths=module_paths,
+        module_paths=os.getenv("MODULE_PATH", "").split(":"),
     )
     plugin = plugin_manager.load_plugin(
         "src.plugins.lab_webhook_worker@v0_1_0.LabWebhookWorkerPlugin"

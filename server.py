@@ -36,15 +36,15 @@ app.add_middleware(
 )
 
 
-@app.websocket("/ws/logs")
-async def websocket_logs_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
+@app.websocket("/ws/logs/{user_id}")
+async def websocket_logs_endpoint(websocket: WebSocket, user_id: int):
+    await manager.connect(websocket, user_id)
     try:
         while True:
             # Keep connection alive; you can also handle client messages here if needed
             await websocket.receive_text()
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        manager.disconnect(websocket, user_id)
 
 
 @app.get("/plugins")
