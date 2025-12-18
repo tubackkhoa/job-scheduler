@@ -1,4 +1,3 @@
-import asyncio
 import importlib
 import json
 import logging
@@ -29,25 +28,6 @@ class PluginSpec:
     async def run(cls, config: BaseModel, logger: logging.Logger) -> bool: ...
 
 
-class JobLogHandler(logging.Handler):
-    def __init__(self, log_callback):
-        super().__init__()
-        self.log_callback = log_callback
-
-    def emit(self, record: logging.LogRecord):
-        if self.log_callback is None:
-            return
-
-        log_entry = self.format(record)
-
-        log_event = {
-            "job_id": record.name,
-            "level": record.levelname,
-            "message": log_entry,
-        }
-        self.log_callback(log_event)
-
-
 class PluginManager:
     """
     Manages plugin loading/unloading, job scheduling, and execution
@@ -56,7 +36,7 @@ class PluginManager:
     def __init__(
         self,
         db_connection: str = "sqlite:///data/apscheduler_events.db",
-        log_callback: Optional[Callable[[dict], Any]] = None,
+        log_handler: Optional[logging.Handler] = None,
         scheduler_kwargs: Optional[dict] = None,
     ) -> None:
         self.plugin_manager = pluggy.PluginManager(PROJECT_NAME)
@@ -64,7 +44,7 @@ class PluginManager:
         # Pass any additional user-provided args
         self.scheduler = AsyncIOScheduler(**(scheduler_kwargs or {}))
         self.plugin_manager.add_hookspecs(PluginSpec)
-        self.log_handler = JobLogHandler(log_callback)
+        self.log_handler = log_handler
 
         # Register all plugins from the database
         all_plugins = self.get_all_plugins()
@@ -72,7 +52,7 @@ class PluginManager:
         for plugin in all_plugins:
             self.load_plugin(str(plugin.package))
             look_up[plugin.id] = plugin
-
+        # verify plugin implementation
         self.plugin_manager.check_pending()
 
         all_jobs = self.get_all_jobs()
@@ -188,7 +168,8 @@ class PluginManager:
 
             # add handler for this logger
             logger = logging.getLogger(scheduler_job_id)
-            logger.addHandler(self.log_handler)
+            if self.log_handler:
+                logger.addHandler(self.log_handler)
 
     def update_job(self, id: int, config: str, description: Optional[str] = None):
         with Session(self.engine) as session:
@@ -225,7 +206,8 @@ class PluginManager:
 
                 # remove handler for this logger
                 logger = logging.getLogger(scheduler_job_id)
-                logger.removeHandler(self.log_handler)
+                if self.log_handler:
+                    logger.removeHandler(self.log_handler)
 
     def activate_job(self, job_id: int):
         with Session(self.engine) as session:
