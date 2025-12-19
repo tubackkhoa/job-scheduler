@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import sys
 import dotenv
 from plugin_manager import PluginManager
 
@@ -9,20 +10,23 @@ logging.basicConfig(level=logging.ERROR)
 logging.getLogger("apscheduler").setLevel(logging.CRITICAL)
 
 
-async def main():
+async def main(package: str):
     plugin_manager = PluginManager(
         log_handler=logging.NullHandler(),
         module_paths=os.getenv("MODULE_PATH", "").split(":"),
     )
-    plugin = plugin_manager.load_plugin(
-        "src.plugins.user_custom_config_worker@v0_1_0.UserCustomConfigPlugin"
-    )
-    assert plugin
-    config = plugin.config()
+
+    # run specific package or run all from database
+    if package:
+        plugin = plugin_manager.load_plugin(package)
+        assert plugin
+        config = plugin.config()
+        await plugin.run(config, logging.getLogger("worker"))
+    else:
+        plugin_manager.start()
 
     try:
-        await plugin.run(config, logging.getLogger("worker"))
-        # await asyncio.sleep(3600)  # Keep process alive
+        await asyncio.sleep(3600)  # Keep process alive
     except (KeyboardInterrupt, asyncio.CancelledError):
         print("\nShutting down gracefully...")
     finally:
@@ -30,4 +34,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # python test.py "src.plugins.lab_webhook_worker@v0_1_0.LabWebhookWorkerPlugin"
+    asyncio.run(main(sys.argv[1]))
