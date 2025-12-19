@@ -4,7 +4,7 @@ import json
 import logging
 import sys
 from typing import Any, Optional
-from concurrent.futures import ThreadPoolExecutor
+
 import pluggy
 from pydantic import BaseModel
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -48,7 +48,6 @@ class PluginManager:
         module_paths: Optional[list[str]] = None,
         log_handler: Optional[logging.Handler] = None,
         scheduler_kwargs: Optional[dict] = None,
-        max_workers: int = 20,
     ) -> None:
 
         # add module path to sys.path to load more plugins
@@ -59,7 +58,7 @@ class PluginManager:
 
         self.manager = pluggy.PluginManager(PROJECT_NAME)
         self.db_engine = create_engine(db_connection)
-        self.executor = ThreadPoolExecutor(max_workers=max_workers)
+
         # Pass any additional user-provided args
         self.scheduler = AsyncIOScheduler(**(scheduler_kwargs or {}))
         self.scheduler.add_listener(
@@ -122,7 +121,6 @@ class PluginManager:
     def stop(self):
         if self.scheduler.running:
             self.scheduler.shutdown(wait=False)
-        self.executor.shutdown(wait=False, cancel_futures=True)
 
     def unload_module(self, module_path: str):
         # Remove module and submodules from sys.modules cache to reload cleanly
@@ -140,17 +138,7 @@ class PluginManager:
     def get_plugin_instance(self, package: str) -> Optional[PluginSpec]:
         return self.manager.get_plugin(package)
 
-    @staticmethod
-    def _execute_plugin_in_thread(
-        plugin: PluginSpec, config: BaseModel, logger: logging.Logger
-    ):
-        try:
-            return asyncio.run(plugin.run(config, logger))
-        except Exception as e:
-            logger.error(f"Critical error in plugin thread: {e}", exc_info=True)
-            return False
-
-    async def run_plugin_job(self, package: str, plugin_id: int, user_id: int):
+    def run_plugin_job(self, package: str, plugin_id: int, user_id: int):
         """
         Wrapper to run a plugin's 'run' method synchronously within asyncio event loop,
         fetching config from the active job for the user/plugin.
@@ -177,11 +165,7 @@ class PluginManager:
         scheduler_job_id = f"{package}/{user_id}"
         logger = logging.getLogger(scheduler_job_id)
 
-        loop = asyncio.get_running_loop()
-        # EXECUTE IN YOUR DEDICATED POOL
-        return await loop.run_in_executor(
-            self.executor, self._execute_plugin_in_thread, plugin, config, logger
-        )
+        return asyncio.run(plugin.run(config, logger))
 
     def unload_plugin(self, package: str):
         module_path, _ = package.rsplit(".", 1)
