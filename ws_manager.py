@@ -1,3 +1,4 @@
+import asyncio
 from collections import defaultdict
 from typing import List
 from fastapi import WebSocket
@@ -31,19 +32,21 @@ class WSConnectionManager:
         connections = self.active_connections.get(user_id)
         if not connections:
             return
+        payload = {
+            **message,
+            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
 
-        disconnected: List[WebSocket] = []
+        results = await asyncio.gather(
+            *(ws.send_json(payload) for ws in connections),
+            return_exceptions=True,
+        )
 
-        for ws in connections:
-            try:
-                await ws.send_json(
-                    {
-                        **message,
-                        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    }
-                )
-            except Exception:
-                disconnected.append(ws)
+        disconnected = [
+            ws
+            for ws, result in zip(connections, results)
+            if isinstance(result, Exception)
+        ]
 
         for ws in disconnected:
             self.disconnect(ws, user_id)

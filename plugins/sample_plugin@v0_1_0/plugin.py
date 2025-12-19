@@ -1,4 +1,6 @@
+import asyncio
 import logging
+import time
 import pluggy
 from pydantic import BaseModel
 
@@ -28,5 +30,6 @@ class Plugin:
     async def run(cls, config: Config, logger: logging.Logger):
         for i in range(10):
             logger.info(f"running with step: {i}")
+            await asyncio.sleep(0.5)
         logger.error(f"running with config: {config}")
         return True
