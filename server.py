@@ -1,5 +1,6 @@
 import asyncio
 from fastapi import FastAPI, Body, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.concurrency import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from log_handler import JobLogHandler
@@ -18,14 +19,25 @@ manager = WSConnectionManager()
 # Schedule async send_log in the event loop safely from sync context
 log_handler = JobLogHandler(manager.send_log, asyncio.get_running_loop())
 
-
 # this code is run in main loop of uvicorn
 plugin_manager = PluginManager(
     log_handler=log_handler,
     module_paths=os.getenv("MODULE_PATH", "").split(":"),
 )
-plugin_manager.start()
-app = FastAPI()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ---- STARTUP ----
+    plugin_manager.start()
+
+    yield
+
+    # ---- SHUTDOWN ----
+    plugin_manager.stop()
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
