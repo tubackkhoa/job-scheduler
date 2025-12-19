@@ -4,7 +4,6 @@ import json
 import logging
 import sys
 from typing import Any, Optional
-
 import pluggy
 from pydantic import BaseModel
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -48,6 +47,7 @@ class PluginManager:
         module_paths: Optional[list[str]] = None,
         log_handler: Optional[logging.Handler] = None,
         scheduler_kwargs: Optional[dict] = None,
+        max_workers: int = 20,
     ) -> None:
 
         # add module path to sys.path to load more plugins

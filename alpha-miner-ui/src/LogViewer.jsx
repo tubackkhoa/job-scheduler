@@ -42,18 +42,20 @@ function formatMessage(message) {
   );
 }
 
-export default function LogViewer({ url, jobInstanceId, maxMessages = 500 }) {
+export default function LogViewer({ url, maxMessages = 500 }) {
   const [logs, setLogs] = useState([]);
   const ws = useRef(null);
-  const jobIdRef = useRef(jobInstanceId);
+  const maxMessagesRef = useRef(maxMessages);
 
   useEffect(() => {
-    jobIdRef.current = jobInstanceId;
+    maxMessagesRef.current = maxMessages;
     setLogs([]);
-  }, [jobInstanceId]);
+  }, [maxMessages]);
 
   useEffect(() => {
+    setLogs([]);
     if (!url) return;
+
     ws.current = new WebSocket(url);
 
     ws.current.onopen = () => {
@@ -63,11 +65,10 @@ export default function LogViewer({ url, jobInstanceId, maxMessages = 500 }) {
     ws.current.onmessage = (event) => {
       const data = JSON.parse(event.data);
       // Always use latest jobInstanceId
-      if (data.job_id !== jobIdRef.current) return;
       setLogs((prevLogs) => {
-        const next = [...prevLogs, data];
-        if (next.length > maxMessages) {
-          return next.slice(next.length - maxMessages);
+        const next = Array.isArray(data) ? data : [...prevLogs, data];
+        if (next.length > maxMessagesRef.current) {
+          return next.slice(next.length - maxMessagesRef.current);
         }
         return next;
       });

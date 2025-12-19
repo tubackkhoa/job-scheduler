@@ -263,8 +263,10 @@ export default function App() {
 
         {currentPlugin && userId && (
           <LogViewer
-            url={API_BASE_URL.replace(/^http/, 'ws') + `/ws/logs/${userId}`}
-            jobInstanceId={`${currentPlugin.package}/${userId}`}
+            url={
+              API_BASE_URL.replace(/^http/, 'ws') +
+              `/ws/logs/${currentPlugin.package}/${userId}`
+            }
           />
         )}
 

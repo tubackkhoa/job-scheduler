@@ -8,37 +8,37 @@ class JobLogHandler(logging.Handler):
         self,
         log_callback: Callable[[Any], Any],
         loop: asyncio.AbstractEventLoop,
-        max_inflight=500,
     ):
         super().__init__()
-        self.queue = asyncio.Queue()
         self.log_callback = log_callback
-        self.sem = asyncio.Semaphore(max_inflight)
-        loop.create_task(self._drain())
+        self.loop = loop
+        self.queue: asyncio.Queue = asyncio.Queue()
+
+        # single drain task → preserves order
+        self.loop.create_task(self._drain())
 
     async def _drain(self):
         while True:
             log_event = await self.queue.get()
-            await self.sem.acquire()
-            asyncio.create_task(self._send(log_event))
-            self.queue.task_done()
-
-    async def _send(self, log_event):
-        try:
-            await self.log_callback(log_event)  # send_log
-        except Exception:
-            pass
-        finally:
-            self.sem.release()
+            try:
+                await self.log_callback(log_event)
+            except Exception:
+                pass
+            finally:
+                self.queue.task_done()
 
     def emit(self, record: logging.LogRecord):
+
         log_entry = self.format(record)
 
-        # Schedule async callback safely
-        self.queue.put_nowait(
-            {
-                "job_id": record.name,
-                "level": record.levelname,
-                "message": log_entry,
-            }
+        log_event = {
+            "job_id": record.name,
+            "level": record.levelname,
+            "message": log_entry,
+        }
+
+        # thread-safe enqueue, non-blocking
+        self.loop.call_soon_threadsafe(
+            self.queue.put_nowait,
+            log_event,
         )
