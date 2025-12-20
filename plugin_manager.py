@@ -88,6 +88,9 @@ class PluginManager:
             self.add_job_instance(job, look_up[job.plugin_id])  # type: ignore
 
     def job_listener(self, event: JobExecutionEvent):
+        if self._active_job_cache.get(event.job_id) is None:
+            return
+
         level = logging.INFO
         message = ""
         if event.code == EVENT_JOB_ADDED:
