@@ -83,7 +83,7 @@ class PluginManager:
 
         all_jobs = self.get_all_jobs()
 
-        self._active_job_cache: Dict[str, Optional[str]] = {}
+        self._active_job_cache: Dict[str, str] = {}
         for job in all_jobs:
             self.add_job_instance(job, look_up[job.plugin_id])  # type: ignore
 
@@ -121,7 +121,7 @@ class PluginManager:
 
     def stop(self):
         if self.scheduler.running:
-            self.scheduler.shutdown(wait=False)
+            self.scheduler.shutdown()
 
     def unload_module(self, module_path: str):
         # Remove module and submodules from sys.modules cache to reload cleanly
@@ -208,10 +208,6 @@ class PluginManager:
     def add_job_instance(self, job: Job, plugin: Plugin):
         scheduler_job_id = f"{plugin.id}/{job.user_id}"
 
-        if bool(job.active):
-            self._active_job_cache[scheduler_job_id] = str(job.config)
-            self.scheduler.resume_job(scheduler_job_id)
-
         if self.scheduler.get_job(scheduler_job_id) is None:
             # make sure job run 1 time
             self.scheduler.add_job(
@@ -231,6 +227,11 @@ class PluginManager:
             if self.log_handler:
                 logger.addHandler(self.log_handler)
 
+        # active job
+        if bool(job.active):
+            self._active_job_cache[scheduler_job_id] = str(job.config)
+            self.scheduler.resume_job(scheduler_job_id)
+
     def update_job(self, id: int, config: str, description: Optional[str] = None):
         with Session(self.db_engine) as session:
             job_item = session.get(Job, id)
@@ -245,7 +246,9 @@ class PluginManager:
             job = session.get(Job, job_id)
             if not job:
                 return
-
+            plugin_id = job.plugin_id
+            user_id = job.user_id
+            scheduler_job_id = f"{plugin_id}/{user_id}"
             session.delete(job)
             session.commit()
 
@@ -253,18 +256,14 @@ class PluginManager:
             remaining_jobs = (
                 session.query(Job)
                 .filter(
-                    Job.plugin_id == job.plugin_id,
-                    Job.user_id == job.user_id,
+                    Job.plugin_id == plugin_id,
+                    Job.user_id == user_id,
                 )
                 .count()
             )
             if remaining_jobs == 0:
-                plugin = session.get(Plugin, job.plugin_id)
-                assert plugin is not None
-                scheduler_job_id = f"{plugin.id}/{job.user_id}"
                 self.scheduler.remove_job(scheduler_job_id)
-
-                self._active_job_cache[scheduler_job_id] = None
+                self._active_job_cache.pop(scheduler_job_id)
 
                 # remove handler for this logger
                 logger = logging.getLogger(scheduler_job_id)
@@ -305,7 +304,7 @@ class PluginManager:
             # so no config is active
             if bool(job.active):
                 scheduler_job_id = f"{job.plugin_id}/{job.user_id}"
-                self._active_job_cache[scheduler_job_id] = None
+                self._active_job_cache.pop(scheduler_job_id)
                 self.scheduler.pause_job(scheduler_job_id)
 
             job.active = 0  # type: ignore
