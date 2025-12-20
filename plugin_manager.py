@@ -290,6 +290,7 @@ class PluginManager:
             job.active = 1  # type: ignore
             session.commit()
 
+        # this is active config
         self._active_job_cache[f"{job.plugin_id}/{job.user_id}"] = str(job.config)
 
     def deactivate_job(self, job_id: int):
@@ -298,10 +299,12 @@ class PluginManager:
             if not job:
                 return
 
+            # so no config is active
+            if bool(job.active):
+                self._active_job_cache[f"{job.plugin_id}/{job.user_id}"] = None
+
             job.active = 0  # type: ignore
             session.commit()
-
-        self._active_job_cache[f"{job.plugin_id}/{job.user_id}"] = None
 
     def get_jobs_for_plugin_and_user(self, plugin_id: int, user_id: int):
         with Session(self.db_engine) as session:
