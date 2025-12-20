@@ -31,7 +31,8 @@ class WSConnectionManager:
             return
 
         payload = {
-            **message,
+            "level": message["level"],
+            "message": message["message"],
             "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
 
