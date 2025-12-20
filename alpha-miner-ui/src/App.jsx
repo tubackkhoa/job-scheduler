@@ -189,7 +189,7 @@ export default function App() {
   return (
     <ThemeProvider theme={theme}>
       <Container sx={{ minHeight: '100vh', padding: 10 }}>
-        <h1>Alpha Miner – Plugin Config</h1>
+        <h1>Job Scheduler – Plugin Config</h1>
         <Box
           sx={{
             display: 'flex',
