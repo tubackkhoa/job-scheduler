@@ -3,8 +3,7 @@ import importlib
 import json
 import logging
 import sys
-from threading import RLock
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 import pluggy
 from pydantic import BaseModel
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -202,9 +201,9 @@ class PluginManager:
             session.add(job)
             session.commit()
 
-        plugin = session.get(Plugin, plugin_id)
-        assert plugin is not None
-        self.add_job_instance(job, plugin)
+            plugin = session.get(Plugin, plugin_id)
+            assert plugin is not None
+            self.add_job_instance(job, plugin)
 
     def add_job_instance(self, job: Job, plugin: Plugin):
         scheduler_job_id = f"{plugin.id}/{job.user_id}"
@@ -290,8 +289,8 @@ class PluginManager:
             job.active = 1  # type: ignore
             session.commit()
 
-        # this is active config
-        self._active_job_cache[f"{job.plugin_id}/{job.user_id}"] = str(job.config)
+            # this is active config
+            self._active_job_cache[f"{job.plugin_id}/{job.user_id}"] = str(job.config)
 
     def deactivate_job(self, job_id: int):
         with Session(self.db_engine) as session:
