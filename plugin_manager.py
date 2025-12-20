@@ -88,9 +88,6 @@ class PluginManager:
             self.add_job_instance(job, look_up[job.plugin_id])  # type: ignore
 
     def job_listener(self, event: JobExecutionEvent):
-        if self._active_job_cache.get(event.job_id) is None:
-            return
-
         level = logging.INFO
         message = ""
         if event.code == EVENT_JOB_ADDED:
@@ -213,6 +210,7 @@ class PluginManager:
 
         if bool(job.active):
             self._active_job_cache[scheduler_job_id] = str(job.config)
+            self.scheduler.resume_job(scheduler_job_id)
 
         if self.scheduler.get_job(scheduler_job_id) is None:
             # make sure job run 1 time
@@ -221,6 +219,7 @@ class PluginManager:
                 "interval",
                 seconds=plugin.interval,
                 args=[plugin.package, scheduler_job_id],
+                next_run_time=None,
                 id=scheduler_job_id,
                 name=scheduler_job_id,
                 coalesce=True,
@@ -293,7 +292,9 @@ class PluginManager:
             session.commit()
 
             # this is active config
-            self._active_job_cache[f"{job.plugin_id}/{job.user_id}"] = str(job.config)
+            scheduler_job_id = f"{job.plugin_id}/{job.user_id}"
+            self._active_job_cache[scheduler_job_id] = str(job.config)
+            self.scheduler.resume_job(scheduler_job_id)
 
     def deactivate_job(self, job_id: int):
         with Session(self.db_engine) as session:
@@ -303,7 +304,9 @@ class PluginManager:
 
             # so no config is active
             if bool(job.active):
-                self._active_job_cache[f"{job.plugin_id}/{job.user_id}"] = None
+                scheduler_job_id = f"{job.plugin_id}/{job.user_id}"
+                self._active_job_cache[scheduler_job_id] = None
+                self.scheduler.pause_job(scheduler_job_id)
 
             job.active = 0  # type: ignore
             session.commit()
