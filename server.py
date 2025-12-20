@@ -3,6 +3,8 @@ from fastapi import FastAPI, Body, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.concurrency import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 import logging
+
+from fastapi.staticfiles import StaticFiles
 from log_handler import JobLogHandler
 from models import Job
 from plugin_manager import PluginManager
@@ -38,6 +40,10 @@ async def lifespan(app: FastAPI):
 
     # ---- SHUTDOWN ----
     plugin_manager.stop()
+
+    # Immediate hard exit after 1 second for cleaning up
+    await asyncio.sleep(1)
+    os._exit(0)
 
 
 app = FastAPI(lifespan=lifespan)
@@ -142,3 +148,13 @@ def update_config(job_id: int, payload: dict = Body(...)):
         raise HTTPException(
             status_code=500, detail=f"Failed to update config: {str(e)}"
         )
+
+
+# static site
+static_files = os.getenv("STATIC_FILES")
+if static_files:
+    app.mount(
+        "/",
+        StaticFiles(directory=static_files, html=True),
+        name="static",
+    )
