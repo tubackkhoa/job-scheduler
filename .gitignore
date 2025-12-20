@@ -2,5 +2,5 @@ __pycache__/
 data
 uv.lock
 logs
-alpha_miner_plugins.egg-info
+*.egg-info
 .env
