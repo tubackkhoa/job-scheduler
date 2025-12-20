@@ -2,6 +2,7 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 import importlib
 from models import Base, Job, Plugin
+from plugin_manager import PluginSpec
 
 plugin_data = [
     {
@@ -49,14 +50,14 @@ def create_data(engine: Engine, user_ids: list[int] = [1, 2]):
                 # Dynamically load the plugin class to get default config
                 module_path, class_name = plugin_item["package"].rsplit(".", 1)
                 module = importlib.import_module(module_path)
-                plugin_class = getattr(module, class_name)
+                plugin_class: PluginSpec = getattr(module, class_name)
 
                 default_config = plugin_class.config()  # Get default Pydantic model
                 job = Job(
                     user_id=user_id,
                     plugin_id=plugin_row.id,  # Use actual inserted plugin ID
                     config=default_config.model_dump_json(),
-                    active=0,
+                    active=1,
                     description=f"{plugin_item['description']} version 0.{plugin_ind}",
                 )
                 session.add(job)

@@ -28,7 +28,17 @@ log_handler = JobLogHandler(manager.send_log, asyncio.get_running_loop())
 
 db_connection = os.getenv("DB_CONNECTION")
 assert db_connection
-db_engine = create_engine(db_connection)
+if db_connection.endswith(":memory:"):
+    from sqlalchemy.pool import StaticPool
+
+    # single connection for testing
+    db_engine = create_engine(
+        db_connection,
+        poolclass=StaticPool,
+    )
+    create_data(db_engine)
+else:
+    db_engine = create_engine(db_connection)
 
 # this code is run in main loop of uvicorn
 plugin_manager = PluginManager(

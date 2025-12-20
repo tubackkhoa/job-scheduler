@@ -4,6 +4,8 @@ from sqlalchemy import (
     Text,
     CheckConstraint,
     UniqueConstraint,
+    text,
+    Sequence,
 )
 from sqlalchemy.orm import declarative_base
 
@@ -13,12 +15,9 @@ Base = declarative_base()
 class Plugin(Base):
     __tablename__ = "plugins"
 
-    id = Column(Integer, primary_key=True)
-
+    id = Column(Integer, Sequence("plugins_id_seq"), primary_key=True)
     package = Column(Text, nullable=False, unique=True)
-
     interval = Column(Integer, nullable=False)
-
     description = Column(Text)
 
     __table_args__ = (
@@ -29,15 +28,12 @@ class Plugin(Base):
 class Job(Base):
     __tablename__ = "jobs"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, Sequence("jobs_id_seq"), primary_key=True)
     user_id = Column(Integer, nullable=False)
     plugin_id = Column(Integer, nullable=False)
     description = Column(Text)
-    config = Column(
-        Text, CheckConstraint("json_valid(config)", name="ck_jobs_config_json")
-    )
-
-    active = Column(Integer, nullable=False, default=1)
+    config = Column(Text, nullable=True)
+    active = Column(Integer, nullable=False, server_default=text("1"))
 
     __table_args__ = (
         CheckConstraint("active IN (0,1)", name="ck_jobs_active_bool"),
