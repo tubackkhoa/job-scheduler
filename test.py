@@ -19,7 +19,7 @@ async def main(package: str):
 
     db_engine = create_engine(db_connection)
     if db_connection.endswith(":memory:"):
-        create_data(db_engine)
+        create_data(db_engine, [1])
 
     plugin_manager = PluginManager(
         db_engine,
