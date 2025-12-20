@@ -215,7 +215,7 @@ class PluginManager:
     def add_job_instance(self, user_id: int, plugin: Plugin):
         scheduler_job_id = f"{plugin.package}/{user_id}"
         if self.scheduler.get_job(scheduler_job_id) is None:
-
+            # make sure job run 1 time
             self.scheduler.add_job(
                 self.run_plugin_job,
                 "interval",
@@ -223,6 +223,8 @@ class PluginManager:
                 args=[plugin.package, plugin.id, user_id],
                 id=scheduler_job_id,
                 name=scheduler_job_id,
+                coalesce=True,
+                max_instances=1,
             )
 
             # add handler for this logger
