@@ -14,7 +14,7 @@ import {
 } from '@mui/material';
 import Form from '@rjsf/mui';
 import validator from '@rjsf/validator-ajv8';
-import api, { API_BASE_URL } from './api';
+import api from './api';
 import LogViewer from './LogViewer';
 
 const theme = createTheme({
@@ -185,7 +185,6 @@ export default function App() {
   };
 
   const currentConfig = configVersions.find((version) => version.id === jobId);
-  const currentPlugin = plugins.find((p) => p.id === pluginId);
 
   return (
     <ThemeProvider theme={theme}>
@@ -261,13 +260,8 @@ export default function App() {
           </FormControl>
         </Box>
 
-        {currentPlugin && userId && (
-          <LogViewer
-            url={
-              API_BASE_URL.replace(/^http/, 'ws') +
-              `/ws/logs/${currentPlugin.package}/${userId}`
-            }
-          />
+        {!!pluginId && !!userId && (
+          <LogViewer jobInstanceId={`${pluginId}/${userId}`} />
         )}
 
         {loading && <p>Loading schema...</p>}

@@ -3,15 +3,26 @@ import logging
 import os
 import sys
 import dotenv
+from sqlalchemy import create_engine
+from create_data import create_data
 from plugin_manager import PluginManager
 
 dotenv.load_dotenv()
 logging.basicConfig(level=logging.INFO)
-logging.getLogger("apscheduler").setLevel(logging.CRITICAL)
+logging.getLogger("apscheduler").setLevel(logging.INFO)
+# logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
 
 
 async def main(package: str):
+    db_connection = os.getenv("DB_CONNECTION")
+    assert db_connection
+
+    db_engine = create_engine(db_connection)
+    if db_connection.endswith(":memory:"):
+        create_data(db_engine)
+
     plugin_manager = PluginManager(
+        db_engine,
         log_handler=logging.NullHandler(),
         module_paths=os.getenv("MODULE_PATH", "").split(":"),
     )
@@ -30,8 +41,9 @@ async def main(package: str):
             print("\nShutting down gracefully...")
         finally:
             plugin_manager.stop()
+            os._exit(0)
 
 
 if __name__ == "__main__":
     # python test.py "src.plugins.lab_webhook_worker@v0_1_0.LabWebhookWorkerPlugin"
-    asyncio.run(main(sys.argv[1]))
+    asyncio.run(main(sys.argv[1] if len(sys.argv) > 1 else ""))

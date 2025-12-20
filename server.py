@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import create_engine
+from create_data import create_data
 from log_handler import JobLogHandler
 from models import Job
 from plugin_manager import PluginManager
@@ -24,8 +26,13 @@ manager = WSConnectionManager()
 # Schedule async send_log in the event loop safely from sync context
 log_handler = JobLogHandler(manager.send_log, asyncio.get_running_loop())
 
+db_connection = os.getenv("DB_CONNECTION")
+assert db_connection
+db_engine = create_engine(db_connection)
+
 # this code is run in main loop of uvicorn
 plugin_manager = PluginManager(
+    db_engine,
     log_handler=log_handler,
     module_paths=os.getenv("MODULE_PATH", "").split(":"),
 )
@@ -57,9 +64,9 @@ app.add_middleware(
 )
 
 
-@app.websocket("/ws/logs/{package}/{user_id}")
-async def websocket_logs_endpoint(websocket: WebSocket, package: str, user_id: int):
-    job_id = f"{package}/{user_id}"
+@app.websocket("/ws/logs/{plugin_id}/{user_id}")
+async def websocket_logs_endpoint(websocket: WebSocket, plugin_id: int, user_id: int):
+    job_id = f"{plugin_id}/{user_id}"
     await manager.connect(websocket, job_id)
     try:
         while True:

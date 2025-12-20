@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { Box, Typography, Paper, Button } from '@mui/material';
+import { API_BASE_URL } from './api';
 
 // Map log levels to MUI color palette or CSS colors
 const LEVEL_STYLES = {
@@ -42,20 +43,21 @@ function formatMessage(message) {
   );
 }
 
-export default function LogViewer({ url, maxMessages = 500 }) {
+export default function LogViewer({ jobInstanceId, maxMessages = 500 }) {
   const [logs, setLogs] = useState([]);
   const ws = useRef(null);
   const maxMessagesRef = useRef(maxMessages);
 
   useEffect(() => {
     maxMessagesRef.current = maxMessages;
-    setLogs([]);
   }, [maxMessages]);
 
   useEffect(() => {
-    setLogs([]);
-    if (!url) return;
-
+    if (!jobInstanceId) return;
+    const url = `${API_BASE_URL.replace(
+      /^http/,
+      'ws'
+    )}/ws/logs/${jobInstanceId}`;
     ws.current = new WebSocket(url);
 
     ws.current.onopen = () => {
@@ -85,9 +87,10 @@ export default function LogViewer({ url, maxMessages = 500 }) {
     return () => {
       if (ws.current) {
         ws.current.close();
+        setLogs([]);
       }
     };
-  }, [url]);
+  }, [jobInstanceId]);
 
   const handleClearLogs = () => {
     setLogs([]);
