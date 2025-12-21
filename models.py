@@ -35,7 +35,4 @@ class Job(Base):
     config = Column(Text, nullable=True)
     active = Column(Integer, nullable=False, server_default=text("1"))
 
-    __table_args__ = (
-        CheckConstraint("active IN (0,1)", name="ck_jobs_active_bool"),
-        UniqueConstraint("user_id", "plugin_id", name="uq_jobs_user_plugin"),
-    )
+    __table_args__ = (CheckConstraint("active IN (0,1)", name="ck_jobs_active_bool"),)

@@ -188,7 +188,7 @@ export default function App() {
 
   return (
     <ThemeProvider theme={theme}>
-      <Container sx={{ minHeight: '100vh', padding: 10 }}>
+      <Container sx={{ minHeight: '100vh' }}>
         <h1>Job Scheduler – Plugin Config</h1>
         <Box
           sx={{
