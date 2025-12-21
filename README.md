@@ -3,7 +3,7 @@
 ### 1. Run the Frontend (Client)
 
 ```bash
-cd alpha-miner-ui
+cd frontend
 yarn
 yarn dev
 ```
@@ -11,9 +11,6 @@ yarn dev
 ### 2. Run the Backend (Server)
 
 ```bash
-# Optional: Create initial database and sample data (only needed the first time or to reset)
-python create_data.py
-
 # Start the server
 python server.py
 ```
