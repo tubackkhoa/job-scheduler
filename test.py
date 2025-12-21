@@ -18,7 +18,7 @@ async def main(package: str):
     assert db_connection
 
     db_engine = create_engine(db_connection)
-    if db_connection.endswith(":memory:"):
+    if ":memory:" in db_connection:
         create_data(db_engine, [1])
 
     plugin_manager = PluginManager(

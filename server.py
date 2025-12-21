@@ -28,7 +28,7 @@ log_handler = JobLogHandler(manager.send_log, asyncio.get_running_loop())
 
 db_connection = os.getenv("DB_CONNECTION")
 assert db_connection
-if db_connection.endswith(":memory:"):
+if ":memory:" in db_connection:
     from sqlalchemy.pool import StaticPool
 
     # single connection for testing
