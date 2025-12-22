@@ -18,6 +18,7 @@ import Form from '@rjsf/mui';
 import validator from '@rjsf/validator-ajv8';
 import api from './api';
 import LogViewer from './LogViewer';
+import MLThresholdsTableField from './MLThresholdsTableField';
 
 const theme = createTheme({
   palette: {
@@ -54,6 +55,12 @@ const users = [
     fullName: 'Ngoc Diep'
   }
 ];
+
+const uiSchema = {
+  ml_filtering_thresholds: {
+    'ui:field': 'MLThresholdsTable'
+  }
+};
 
 export default function App() {
   const [plugins, setPlugins] = useState([]);
@@ -107,7 +114,6 @@ export default function App() {
 
   const handleSubmit = async ({ formData, saveNew = false }) => {
     if (!pluginId) return;
-
     setSubmitting(true);
     setError(null);
 
@@ -116,6 +122,7 @@ export default function App() {
         config: formData,
         description: jobDesc
       };
+
       let response;
       if (!jobId || saveNew) {
         // add new job
@@ -309,7 +316,11 @@ export default function App() {
         {schema && currentConfig && (
           <Form
             schema={schema}
+            uiSchema={uiSchema}
             ref={formRef}
+            fields={{
+              MLThresholdsTable: MLThresholdsTableField
+            }}
             formData={JSON.parse(currentConfig.config)}
             validator={validator}
             onSubmit={handleSubmit}
