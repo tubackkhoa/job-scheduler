@@ -9,9 +9,11 @@ import {
   Input,
   Checkbox,
   Box,
+  Stack,
   Container,
   Typography
 } from '@mui/material';
+
 import Form from '@rjsf/mui';
 import validator from '@rjsf/validator-ajv8';
 import api from './api';
@@ -184,6 +186,23 @@ export default function App() {
     }
   };
 
+  const reloadPlugins = async () => {
+    if (!pluginId) return;
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const pkg = plugins.find((p) => p.id === pluginId).package;
+      const response = await api.reloadPlugin(pkg);
+      handleSetResult(response);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const currentConfig = configVersions.find((version) => version.id === jobId);
 
   return (
@@ -216,30 +235,40 @@ export default function App() {
               ))}
             </Select>
           </FormControl>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <FormControl size="small" sx={{ minWidth: 360 }}>
+              <InputLabel id="plugin-select-label">
+                -- Select a plugin --
+              </InputLabel>
+              <Select
+                labelId="plugin-select-label"
+                value={pluginId}
+                label="-- Select a plugin --"
+                onChange={(e) => loadSchema(Number(e.target.value))}
+              >
+                {plugins.map((plugin) => (
+                  <MenuItem
+                    key={plugin.id}
+                    value={plugin.id}
+                    title={plugin.description}
+                  >
+                    {plugin.package} (interval {plugin.interval} seconds)
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            {!!pluginId && (
+              <Button
+                variant="contained"
+                color="warning"
+                onClick={reloadPlugins}
+              >
+                Reload plugin (development)
+              </Button>
+            )}
+          </Stack>
 
-          <FormControl size="small" sx={{ minWidth: 360 }}>
-            <InputLabel id="plugin-select-label">
-              -- Select a plugin --
-            </InputLabel>
-            <Select
-              labelId="plugin-select-label"
-              value={pluginId}
-              label="-- Select a plugin --"
-              onChange={(e) => loadSchema(Number(e.target.value))}
-            >
-              {plugins.map((plugin) => (
-                <MenuItem
-                  key={plugin.id}
-                  value={plugin.id}
-                  title={plugin.description}
-                >
-                  {plugin.package} (interval {plugin.interval} seconds)
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          <FormControl size="small" sx={{ minWidth: 360 }}>
+          <FormControl size="small" fullWidth>
             <InputLabel id="config-version-select-label">
               -- Select a job --
             </InputLabel>

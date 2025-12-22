@@ -67,5 +67,20 @@ export default {
     }
 
     return res.json();
+  },
+  async reloadPlugin(pkg: string) {
+    const res = await fetch(`${API_BASE_URL}/reload/${pkg}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!res.ok) {
+      const msg = await res.text();
+      throw new Error(msg || 'Plugin reload failed');
+    }
+
+    return res.json();
   }
 };

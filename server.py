@@ -131,6 +131,12 @@ def delete_job(job_id: int):
     return {"success": True}
 
 
+@app.post("/reload/{package}")
+def reload_plugin(package: str):
+    plugin_manager.load_plugin(package, True)
+    return {"success": True}
+
+
 @app.post("/config/{job_id}")
 def update_config(job_id: int, payload: dict = Body(...)):
     try:
