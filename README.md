@@ -5,7 +5,10 @@
 ```bash
 cd frontend
 yarn
-yarn dev
+VITE_API_BASE_URL=http://localhost:8000 yarn dev
+
+# build for backend
+yarn build
 ```
 
 ### 2. Run the Backend (Server)
