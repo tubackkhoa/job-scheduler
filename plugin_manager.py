@@ -177,9 +177,13 @@ class PluginManager:
 
         plugin: PluginSpec | None = self.manager.get_plugin(package)
         if plugin is None:
-            module = importlib.import_module(module_path)
-            plugin = getattr(module, class_name)
-            self.manager.register(plugin, package)
+            try:
+                module = importlib.import_module(module_path)
+                plugin = getattr(module, class_name)
+                self.manager.register(plugin, package)
+            except Exception as e:
+                # show error to terminal to check
+                logging.getLogger("apscheduler").error(e)
 
         return plugin
 

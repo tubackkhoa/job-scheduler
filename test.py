@@ -8,8 +8,7 @@ from create_data import create_data
 from plugin_manager import PluginManager
 
 dotenv.load_dotenv()
-logging.basicConfig(level=logging.INFO)
-logging.getLogger("apscheduler").setLevel(logging.INFO)
+logging.getLogger("apscheduler").setLevel(logging.ERROR)
 # logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
 
 

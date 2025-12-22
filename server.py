@@ -17,8 +17,7 @@ import uvloop
 
 dotenv.load_dotenv()
 # Configure logging to show INFO and above messages
-logging.basicConfig(level=logging.DEBUG, handlers=[logging.NullHandler()])
-
+logging.getLogger("apscheduler").setLevel(logging.ERROR)
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 manager = WSConnectionManager()
@@ -137,8 +136,13 @@ def delete_job(job_id: int):
 
 @app.post("/reload/{package}")
 def reload_plugin(package: str):
-    plugin_manager.load_plugin(package, True)
-    return {"success": True}
+    try:
+        plugin_manager.load_plugin(package, True)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to reload plugin: {str(e)}"
+        )
 
 
 @app.post("/config/{job_id}")
