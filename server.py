@@ -95,25 +95,29 @@ def plugins():
 def schema(user_id: int, plugin_id: int):
     plugin_item = plugin_manager.get_plugin_by_id(plugin_id)
     assert plugin_item
-    plugin = plugin_manager.get_plugin_instance(str(plugin_item.package))
-    configs = plugin_manager.get_jobs_for_plugin_and_user(plugin_id, user_id)
-    if plugin != None:
-        if len(configs) == 0:
-            # add empty config so that when saving it will be new job
-            configs.append(
-                Job(
-                    active=0,
-                    description="",
-                    id=0,
-                    config=plugin.config().model_dump_json(),
-                    plugin_id=plugin_id,
-                    user_id=user_id,
+
+    try:
+        plugin = plugin_manager.get_plugin_instance(str(plugin_item.package))
+        if plugin != None:
+            configs = plugin_manager.get_jobs_for_plugin_and_user(plugin_id, user_id)
+            if len(configs) == 0:
+                # add empty config so that when saving it will be new job
+                configs.append(
+                    Job(
+                        active=0,
+                        description="",
+                        id=0,
+                        config=plugin.config().model_dump_json(),
+                        plugin_id=plugin_id,
+                        user_id=user_id,
+                    )
                 )
-            )
-        return {
-            "schema": plugin.schema(),
-            "configs": configs,
-        }
+            return {
+                "schema": plugin.schema(),
+                "configs": configs,
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load schema: {str(e)}")
 
 
 @app.post("/activate/{job_id}/{activation}")
@@ -167,7 +171,6 @@ def update_config(job_id: int, payload: dict = Body(...)):
 
         return config
     except Exception as e:
-        # unexpected errors
         raise HTTPException(
             status_code=500, detail=f"Failed to update config: {str(e)}"
         )

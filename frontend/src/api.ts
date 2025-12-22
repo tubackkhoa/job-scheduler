@@ -7,7 +7,7 @@ export default {
     const res = await fetch(`${API_BASE_URL}/schema/${userId}/${pluginId}`);
 
     if (!res.ok) {
-      throw new Error(`Schema not found for ${pluginId}`);
+      throw new Error((await res.text()) || `Schema not found`);
     }
 
     return res.json();
@@ -32,8 +32,7 @@ export default {
     });
 
     if (!res.ok) {
-      const msg = await res.text();
-      throw new Error(msg || 'Plugin execution failed');
+      throw new Error((await res.text()) || 'Plugin execution failed');
     }
 
     return res.json();
