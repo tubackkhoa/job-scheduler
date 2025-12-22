@@ -196,6 +196,8 @@ export default function App() {
       const pkg = plugins.find((p) => p.id === pluginId).package;
       const response = await api.reloadPlugin(pkg);
       handleSetResult(response);
+      // update schema
+      loadSchema(pluginId, userId, jobId);
     } catch (err) {
       setError(err.message);
     } finally {
