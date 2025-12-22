@@ -22,8 +22,9 @@ asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 manager = WSConnectionManager()
 
-# Schedule async send_log in the event loop safely from sync context
-log_handler = JobLogHandler(manager.send_log, asyncio.get_running_loop())
+# These will be initialised once an event loop is running (inside lifespan)
+log_handler: JobLogHandler | None = None
+plugin_manager: PluginManager | None = None
 
 db_connection = os.getenv("DB_CONNECTION")
 assert db_connection
@@ -39,16 +40,21 @@ if ":memory:" in db_connection:
 else:
     db_engine = create_engine(db_connection)
 
-# this code is run in main loop of uvicorn
-plugin_manager = PluginManager(
-    db_engine,
-    log_handler=log_handler,
-    module_paths=os.getenv("MODULE_PATH", "").split(":"),
-)
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global log_handler, plugin_manager
+
+    # Initialise log handler and plugin manager once we have a running event loop
+    loop = asyncio.get_running_loop()
+    log_handler = JobLogHandler(manager.send_log, loop)
+
+    plugin_manager = PluginManager(
+        db_engine,
+        log_handler=log_handler,
+        module_paths=os.getenv("MODULE_PATH", "").split(":"),
+    )
+
     # ---- STARTUP ----
     plugin_manager.start()
 
@@ -87,11 +93,13 @@ async def websocket_logs_endpoint(websocket: WebSocket, plugin_id: int, user_id:
 
 @app.get("/plugins")
 def plugins():
+    assert plugin_manager is not None
     return plugin_manager.get_all_plugins()
 
 
 @app.get("/schema/{user_id}/{plugin_id}")
 def schema(user_id: int, plugin_id: int):
+    assert plugin_manager is not None
     plugin_item = plugin_manager.get_plugin_by_id(plugin_id)
     assert plugin_item
 
@@ -121,6 +129,7 @@ def schema(user_id: int, plugin_id: int):
 
 @app.post("/activate/{job_id}/{activation}")
 def activate_config(job_id: int, activation: bool):
+    assert plugin_manager is not None
     if activation:
         plugin_manager.activate_job(job_id)
     else:
@@ -130,6 +139,7 @@ def activate_config(job_id: int, activation: bool):
 
 @app.post("/delete/{job_id}")
 def delete_job(job_id: int):
+    assert plugin_manager is not None
     plugin_manager.remove_job(job_id)
     return {"success": True}
 
@@ -147,6 +157,7 @@ def reload_plugin(package: str):
 
 @app.post("/config/{job_id}")
 def update_config(job_id: int, payload: dict = Body(...)):
+    assert plugin_manager is not None
     try:
         if job_id == 0:
             plugin_id = payload["pluginId"]
