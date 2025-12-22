@@ -3,7 +3,6 @@ from sqlalchemy import (
     Integer,
     Text,
     CheckConstraint,
-    UniqueConstraint,
     text,
     Sequence,
 )
