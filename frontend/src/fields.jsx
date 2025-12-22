@@ -12,7 +12,7 @@ import {
   TextField
 } from '@mui/material';
 
-export default function MLThresholdsTableField(props) {
+export function MLThresholdsTableField(props) {
   const { schema, formData = {}, onChange, name } = props;
 
   // Extract model rows from schema

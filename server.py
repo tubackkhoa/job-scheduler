@@ -1,5 +1,14 @@
 import asyncio
-from fastapi import FastAPI, Body, HTTPException, WebSocket, WebSocketDisconnect
+from typing import Annotated
+from fastapi import (
+    Depends,
+    FastAPI,
+    Body,
+    HTTPException,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.concurrency import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 import logging
@@ -22,28 +31,31 @@ asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 manager = WSConnectionManager()
 
-# These will be initialised once an event loop is running (inside lifespan)
-log_handler: JobLogHandler | None = None
-plugin_manager: PluginManager | None = None
 
-db_connection = os.getenv("DB_CONNECTION")
-assert db_connection
-if ":memory:" in db_connection:
-    from sqlalchemy.pool import StaticPool
+# define state transform for app
+def get_plugin_manager(request: Request) -> PluginManager:
+    return request.app.state.plugin_manager
 
-    # single connection for testing
-    db_engine = create_engine(
-        db_connection,
-        poolclass=StaticPool,
-    )
-    create_data(db_engine)
-else:
-    db_engine = create_engine(db_connection)
+
+PluginManagerState = Annotated[PluginManager, Depends(get_plugin_manager)]
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global log_handler, plugin_manager
+    # These will be initialised once an event loop is running (inside lifespan)
+    db_connection = os.getenv("DB_CONNECTION")
+    assert db_connection
+    if ":memory:" in db_connection:
+        from sqlalchemy.pool import StaticPool
+
+        # single connection for testing
+        db_engine = create_engine(
+            db_connection,
+            poolclass=StaticPool,
+        )
+        create_data(db_engine)
+    else:
+        db_engine = create_engine(db_connection)
 
     # Initialise log handler and plugin manager once we have a running event loop
     loop = asyncio.get_running_loop()
@@ -57,6 +69,9 @@ async def lifespan(app: FastAPI):
 
     # ---- STARTUP ----
     plugin_manager.start()
+
+    # store in app state
+    app.state.plugin_manager = plugin_manager
 
     yield
 
@@ -92,14 +107,13 @@ async def websocket_logs_endpoint(websocket: WebSocket, plugin_id: int, user_id:
 
 
 @app.get("/plugins")
-def plugins():
-    assert plugin_manager is not None
+def plugins(plugin_manager: PluginManagerState):
+    # plugin_manager: PluginManager = app.state.plugin_manager
     return plugin_manager.get_all_plugins()
 
 
 @app.get("/schema/{user_id}/{plugin_id}")
-def schema(user_id: int, plugin_id: int):
-    assert plugin_manager is not None
+def schema(plugin_manager: PluginManagerState, user_id: int, plugin_id: int):
     plugin_item = plugin_manager.get_plugin_by_id(plugin_id)
     assert plugin_item
 
@@ -128,8 +142,7 @@ def schema(user_id: int, plugin_id: int):
 
 
 @app.post("/activate/{job_id}/{activation}")
-def activate_config(job_id: int, activation: bool):
-    assert plugin_manager is not None
+def activate_config(plugin_manager: PluginManagerState, job_id: int, activation: bool):
     if activation:
         plugin_manager.activate_job(job_id)
     else:
@@ -138,14 +151,13 @@ def activate_config(job_id: int, activation: bool):
 
 
 @app.post("/delete/{job_id}")
-def delete_job(job_id: int):
-    assert plugin_manager is not None
+def delete_job(plugin_manager: PluginManagerState, job_id: int):
     plugin_manager.remove_job(job_id)
     return {"success": True}
 
 
 @app.post("/reload/{package}")
-def reload_plugin(package: str):
+def reload_plugin(plugin_manager: PluginManagerState, package: str):
     try:
         plugin_manager.load_plugin(package, True)
         return {"success": True}
@@ -156,8 +168,9 @@ def reload_plugin(package: str):
 
 
 @app.post("/config/{job_id}")
-def update_config(job_id: int, payload: dict = Body(...)):
-    assert plugin_manager is not None
+def update_config(
+    plugin_manager: PluginManagerState, job_id: int, payload: dict = Body(...)
+):
     try:
         if job_id == 0:
             plugin_id = payload["pluginId"]

@@ -18,7 +18,7 @@ import Form from '@rjsf/mui';
 import validator from '@rjsf/validator-ajv8';
 import api from './api';
 import LogViewer from './LogViewer';
-import MLThresholdsTableField from './MLThresholdsTableField';
+import { MLThresholdsTableField } from './fields';
 
 const theme = createTheme({
   palette: {
