@@ -234,11 +234,15 @@ class PluginManager:
 
     def update_job(self, id: int, config: str, description: Optional[str] = None):
         with Session(self.db_engine) as session:
-            job_item = session.get(Job, id)
-            if job_item:
-                job_item.config = config  # type: ignore
+            job = session.get(Job, id)
+            if job:
+                job.config = config  # type: ignore
                 if description:
-                    job_item.description = description  # type: ignore
+                    job.description = description  # type: ignore
+                # update the active config
+                if bool(job.active):
+                    scheduler_job_id = f"{job.plugin_id}/{job.user_id}"
+                    self._active_job_cache[scheduler_job_id] = str(job.config)
                 session.commit()
 
     def remove_job(self, job_id: int):

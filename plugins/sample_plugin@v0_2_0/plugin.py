@@ -9,6 +9,7 @@ hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
 
 class Config(BaseModel):
     version: str = "2.0"
+    symbols: str = ",".join(["BTC", "ETH", "SOL", "LINK"])
 
 
 class Plugin:
@@ -26,5 +27,9 @@ class Plugin:
     @hookimpl
     @classmethod
     async def run(cls, config: Config, logger: logging.Logger):
+        from .data import create_signals
+
         logger.debug(f"running with config: {config}")
-        return True
+        symbols = [s.strip() for s in config.symbols.split(",")]
+        signals = create_signals(symbols)
+        return signals
