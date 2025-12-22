@@ -46,6 +46,7 @@ function formatMessage(message) {
 export default function LogViewer({ jobInstanceId, maxMessages = 500 }) {
   const [logs, setLogs] = useState([]);
   const ws = useRef(null);
+  const logIdRef = useRef(0);
   const maxMessagesRef = useRef(maxMessages);
 
   useEffect(() => {
@@ -66,9 +67,15 @@ export default function LogViewer({ jobInstanceId, maxMessages = 500 }) {
 
     ws.current.onmessage = (event) => {
       const data = JSON.parse(event.data);
+      const items = Array.isArray(data) ? data : [data];
+      // 🔑 Assign stable, monotonic indices
+      const withIdx = items.map((item) => ({
+        ...item,
+        id: logIdRef.current++
+      }));
       // Always use latest jobInstanceId
       setLogs((prevLogs) => {
-        const next = Array.isArray(data) ? data : [...prevLogs, data];
+        const next = [...prevLogs, ...withIdx];
         if (next.length > maxMessagesRef.current) {
           return next.slice(next.length - maxMessagesRef.current);
         }
@@ -87,13 +94,14 @@ export default function LogViewer({ jobInstanceId, maxMessages = 500 }) {
     return () => {
       if (ws.current) {
         ws.current.close();
-        setLogs([]);
+        handleClearLogs();
       }
     };
   }, [jobInstanceId]);
 
   const handleClearLogs = () => {
     setLogs([]);
+    logIdRef.current = 0;
   };
 
   return (
@@ -155,12 +163,12 @@ export default function LogViewer({ jobInstanceId, maxMessages = 500 }) {
           fontSize: '0.85rem'
         }}
       >
-        {logs.map((log, idx) => {
+        {logs.map((log) => {
           const style = LEVEL_STYLES[log.level] || DEFAULT_STYLE;
 
           return (
             <Box
-              key={idx}
+              key={log.id}
               sx={{
                 display: 'flex',
                 alignItems: 'flex-start',
