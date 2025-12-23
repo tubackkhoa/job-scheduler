@@ -25,10 +25,11 @@ dependencies = [
     "pluggy>=1.0",
     "pydantic>=2.0",
     "APScheduler>=3.10",
-    "SQLAlchemy>=2.0",
+    "sqlalchemy==2.0.45",
     "fastapi>=0.100",
     "uvicorn[standard]>=0.20",
     "alembic>=1.16.5",
+    "psycopg2",
 ]
 
 [project.urls]

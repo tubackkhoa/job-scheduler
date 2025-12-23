@@ -13,10 +13,19 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Explicitly create sequences for PostgreSQL
+    op.execute(sa.text("CREATE SEQUENCE IF NOT EXISTS plugins_id_seq"))
+    op.execute(sa.text("CREATE SEQUENCE IF NOT EXISTS jobs_id_seq"))
+
     # Create plugins table
     op.create_table(
         'plugins',
-        sa.Column('id', sa.Integer(), sa.Sequence('plugins_id_seq'), nullable=False),
+        sa.Column(
+            'id',
+            sa.Integer(),
+            server_default=sa.text("nextval('plugins_id_seq'::regclass)"),
+            nullable=False,
+        ),
         sa.Column('package', sa.Text(), nullable=False),
         sa.Column('interval', sa.Integer(), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
@@ -28,7 +37,12 @@ def upgrade() -> None:
     # Create jobs table
     op.create_table(
         'jobs',
-        sa.Column('id', sa.Integer(), sa.Sequence('jobs_id_seq'), nullable=False),
+        sa.Column(
+            'id',
+            sa.Integer(),
+            server_default=sa.text("nextval('jobs_id_seq'::regclass)"),
+            nullable=False,
+        ),
         sa.Column('user_id', sa.Integer(), nullable=False),
         sa.Column('plugin_id', sa.Integer(), nullable=False),
         sa.Column('description', sa.Text(), nullable=True),
@@ -42,4 +56,6 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_table('jobs')
     op.drop_table('plugins')
+    op.execute(sa.text("DROP SEQUENCE IF EXISTS jobs_id_seq"))
+    op.execute(sa.text("DROP SEQUENCE IF EXISTS plugins_id_seq"))
 
