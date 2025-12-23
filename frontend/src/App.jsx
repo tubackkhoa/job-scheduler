@@ -22,7 +22,9 @@ import { MLThresholdsTableField, MultiSelectField } from './fields';
 
 const theme = createTheme({
   palette: {
-    mode: 'dark', // or "light"
+    mode: window.matchMedia?.('(prefers-color-scheme: dark)').matches
+      ? 'dark'
+      : 'light',
     primary: {
       main: '#7C4DFF' // Deep purple
     },
