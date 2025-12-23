@@ -17,8 +17,6 @@ async def main(package: str):
     assert db_connection
 
     db_engine = create_engine(db_connection)
-    if ":memory:" in db_connection:
-        create_data(db_engine, [1])
 
     plugin_manager = PluginManager(
         db_engine,
@@ -33,6 +31,8 @@ async def main(package: str):
         config = plugin.config()
         await plugin.run(config, logging.getLogger("worker"))
     else:
+        if ":memory:" in db_connection:
+            create_data(db_engine, [1])
         plugin_manager.start()
         try:
             await asyncio.sleep(3600)  # Keep process alive
