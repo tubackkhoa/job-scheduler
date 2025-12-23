@@ -18,7 +18,7 @@ import Form from '@rjsf/mui';
 import validator from '@rjsf/validator-ajv8';
 import api from './api';
 import LogViewer from './LogViewer';
-import { MLThresholdsTableField } from './fields';
+import { MLThresholdsTableField, MultiSelectField } from './fields';
 
 const theme = createTheme({
   palette: {
@@ -61,7 +61,10 @@ const uiSchema = {
     'ui:field': 'MLThresholdsTable'
   },
   strategy_config: {
-    'ui:classNames': 'two-column-flex'
+    'ui:classNames': 'two-column-flex',
+    token_blacklist: {
+      'ui:field': 'MultiSelect'
+    }
   }
 };
 
@@ -322,7 +325,8 @@ export default function App() {
             uiSchema={uiSchema}
             ref={formRef}
             fields={{
-              MLThresholdsTable: MLThresholdsTableField
+              MLThresholdsTable: MLThresholdsTableField,
+              MultiSelect: MultiSelectField
             }}
             formData={JSON.parse(currentConfig.config)}
             validator={validator}

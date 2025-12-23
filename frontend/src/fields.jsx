@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+
 import {
   Table,
   TableHead,
@@ -9,11 +10,17 @@ import {
   Grid,
   Typography,
   Divider,
-  TextField
+  TextField,
+  Select,
+  MenuItem,
+  InputLabel,
+  FormControl,
+  ListItemText,
+  OutlinedInput
 } from '@mui/material';
 
 export function MLThresholdsTableField(props) {
-  const { schema, formData = {}, onChange, name } = props;
+  const { schema, formData = {}, onChange, fieldPathId } = props;
 
   // Extract model rows from schema
   const modelSchemas = schema.properties ?? {};
@@ -25,8 +32,8 @@ export function MLThresholdsTableField(props) {
   const thresholdKeys = Object.keys(thresholdSchema);
 
   const updateCell = (modelKey, thresholdKey, patch) => {
-    onChange({
-      [name]: {
+    onChange(
+      {
         ...formData,
         [modelKey]: {
           ...formData[modelKey],
@@ -35,8 +42,9 @@ export function MLThresholdsTableField(props) {
             ...patch
           }
         }
-      }
-    });
+      },
+      fieldPathId.path
+    );
   };
 
   return (
@@ -118,5 +126,39 @@ export function MLThresholdsTableField(props) {
         </TableBody>
       </Table>
     </Grid>
+  );
+}
+
+// Props:
+// - options: string[] (the enum options from JSON schema)
+// - defaultValue: string[] (default selected tokens from JSON schema)
+// - label: string
+// - onChange: (newValue: string[]) => void
+export function MultiSelectField(props) {
+  const { formData, fieldPathId, schema, onChange } = props;
+
+  const handleChange = (event) => {
+    const value = event.target.value;
+    if (onChange) onChange(value, fieldPathId.path);
+  };
+  const defaultValue = Array.isArray(formData) ? formData : [];
+  return (
+    <FormControl fullWidth>
+      <InputLabel>{schema.title}</InputLabel>
+      <Select
+        multiple
+        value={defaultValue}
+        onChange={handleChange}
+        input={<OutlinedInput label={schema.title} />}
+        renderValue={(selected) => selected.join(', ')}
+      >
+        {schema.default.map((token) => (
+          <MenuItem key={token} value={token}>
+            <Checkbox checked={formData?.indexOf(token) > -1} />
+            <ListItemText primary={token} />
+          </MenuItem>
+        ))}
+      </Select>
+    </FormControl>
   );
 }
