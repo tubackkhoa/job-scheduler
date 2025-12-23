@@ -1,5 +1,12 @@
 import { useEffect, useState, useRef } from 'react';
-import { Box, Typography, Paper, Button } from '@mui/material';
+import {
+  Box,
+  Typography,
+  Paper,
+  Button,
+  useTheme,
+  useMediaQuery
+} from '@mui/material';
 import { API_BASE_URL } from './api';
 
 // Map log levels to MUI color palette or CSS colors
@@ -48,6 +55,13 @@ export default function LogViewer({ jobInstanceId, maxMessages = 500 }) {
   const ws = useRef(null);
   const logIdRef = useRef(0);
   const maxMessagesRef = useRef(maxMessages);
+  const theme = useTheme();
+  const isSmall = useMediaQuery(theme.breakpoints.down('sm'));
+
+  const handleClearLogs = () => {
+    setLogs([]);
+    logIdRef.current = 0;
+  };
 
   useEffect(() => {
     maxMessagesRef.current = maxMessages;
@@ -99,21 +113,16 @@ export default function LogViewer({ jobInstanceId, maxMessages = 500 }) {
     };
   }, [jobInstanceId]);
 
-  const handleClearLogs = () => {
-    setLogs([]);
-    logIdRef.current = 0;
-  };
-
   return (
     <Paper
       elevation={3}
       sx={{
         mt: 2,
-        height: 400,
+        height: isSmall ? 260 : 400,
         display: 'flex',
         flexDirection: 'column',
-        backgroundColor: '#000',
-        border: '1px solid #444',
+        backgroundColor: theme.palette.background.paper,
+        border: `1px solid ${theme.palette.divider}`,
         borderRadius: 2,
         overflow: 'hidden'
       }}
@@ -123,7 +132,7 @@ export default function LogViewer({ jobInstanceId, maxMessages = 500 }) {
         sx={{
           px: 2,
           py: 1,
-          borderBottom: '1px solid #333',
+          borderBottom: `1px solid ${theme.palette.divider}`,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center'
@@ -160,7 +169,8 @@ export default function LogViewer({ jobInstanceId, maxMessages = 500 }) {
           px: 2,
           py: 1,
           fontFamily: 'monospace',
-          fontSize: '0.85rem'
+          fontSize: '0.85rem',
+          backgroundColor: theme.palette.background.default
         }}
       >
         {logs.map((log) => {
