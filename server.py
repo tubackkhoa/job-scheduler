@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine
 from create_data import create_data
 from log_handler import JobLogHandler
-from models import Job
+from models import Job, Plugin
 from plugin_manager import PluginManager
 from ws_manager import WSConnectionManager
 import os
@@ -56,6 +56,7 @@ async def lifespan(app: FastAPI):
         create_data(db_engine)
     else:
         db_engine = create_engine(db_connection)
+
 
     # Initialise log handler and plugin manager once we have a running event loop
     loop = asyncio.get_running_loop()
@@ -112,6 +113,151 @@ def plugins(plugin_manager: PluginManagerState):
     return plugin_manager.get_all_plugins()
 
 
+@app.post("/plugins")
+def create_plugin(plugin_manager: PluginManagerState, payload: dict = Body(...)):
+    """
+    Create a plugin record and load it into the PluginManager.
+
+    Expected payload:
+    {
+      "package": "plugins.sample_plugin@v0_1_0.Plugin",
+      "interval": 60,
+      "description": "Sample plugin"
+    }
+    """
+    from sqlalchemy.orm import Session
+
+    required_keys = {"package", "interval"}
+    if not required_keys.issubset(payload):
+        raise HTTPException(
+            status_code=400,
+            detail="Missing required fields: package, interval",
+        )
+
+    package = payload["package"]
+    interval = payload["interval"]
+    description = payload.get("description")
+
+    # Insert into DB
+    with Session(plugin_manager.db_engine) as session:
+        plugin_row = Plugin(
+            package=package,
+            interval=interval,
+            description=description,
+        )
+        session.add(plugin_row)
+        session.commit()
+        session.refresh(plugin_row)
+
+    # Load into manager
+    try:
+        plugin_manager.load_plugin(package, True)
+    except Exception as e:
+        # Cleanup if load fails
+        with Session(plugin_manager.db_engine) as session:
+            db_plugin = session.get(Plugin, plugin_row.id)
+            if db_plugin:
+                session.delete(db_plugin)
+                session.commit()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to load plugin: {str(e)}",
+        )
+
+    return {
+        "id": plugin_row.id,
+        "package": plugin_row.package,
+        "interval": plugin_row.interval,
+        "description": plugin_row.description,
+    }
+
+
+@app.post("/jobs/default")
+def create_default_jobs(plugin_manager: PluginManagerState, payload: dict = Body(...)):
+    """
+    Create jobs using the plugin's default config for one or more users.
+
+    Expected payload:
+    {
+      "pluginId": 1,
+      "userIds": [1, 2],          # optional, defaults to [1]
+      "description": "optional",  # optional
+      "active": true              # optional, default true
+    }
+    """
+    from sqlalchemy.orm import Session
+
+    plugin_id = payload.get("pluginId")
+    if plugin_id is None:
+        raise HTTPException(status_code=400, detail="pluginId is required")
+
+    user_ids = payload.get("userIds") or [1]
+    if not isinstance(user_ids, list):
+        raise HTTPException(status_code=400, detail="userIds must be a list")
+
+    description = payload.get("description")
+    active = bool(payload.get("active", True))
+
+    plugin_item = plugin_manager.get_plugin_by_id(plugin_id)
+    if not plugin_item:
+        raise HTTPException(status_code=404, detail=f"Plugin with id {plugin_id} not found")
+
+    plugin = plugin_manager.get_plugin_instance(str(plugin_item.package))
+    if not plugin:
+        # try to load once
+        plugin_manager.load_plugin(str(plugin_item.package), True)
+        plugin = plugin_manager.get_plugin_instance(str(plugin_item.package))
+    if not plugin:
+        raise HTTPException(status_code=500, detail="Failed to load plugin instance")
+
+    # default config from plugin
+    try:
+        default_config = plugin.config()  # pydantic model
+        config_json = default_config.model_dump_json()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get default config: {str(e)}")
+
+    created_jobs = []
+    with Session(plugin_manager.db_engine) as session:
+        for user_id in user_ids:
+            job = Job(
+                user_id=int(user_id),
+                plugin_id=plugin_item.id,
+                config=config_json,
+                active=1 if active else 0,
+                description=description,
+            )
+            session.add(job)
+            session.flush()
+
+            # schedule job
+            plugin_manager.add_job_instance(job, plugin_item)
+            if active:
+                plugin_manager.activate_job(job.id)
+
+            created_jobs.append(
+                {
+                    "id": job.id,
+                    "user_id": job.user_id,
+                    "plugin_id": job.plugin_id,
+                    "config": job.config,
+                    "description": job.description,
+                    "active": job.active,
+                }
+            )
+
+        session.commit()
+
+    return {
+        "plugin": {
+            "id": plugin_item.id,
+            "package": plugin_item.package,
+            "interval": plugin_item.interval,
+            "description": plugin_item.description,
+        },
+        "jobs": created_jobs,
+    }
+
 @app.get("/schema/{user_id}/{plugin_id}")
 def schema(plugin_manager: PluginManagerState, user_id: int, plugin_id: int):
     plugin_item = plugin_manager.get_plugin_by_id(plugin_id)
@@ -139,6 +285,7 @@ def schema(plugin_manager: PluginManagerState, user_id: int, plugin_id: int):
             }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load schema: {str(e)}")
+
 
 
 @app.post("/activate/{job_id}/{activation}")
