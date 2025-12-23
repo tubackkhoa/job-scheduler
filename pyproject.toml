@@ -28,6 +28,7 @@ dependencies = [
     "SQLAlchemy>=2.0",
     "fastapi>=0.100",
     "uvicorn[standard]>=0.20",
+    "alembic>=1.16.5",
 ]
 
 [project.urls]
