@@ -66,3 +66,20 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+
+.two-column-flex > div > div:nth-child(2) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+
+  > div {
+    flex: 0 0 50%;
+    box-sizing: border-box;
+    padding: 10px 0;
+
+    &:nth-child(odd) {
+      padding-right: 20px;
+    }
+  }
+}

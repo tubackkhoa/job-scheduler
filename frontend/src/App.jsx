@@ -59,6 +59,9 @@ const users = [
 const uiSchema = {
   ml_filtering_thresholds: {
     'ui:field': 'MLThresholdsTable'
+  },
+  strategy_config: {
+    'ui:classNames': 'two-column-flex'
   }
 };
 
