@@ -24,7 +24,7 @@ PROJECT_NAME = "alpha-miner"
 
 hookspec = pluggy.HookspecMarker(PROJECT_NAME)
 
-scheduler_logger = logging.getLogger("plugin_manager")
+scheduler_logger = logging.getLogger(__name__)
 scheduler_logger.addHandler(logging.StreamHandler())
 
 
