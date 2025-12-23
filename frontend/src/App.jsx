@@ -20,32 +20,10 @@ import api from './api';
 import LogViewer from './LogViewer';
 import { MLThresholdsTableField, MultiSelectField } from './fields';
 
-const theme = createTheme({
-  palette: {
-    mode: window.matchMedia?.('(prefers-color-scheme: dark)').matches
-      ? 'dark'
-      : 'light',
-    primary: {
-      main: '#7C4DFF' // Deep purple
-    },
-    secondary: {
-      main: '#00E5FF' // Cyan accent
-    },
-    background: {
-      default: '#0F1117',
-      paper: '#161A23'
-    }
-  },
-  shape: {
-    borderRadius: 10
-  },
-  typography: {
-    fontFamily: 'Inter, Roboto, sans-serif',
-    h6: {
-      fontWeight: 600
-    }
-  }
-});
+const getSystemTheme = () =>
+  window.matchMedia?.('(prefers-color-scheme: dark)').matches
+    ? 'dark'
+    : 'light';
 
 const users = [
   {
@@ -74,6 +52,7 @@ const uiSchema = {
 };
 
 export default function App() {
+  const [mode, setMode] = useState(getSystemTheme());
   const [plugins, setPlugins] = useState([]);
   const [pluginId, setPluginId] = useState(0);
   const [jobId, setJobId] = useState(0);
@@ -86,6 +65,28 @@ export default function App() {
   const [userId, setUserId] = useState(users[0].id);
   const [error, setError] = useState(null);
   const formRef = useRef(null);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+    // Event handler for changes
+    const handleChange = (event) => {
+      setMode(event.matches ? 'dark' : 'light');
+    };
+
+    // Listen for changes
+    mediaQuery.addEventListener('change', handleChange);
+
+    // Cleanup listener on unmount
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  // Create theme based on current mode
+  const theme = createTheme({
+    palette: {
+      mode
+    }
+  });
 
   // Load plugin list
   useEffect(() => {
