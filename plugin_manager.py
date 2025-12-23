@@ -81,8 +81,6 @@ class PluginManager:
         for plugin in all_plugins:
             self.load_plugin(str(plugin.package))
             look_up[plugin.id] = plugin
-        # verify plugin implementation
-        self.manager.check_pending()
 
         all_jobs = self.get_all_jobs()
 
@@ -170,19 +168,16 @@ class PluginManager:
         return asyncio.run(plugin.run(config, logger))
 
     def unload_plugin(self, package: str):
-        module_path, _ = package.rsplit(".", 1)
-
         existing_plugin = self.manager.get_plugin(package)
         if existing_plugin:
             self.manager.unregister(existing_plugin, package)
-
-        self.reload_module(module_path)
 
     def load_plugin(self, package: str, override: bool = False):
         module_path, class_name = package.rsplit(".", 1)
 
         if override:
             self.unload_plugin(package)
+            self.reload_module(module_path)
 
         plugin: PluginSpec | None = self.manager.get_plugin(package)
         if plugin is None:
