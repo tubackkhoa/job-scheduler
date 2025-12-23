@@ -98,7 +98,9 @@ class PluginManager:
         elif event.code == EVENT_JOB_REMOVED:
             message = "Job removed from scheduler"
         elif event.code == EVENT_JOB_SUBMITTED:
-            message = f"Job submitted to executor (scheduled: {getattr(event, 'scheduled_run_times')})"
+            message = (
+                f"Job submitted to executor (scheduled: {getattr(event, 'scheduled_run_times')})"
+            )
         elif event.code == EVENT_JOB_EXECUTED:
             message = f"Job executed successfully (return value: {event.retval})"
         elif event.code == EVENT_JOB_ERROR:
@@ -126,15 +128,19 @@ class PluginManager:
         if self.scheduler.running:
             self.scheduler.shutdown()
 
-    def unload_module(self, module_path: str):
-        # Remove module and submodules from sys.modules cache to reload cleanly
-        modules_to_remove = [
-            name
-            for name in sys.modules
-            if name == module_path or name.startswith(module_path + ".")
-        ]
-        for mod_name in modules_to_remove:
-            del sys.modules[mod_name]
+    def reload_module(self, module_path: str):
+        root = module_path.partition(".")[0]
+        prefix = root + "."
+
+        # Reload submodules first
+        for name, module in list(sys.modules.items()):
+            if name.startswith(prefix):
+                importlib.reload(module)
+
+        # Reload root last
+        root_module = sys.modules.get(root)
+        if root_module:
+            importlib.reload(root_module)
 
     def get_plugin_names(self):
         return [name for name, _ in self.manager.list_name_plugin()]
@@ -170,7 +176,7 @@ class PluginManager:
         if existing_plugin:
             self.manager.unregister(existing_plugin, package)
 
-        self.unload_module(module_path)
+        self.reload_module(module_path)
 
     def load_plugin(self, package: str, override: bool = False):
         module_path, class_name = package.rsplit(".", 1)
