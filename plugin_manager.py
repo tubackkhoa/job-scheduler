@@ -24,6 +24,9 @@ PROJECT_NAME = "alpha-miner"
 
 hookspec = pluggy.HookspecMarker(PROJECT_NAME)
 
+scheduler_logger = logging.getLogger("plugin_manager")
+scheduler_logger.addHandler(logging.StreamHandler())
+
 
 class PluginSpec:
     @hookspec
@@ -182,8 +185,8 @@ class PluginManager:
                 plugin = getattr(module, class_name)
                 self.manager.register(plugin, package)
             except Exception as e:
-                # show error to terminal to check
-                logging.getLogger("apscheduler").error(e)
+                # show error to terminal to check but keep running
+                scheduler_logger.error(e, exc_info=True)
 
         return plugin
 

@@ -26,7 +26,7 @@ import uvloop
 
 dotenv.load_dotenv()
 # Configure logging to show INFO and above messages
-logging.getLogger("apscheduler").setLevel(logging.ERROR)
+logging.basicConfig(level=logging.DEBUG, handlers=[logging.NullHandler()])
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 manager = WSConnectionManager()
