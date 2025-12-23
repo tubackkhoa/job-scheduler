@@ -64,6 +64,9 @@ const uiSchema = {
     'ui:classNames': 'two-column-flex',
     token_blacklist: {
       'ui:field': 'MultiSelect'
+    },
+    token_whitelist: {
+      'ui:field': 'MultiSelect'
     }
   }
 };
