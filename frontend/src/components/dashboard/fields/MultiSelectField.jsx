@@ -12,7 +12,10 @@ import {
 } from '@mui/material';
 
 export function MultiSelectField({ formData, fieldPathId, schema, onChange }) {
-  const options = schema.enum || schema.default || [];
+  let options = schema?.enum || schema?.default || [];
+  if(typeof options === 'string') {
+    options = options.split(',');
+  }
   const selectedValues = Array.isArray(formData) ? formData : [];
   const allSelected = options.length > 0 && selectedValues.length === options.length;
   const someSelected = selectedValues.length > 0 && selectedValues.length < options.length;
@@ -115,7 +118,7 @@ export function MultiSelectField({ formData, fieldPathId, schema, onChange }) {
         <Divider sx={{ my: 0.5 }} />
         
         {/* Individual Options */}
-        {options.map((token) => (
+        {options?.length > 0 && options?.map((token) => (
           <MenuItem 
             key={token} 
             value={token}
