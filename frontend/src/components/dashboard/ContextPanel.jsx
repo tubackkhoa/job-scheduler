@@ -10,9 +10,11 @@ import {
   Typography,
   IconButton,
   Tooltip,
-  Avatar,
-} from "@mui/material";
-import { Refresh, Person } from "@mui/icons-material";
+  OutlinedInput,
+  InputAdornment,
+  Avatar
+} from '@mui/material';
+import { Refresh, Person } from '@mui/icons-material';
 
 export function ContextPanel({
   users,
@@ -22,13 +24,14 @@ export function ContextPanel({
   onUserChange,
   onPluginChange,
   onReloadPlugin,
-  isLoading,
+  isLoading
 }) {
   return (
     <Card
       sx={{
         bgcolor: 'background.paper',
-        backgroundImage: 'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(236, 72, 153, 0.05) 100%)',
+        backgroundImage:
+          'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(236, 72, 153, 0.05) 100%)'
       }}
     >
       <CardContent sx={{ p: 3 }}>
@@ -37,7 +40,7 @@ export function ContextPanel({
             sx={{
               bgcolor: 'primary.main',
               width: 44,
-              height: 44,
+              height: 44
             }}
           >
             <Person />
@@ -75,6 +78,43 @@ export function ContextPanel({
                 value={pluginId}
                 onChange={(e) => onPluginChange(Number(e.target.value))}
                 label="Plugin"
+                input={
+                  <OutlinedInput
+                    notched={false}
+                    startAdornment={
+                      <InputAdornment position="start">
+                        {pluginId > 0 && (
+                          <Tooltip title="Reload plugin (development)">
+                            <IconButton
+                              onClick={onReloadPlugin}
+                              disabled={isLoading}
+                              size="small"
+                              color="warning"
+                              sx={{
+                                bgcolor: 'rgba(245, 158, 11, 0.1)',
+                                '&:hover': {
+                                  bgcolor: 'rgba(245, 158, 11, 0.2)'
+                                }
+                              }}
+                            >
+                              <Refresh
+                                sx={{
+                                  animation: isLoading
+                                    ? 'spin 1s linear infinite'
+                                    : 'none',
+                                  '@keyframes spin': {
+                                    '0%': { transform: 'rotate(0deg)' },
+                                    '100%': { transform: 'rotate(360deg)' }
+                                  }
+                                }}
+                              />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </InputAdornment>
+                    }
+                  />
+                }
               >
                 <MenuItem value={0}>
                   <em>Select a plugin...</em>
@@ -82,7 +122,14 @@ export function ContextPanel({
                 {plugins.map((plugin) => (
                   <MenuItem key={plugin.id} value={plugin.id}>
                     <Stack>
-                      <Typography variant="body2">
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
                         {plugin.package}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
@@ -93,35 +140,9 @@ export function ContextPanel({
                 ))}
               </Select>
             </FormControl>
-
-            {pluginId > 0 && (
-              <Tooltip title="Reload plugin (development)">
-                <IconButton
-                  onClick={onReloadPlugin}
-                  disabled={isLoading}
-                  color="warning"
-                  sx={{
-                    mt: 0.5,
-                    bgcolor: 'rgba(245, 158, 11, 0.1)',
-                    '&:hover': { bgcolor: 'rgba(245, 158, 11, 0.2)' },
-                  }}
-                >
-                  <Refresh
-                    sx={{
-                      animation: isLoading ? 'spin 1s linear infinite' : 'none',
-                      '@keyframes spin': {
-                        '0%': { transform: 'rotate(0deg)' },
-                        '100%': { transform: 'rotate(360deg)' },
-                      },
-                    }}
-                  />
-                </IconButton>
-              </Tooltip>
-            )}
           </Stack>
         </Stack>
       </CardContent>
     </Card>
   );
 }
-
