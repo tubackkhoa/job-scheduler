@@ -207,7 +207,6 @@ export default function App() {
 
   const currentConfig = configVersions.find((version) => version.id === jobId);
   const uiSchema = extractUiSchema(schema);
-  console.log(uiSchema);
 
   return (
     <ThemeProvider theme={theme}>

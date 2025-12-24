@@ -136,12 +136,15 @@ export function MLThresholdsTableField(props) {
 // - onChange: (newValue: string[]) => void
 export function MultiSelectField(props) {
   const { formData, fieldPathId, schema, onChange } = props;
-  console.log('MultiSelectField props:', props);
+
   const handleChange = (event) => {
     const value = event.target.value;
     if (onChange) onChange(value, fieldPathId.path);
   };
   const defaultValue = Array.isArray(formData) ? formData : [];
+  const options = schema.default
+    ? schema.default.split(',').map((token) => token.trim())
+    : [];
   return (
     <FormControl fullWidth>
       <InputLabel>{schema.title}</InputLabel>
@@ -152,13 +155,12 @@ export function MultiSelectField(props) {
         input={<OutlinedInput label={schema.title} />}
         renderValue={(selected) => selected.join(', ')}
       >
-        {Array.isArray(schema.default) &&
-          schema.default.map((token) => (
-            <MenuItem key={token} value={token}>
-              <Checkbox checked={formData?.indexOf(token) > -1} />
-              <ListItemText primary={token} />
-            </MenuItem>
-          ))}
+        {options.map((token) => (
+          <MenuItem key={token} value={token}>
+            <Checkbox checked={formData?.indexOf(token) > -1} />
+            <ListItemText primary={token} />
+          </MenuItem>
+        ))}
       </Select>
     </FormControl>
   );
