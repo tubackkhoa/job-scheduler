@@ -1,5 +1,13 @@
 import { useEffect, useState, useRef } from 'react';
-import { Box, Typography, Paper, Button } from '@mui/material';
+import {
+  Box,
+  Stack,
+  Typography,
+  IconButton,
+  Paper,
+  Tooltip,
+} from '@mui/material';
+import { Terminal, Delete } from '@mui/icons-material';
 import { API_BASE_URL } from './api';
 
 // Map log levels to MUI color palette or CSS colors
@@ -48,6 +56,22 @@ export default function LogViewer({ jobInstanceId, maxMessages = 500 }) {
   const ws = useRef(null);
   const logIdRef = useRef(0);
   const maxMessagesRef = useRef(maxMessages);
+
+  const handleClearLogs = () => {
+    setLogs([]);
+    logIdRef.current = 0;
+  };
+
+  const getLevelColor = (level) => {
+    switch (level) {
+      case 'ERROR':
+        return 'error.main';
+      case 'WARNING':
+        return 'warning.main';
+      default:
+        return 'primary.main';
+    }
+  };
 
   useEffect(() => {
     maxMessagesRef.current = maxMessages;
@@ -99,135 +123,85 @@ export default function LogViewer({ jobInstanceId, maxMessages = 500 }) {
     };
   }, [jobInstanceId]);
 
-  const handleClearLogs = () => {
-    setLogs([]);
-    logIdRef.current = 0;
-  };
-
   return (
+    <Stack spacing={2}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center">
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <Terminal fontSize="small" color="action" />
+          <Typography variant="body2" color="text.secondary">
+            Live logs for {jobInstanceId}
+          </Typography>
+        </Stack>
+        <Tooltip title="Clear logs">
+          <IconButton onClick={handleClearLogs} size="small">
+            <Delete fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Stack>
+
     <Paper
-      elevation={3}
-      sx={{
-        mt: 2,
-        height: 400,
-        display: 'flex',
-        flexDirection: 'column',
-        backgroundColor: '#000',
-        border: '1px solid #444',
-        borderRadius: 2,
-        overflow: 'hidden'
-      }}
-    >
-      {/* Header */}
-      <Box
-        sx={{
-          px: 2,
-          py: 1,
-          borderBottom: '1px solid #333',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}
-      >
-        <Typography variant="subtitle2" sx={{ color: '#aaa' }}>
-          Job Execution Logs
-        </Typography>
-        <Button
-          size="small"
           variant="outlined"
-          onClick={handleClearLogs}
-          disabled={logs.length === 0}
-          sx={{
-            fontSize: '0.75rem',
-            textTransform: 'none',
-            borderColor: '#555',
-            color: '#ccc',
-            '&:hover': {
-              borderColor: '#888',
-              backgroundColor: 'rgba(255,255,255,0.08)'
-            }
-          }}
-        >
-          Clear
-        </Button>
-      </Box>
-
-      {/* Scrollable Log Area */}
-      <Box
         sx={{
-          flex: 1,
-          overflowY: 'auto',
-          px: 2,
-          py: 1,
-          fontFamily: 'monospace',
-          fontSize: '0.85rem'
+          p: 2,
+          height: 300,
+          overflow: 'auto',
+          bgcolor: 'rgba(0, 0, 0, 0.4)',
+          fontFamily: '"JetBrains Mono", monospace',
+          fontSize: '0.85rem',
+          borderRadius: 2,
         }}
       >
-        {logs.map((log) => {
-          const style = LEVEL_STYLES[log.level] || DEFAULT_STYLE;
-
-          return (
-            <Box
-              key={log.id}
-              sx={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 1.5,
-                py: 0.4,
-                '&:hover': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.03)'
-                }
-              }}
-            >
-              {/* Level Badge */}
+        {logs.length === 0 ? (
               <Box
                 sx={{
-                  minWidth: 60,
-                  textAlign: 'center',
-                  px: 1,
-                  py: 0.3,
-                  borderRadius: 1,
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  color: style.color,
-                  backgroundColor: style.bg,
-                  flexShrink: 0
-                }}
-              >
-                {log.level}
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Typography variant="body2" color="text.secondary">
+              No logs available
+            </Typography>
               </Box>
-
-              {/* Timestamp - fixed width + monospace */}
+        ) : (
+          <Stack spacing={0.5}>
+            {logs.map((log) => (
+                <Stack key={log.id} direction="row" spacing={2}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ fontFamily: 'inherit', flexShrink: 0 }}
+                  >
+                    {log.time}
+                  </Typography>
               <Typography
                 variant="caption"
                 sx={{
-                  minWidth: 135,
-                  color: '#9e9e9e',
-                  fontFamily: 'monospace',
-                  flexShrink: 0
+                      fontFamily: 'inherit',
+                      color: getLevelColor(log.level),
+                      textTransform: 'uppercase',
+                      fontWeight: 600,
+                      flexShrink: 0,
                 }}
               >
-                {log.time}
+                    [{log.level}]
               </Typography>
-
-              {/* Message - takes remaining space */}
               <Typography
-                variant="body2"
-                component="div"
+                    variant="caption"
                 sx={{
-                  color: '#e0e0e0',
-                  wordBreak: 'break-word',
-                  whiteSpace: 'pre-wrap',
-                  flex: 1,
-                  lineHeight: 1.4
+                      fontFamily: 'inherit',
+                      color: 'text.primary',
+                      opacity: 0.9,
                 }}
               >
                 {formatMessage(log.message)}
               </Typography>
-            </Box>
-          );
-        })}
-      </Box>
+                </Stack>
+            ))}
+          </Stack>
+        )}
     </Paper>
+    </Stack>
   );
 }

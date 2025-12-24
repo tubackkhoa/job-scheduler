@@ -16,7 +16,10 @@ import {
   InputLabel,
   FormControl,
   ListItemText,
-  OutlinedInput
+  OutlinedInput,
+  Box,
+  Tooltip,
+  Chip
 } from '@mui/material';
 
 export function MLThresholdsTableField(props) {
@@ -51,80 +54,162 @@ export function MLThresholdsTableField(props) {
     <Grid>
       <Typography variant="h5">{schema.title}</Typography>
       <Divider />
-      <Typography
-        variant="subtitle2"
-        sx={{ my: 1 }}
-      >{`Configure filtering rules for each model separately (Rule 1: |μ| ≥ threshold, Rule 2: min < |μ/σ| < max, Rule 3: σ < threshold)`}</Typography>
-      <Table size="small">
-        <TableHead>
-          <TableRow
-            sx={(theme) => ({
-              backgroundColor: theme.palette.background.default
-            })}
-          >
-            <TableCell>Model</TableCell>
-            <TableCell>Model Key</TableCell>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          color: 'text.secondary',
+          my: 1,
+          flexWrap: 'wrap'
+        }}
+      >
+        <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
+          Configure rules per model
+        </Typography>
+        <Tooltip title="Rule 1: |μ| ≥ threshold, Rule 2: min < |μ/σ| < max, Rule 3: σ < threshold">
+          <Chip
+            label="View rules"
+            size="small"
+            variant="outlined"
+            sx={{ color: 'text.secondary', borderColor: 'divider' }}
+          />
+        </Tooltip>
+      </Box>
+      <Box
+        sx={{
+          overflowX: 'auto',
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 1,
+          backgroundColor: 'background.default'
+        }}
+      >
+        <Table size="small" stickyHeader>
+          <TableHead>
+            <TableRow>
+              <TableCell
+                sx={{
+                  position: 'sticky',
+                  left: 0,
+                  zIndex: 2,
+                  backgroundColor: 'background.default',
+                  minWidth: 120
+                }}
+              >
+                Model
+              </TableCell>
+              <TableCell
+                sx={{
+                  position: 'sticky',
+                  left: 120,
+                  zIndex: 2,
+                  backgroundColor: 'background.default',
+                  minWidth: 120
+                }}
+              >
+                Model Key
+              </TableCell>
 
-            {thresholdKeys.map((key) => (
-              <React.Fragment key={key}>
-                <TableCell>{thresholdSchema[key].title}</TableCell>
-                <TableCell>Disable</TableCell>
-              </React.Fragment>
-            ))}
-          </TableRow>
-        </TableHead>
-
-        <TableBody>
-          {Object.entries(formData).map(([modelKey, row]) => (
-            <TableRow key={modelKey}>
-              <TableCell>{modelSchemas[modelKey]?.title}</TableCell>
-              <TableCell>{modelKey}</TableCell>
-
-              {thresholdKeys.map((thKey) => {
-                const cell = row[thKey];
-                return (
-                  <React.Fragment key={`${modelKey}-${thKey}`}>
-                    <TableCell>
-                      <TextField
-                        variant="standard"
-                        sx={{
-                          minWidth: '6ch' // 👈 fits ~5 digits comfortably
-                        }}
-                        slotProps={{
-                          input: {
-                            step: 'any',
-                            disableUnderline: true
-                          }
-                        }}
-                        type="number"
-                        size="small"
-                        value={cell.value}
-                        disabled={cell.disabled}
-                        onChange={(e) =>
-                          updateCell(modelKey, thKey, {
-                            value: Number(e.target.value)
-                          })
-                        }
-                      />
-                    </TableCell>
-
-                    <TableCell>
-                      <Checkbox
-                        checked={cell.disabled}
-                        onChange={(e) =>
-                          updateCell(modelKey, thKey, {
-                            disabled: e.target.checked
-                          })
-                        }
-                      />
-                    </TableCell>
-                  </React.Fragment>
-                );
-              })}
+              {thresholdKeys.map((key) => (
+                <React.Fragment key={key}>
+                  <TableCell sx={{ minWidth: 120 }}>{thresholdSchema[key].title}</TableCell>
+                  <TableCell
+                    sx={{
+                      minWidth: 90,
+                      textAlign: 'center'
+                    }}
+                  >
+                    Disable
+                  </TableCell>
+                </React.Fragment>
+              ))}
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHead>
+
+          <TableBody>
+            {Object.entries(formData).map(([modelKey, row]) => (
+              <TableRow key={modelKey} hover>
+                <TableCell
+                  sx={{
+                    position: 'sticky',
+                    left: 0,
+                    backgroundColor: 'background.paper',
+                    zIndex: 1,
+                    minWidth: 120,
+                    fontWeight: 600
+                  }}
+                >
+                  {modelSchemas[modelKey]?.title}
+                </TableCell>
+                <TableCell
+                  sx={{
+                    position: 'sticky',
+                    left: 120,
+                    backgroundColor: 'background.paper',
+                    zIndex: 1,
+                    minWidth: 120,
+                    color: 'text.secondary'
+                  }}
+                >
+                  {modelKey}
+                </TableCell>
+
+                {thresholdKeys.map((thKey) => {
+                  const cell = row[thKey];
+                  return (
+                    <React.Fragment key={`${modelKey}-${thKey}`}>
+                      <TableCell sx={{ minWidth: 120 }}>
+                        <TextField
+                          variant="standard"
+                          sx={{
+                            minWidth: '7ch',
+                            '& input': {
+                              textAlign: 'right',
+                              paddingRight: 1
+                            }
+                          }}
+                          slotProps={{
+                            input: {
+                              step: 'any',
+                              disableUnderline: true
+                            }
+                          }}
+                          type="number"
+                          size="small"
+                          value={cell.value}
+                          disabled={cell.disabled}
+                          onChange={(e) =>
+                            updateCell(modelKey, thKey, {
+                              value: Number(e.target.value)
+                            })
+                          }
+                        />
+                      </TableCell>
+
+                      <TableCell
+                        sx={{
+                          minWidth: 90,
+                          textAlign: 'center'
+                        }}
+                      >
+                        <Checkbox
+                          checked={cell.disabled}
+                          onChange={(e) =>
+                            updateCell(modelKey, thKey, {
+                              disabled: e.target.checked
+                            })
+                          }
+                        />
+                      </TableCell>
+                    </React.Fragment>
+                  );
+                })}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Box>
     </Grid>
   );
 }
