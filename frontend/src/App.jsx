@@ -1,39 +1,14 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  Chip,
-  Container,
-  FormControl,
-  Grid,
-  IconButton,
-  Input,
-  InputLabel,
-  LinearProgress,
-  List,
-  ListItemButton,
-  ListItemText,
-  MenuItem,
-  Select,
-  Stack,
-  Switch,
-  Tab,
-  Tabs,
-  Tooltip,
-  Typography
-} from '@mui/material';
-import { Pause, PlayArrow, Refresh, Add, ContentCopy } from '@mui/icons-material';
-
-import Form from '@rjsf/mui';
-import validator from '@rjsf/validator-ajv8';
+import { Box, Container, Grid, CssBaseline } from '@mui/material';
+import { Header } from './components/dashboard/Header';
+import { ContextPanel } from './components/dashboard/ContextPanel';
+import { JobsList } from './components/dashboard/JobsList';
+import { JobDetails } from './components/dashboard/JobDetails';
+import { LoadingBar } from './components/dashboard/LoadingBar';
+import { ErrorAlert } from './components/dashboard/ErrorAlert';
+import { ResponseCard } from './components/dashboard/ResponseCard';
 import api from './api';
-import LogViewer from './LogViewer';
-import { MLThresholdsTableField, MultiSelectField } from './fields';
-import { extractUiSchema, getSystemTheme } from './utils';
 
 const users = [
   {
@@ -46,8 +21,78 @@ const users = [
   }
 ];
 
+const darkTheme = createTheme({
+  palette: {
+    mode: 'dark',
+    primary: {
+      main: '#6366f1',
+      light: '#818cf8',
+      dark: '#4f46e5',
+    },
+    secondary: {
+      main: '#ec4899',
+      light: '#f472b6',
+      dark: '#db2777',
+    },
+    success: {
+      main: '#22c55e',
+      light: '#4ade80',
+      dark: '#16a34a',
+    },
+    warning: {
+      main: '#f59e0b',
+      light: '#fbbf24',
+      dark: '#d97706',
+    },
+    error: {
+      main: '#ef4444',
+      light: '#f87171',
+      dark: '#dc2626',
+    },
+    background: {
+      default: '#0a0a0f',
+      paper: '#111119',
+    },
+    divider: 'rgba(255, 255, 255, 0.08)',
+  },
+  typography: {
+    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+  },
+  shape: {
+    borderRadius: 12,
+  },
+  components: {
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          backgroundImage: 'none',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+        },
+      },
+    },
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          textTransform: 'none',
+          fontWeight: 500,
+        },
+      },
+    },
+    MuiTextField: {
+      defaultProps: {
+        variant: 'outlined',
+        size: 'small',
+      },
+    },
+    MuiSelect: {
+      defaultProps: {
+        size: 'small',
+      },
+    },
+  },
+});
+
 export default function App() {
-  const [mode, setMode] = useState(getSystemTheme());
   const [plugins, setPlugins] = useState([]);
   const [pluginId, setPluginId] = useState(0);
   const [jobId, setJobId] = useState(0);
@@ -60,31 +105,6 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [userId, setUserId] = useState(users[0].id);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('config');
-  const [copiedJson, setCopiedJson] = useState(false);
-  const formRef = useRef(null);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-
-    // Event handler for changes
-    const handleChange = (event) => {
-      setMode(event.matches ? 'dark' : 'light');
-    };
-
-    // Listen for changes
-    mediaQuery.addEventListener('change', handleChange);
-
-    // Cleanup listener on unmount
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
-
-  // Create theme based on current mode
-  const theme = createTheme({
-    palette: {
-      mode
-    }
-  });
 
   // Load plugin list
   useEffect(() => {
@@ -107,11 +127,11 @@ export default function App() {
     setSchema(null);
 
     try {
-      const { schema, configs } = await api.fetchSchema(
+      const { schema: fetchedSchema, configs } = await api.fetchSchema(
         currentUserId ?? userId,
         currentPluginId
       );
-      setSchema(schema);
+      setSchema(fetchedSchema);
       setConfigVersions(configs);
       const templateConfig =
         configs.find((c) => c.id === 0)?.config ?? configs[0]?.config ?? '{}';
@@ -121,7 +141,7 @@ export default function App() {
         active: 0,
         config: templateConfig
       });
-      const newJobId = currentJobId ?? configs[0].id;
+      const newJobId = currentJobId ?? configs[0]?.id ?? 0;
       handleChangeJob(newJobId, configs);
     } catch (err) {
       setError(err.message);
@@ -239,399 +259,82 @@ export default function App() {
     : null;
   const isActive = (currentConfig?.active ?? 0) === 1;
 
-  const handleCopyJson = async () => {
-    if (!formData) return;
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(formData, null, 2));
-      setCopiedJson(true);
-      setTimeout(() => setCopiedJson(false), 1500);
-    } catch (err) {
-      console.error('Copy failed', err);
-    }
-  };
+  const jobs = configVersions;
 
   return (
-    <ThemeProvider theme={theme}>
-      <Container sx={{ minHeight: '100vh', pb: 4 }}>
-        <Box sx={{ py: 2 }}>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            Job Scheduler Dashboard
-          </Typography>
-          <Typography variant="subtitle1" sx={{ color: '#9da3af' }}>
-            Manage plugins, jobs, configurations, and live logs in one view.
-          </Typography>
-        </Box>
+    <ThemeProvider theme={darkTheme}>
+      <CssBaseline />
+      <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+        <LoadingBar isLoading={loading || submitting} />
 
-        {(loading || submitting) && <LinearProgress sx={{ mb: 2 }} />}
-        {error && (
-          <Box
-            sx={{
-              p: 2,
-              mb: 2,
-              borderRadius: 2,
-              border: '1px solid #b71c1c',
-              background: 'rgba(183,28,28,0.1)',
-              color: '#ffcdd2'
-            }}
-          >
-            {error}
-          </Box>
-        )}
+        <Container maxWidth={false} sx={{ py: 3, px: { xs: 2, sm: 3, md: 4 } }}>
+          <Header onReload={reloadPlugins} isLoading={submitting} />
 
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={4}>
-            <Card
-              sx={{
-                mb: 2,
-                border: '1px solid #1f2937',
-                backgroundColor: '#0f1117'
-              }}
-            >
-              <CardHeader
-                title="Context"
-                subheader="Choose user and plugin"
-                subheaderTypographyProps={{ sx: { color: '#9da3af' } }}
+          {error && (
+            <Box sx={{ mt: 3 }}>
+              <ErrorAlert message={error} onClose={() => setError(null)} />
+            </Box>
+          )}
+
+          <Grid container spacing={3} sx={{ mt: 1 }}>
+            {/* Left sidebar */}
+            <Grid item xs={12} size={3}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <ContextPanel
+                  users={users}
+                  plugins={plugins}
+                  userId={userId}
+                  pluginId={pluginId}
+                  onUserChange={handleChangeUser}
+                  onPluginChange={loadSchema}
+                  onReloadPlugin={reloadPlugins}
+                  isLoading={submitting}
+                />
+
+                <JobsList
+                  jobs={jobs}
+                  selectedJobId={jobId}
+                  pluginPackage={pluginInfo?.package}
+                  onSelectJob={(id) => {
+                    handleChangeJob(id);
+                  }}
+                  onToggleJob={(id, active) => handleJobActivation(active, id)}
+                  onNewJob={() => {
+                    setJobId(0);
+                    setJobDesc('');
+                  }}
+                  disabled={!schema}
+                />
+              </Box>
+            </Grid>
+
+            {/* Main content */}
+            <Grid item xs={12} size={9}>
+              <JobDetails
+                jobId={jobId}
+                jobDesc={jobDesc}
+                pluginPackage={pluginInfo?.package}
+                pluginInterval={pluginInfo?.interval}
+                isActive={isActive}
+                formData={formData}
+                schema={schema}
+                onDescChange={setJobDesc}
+                onToggleActive={() => handleJobActivation(!isActive)}
+                onSave={(data) => handleSubmit({ formData: data, saveNew: false })}
+                onSaveAsNew={(data) => handleSubmit({ formData: data, saveNew: true })}
+                onDelete={handleDeleteJob}
+                isSubmitting={submitting}
+                userId={userId}
+                pluginId={pluginId}
               />
-              <CardContent>
-                <Stack spacing={2}>
-                  <FormControl size="small">
-                    <InputLabel id="user-select-label">User</InputLabel>
-                    <Select
-                      labelId="user-select-label"
-                      value={userId}
-                      label="User"
-                      onChange={(e) => handleChangeUser(e.target.value)}
-                    >
-                      {users.map((user) => (
-                        <MenuItem key={user.id} value={user.id}>
-                          {user.fullName}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
 
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <FormControl size="small" fullWidth>
-                      <InputLabel id="plugin-select-label">Plugin</InputLabel>
-                      <Select
-                        labelId="plugin-select-label"
-                        value={pluginId}
-                        label="Plugin"
-                        onChange={(e) => loadSchema(Number(e.target.value))}
-                      >
-                        {plugins.map((plugin) => (
-                          <MenuItem
-                            key={plugin.id}
-                            value={plugin.id}
-                            title={plugin.description}
-                          >
-                            {plugin.package} (interval {plugin.interval}s)
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-
-                    {!!pluginId && (
-                      <IconButton
-                        color="warning"
-                        onClick={reloadPlugins}
-                        title="Reload plugin (development)"
-                      >
-                        <Refresh />
-                      </IconButton>
-                    )}
-                  </Stack>
-                </Stack>
-              </CardContent>
-            </Card>
-
-            <Card
-              sx={{
-                border: '1px solid #1f2937',
-                backgroundColor: '#0f1117'
-              }}
-            >
-              <CardHeader
-                title="Jobs"
-                subheader="Select, start, pause, or add a job"
-                subheaderTypographyProps={{ sx: { color: '#9da3af' } }}
-                action={
-                  <Button
-                    size="small"
-                    startIcon={<Add />}
-                    variant="contained"
-                    disabled={!schema}
-                    onClick={() => {
-                      setJobId(0);
-                      setJobDesc('');
-                      setActiveTab('config');
-                    }}
-                  >
-                    New
-                  </Button>
-                }
-              />
-              <CardContent sx={{ maxHeight: 520, overflowY: 'auto', pt: 0 }}>
-                <List dense>
-                  {configVersions.map((version) => (
-                    <ListItemButton
-                      key={version.id}
-                      selected={jobId === version.id}
-                      onClick={() => {
-                        handleChangeJob(version.id);
-                        setActiveTab('config');
-                      }}
-                      sx={{
-                        mb: 1,
-                        borderRadius: 1,
-                        border: '1px solid #1f2937',
-                        backgroundColor:
-                          jobId === version.id ? '#161a23' : 'transparent'
-                      }}
-                    >
-                      <ListItemText
-                        primary={
-                          <Stack
-                            direction="row"
-                            alignItems="center"
-                            spacing={1}
-                          >
-                            <Typography variant="body1">
-                              {version.description || 'Untitled job'}
-                            </Typography>
-                            {version.active ? (
-                              <Chip
-                                label="Active"
-                                color="success"
-                                size="small"
-                              />
-                            ) : (
-                              <Chip
-                                label="Paused"
-                                color="default"
-                                size="small"
-                              />
-                            )}
-                          </Stack>
-                        }
-                        secondary={
-                          <Typography variant="caption" sx={{ color: '#9da3af' }}>
-                            #{version.id} • {pluginInfo?.package || 'Plugin'}
-                          </Typography>
-                        }
-                      />
-                      <Switch
-                        edge="end"
-                        checked={!!version.active}
-                        onChange={(e) =>
-                          handleJobActivation(e.target.checked, version.id)
-                        }
-                      />
-                    </ListItemButton>
-                  ))}
-                  {!configVersions.length && (
-                    <Typography variant="body2" sx={{ color: '#9da3af' }}>
-                      No jobs yet. Pick a plugin to load defaults.
-                    </Typography>
-                  )}
-                </List>
-              </CardContent>
-            </Card>
+              {result && (
+                <ResponseCard result={result} onClose={() => setResult(null)} />
+              )}
+            </Grid>
           </Grid>
-
-          <Grid item xs={12} md={8}>
-            <Card
-              sx={{
-                border: '1px solid #1f2937',
-                backgroundColor: '#0f1117'
-              }}
-            >
-              <CardHeader
-                title="Job Details"
-                subheader={
-                  pluginInfo
-                    ? `${pluginInfo.package} • every ${pluginInfo.interval}s`
-                    : 'Select a plugin to begin'
-                }
-                subheaderTypographyProps={{ sx: { color: '#9da3af' } }}
-                action={
-                  !!currentConfig && (
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Chip
-                        size="small"
-                        label={isActive ? 'Active' : 'Paused'}
-                        color={isActive ? 'success' : 'default'}
-                        variant={isActive ? 'filled' : 'outlined'}
-                        sx={{ mr: 1 }}
-                      />
-                      <Button
-                        size="small"
-                        variant={isActive ? 'outlined' : 'contained'}
-                        color={isActive ? 'warning' : 'success'}
-                        startIcon={isActive ? <Pause /> : <PlayArrow />}
-                        disabled={!pluginId || submitting}
-                        onClick={() => handleJobActivation(!isActive)}
-                      >
-                        {isActive ? 'Pause' : 'Start'}
-                      </Button>
-                    </Stack>
-                  )
-                }
-              />
-              <CardContent>
-                {schema && displayedConfig && (
-                  <Stack spacing={2}>
-                    <FormControl fullWidth>
-                      <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-                        Description
-                      </Typography>
-                      <Input
-                        value={jobDesc}
-                        onChange={(e) => setJobDesc(e.target.value)}
-                        placeholder="Short note for this job"
-                      />
-                    </FormControl>
-
-                    <Tabs
-                      value={activeTab}
-                      onChange={(_, v) => setActiveTab(v)}
-                      textColor="secondary"
-                      indicatorColor="secondary"
-                      sx={{ borderBottom: '1px solid #1f2937' }}
-                    >
-                      <Tab label="Config Form" value="config" />
-                      <Tab label="Config JSON" value="json" />
-                      <Tab label="Live Logs" value="logs" />
-                    </Tabs>
-
-                    {activeTab === 'config' && (
-                      <Form
-                        schema={schema}
-                        uiSchema={uiSchema}
-                        ref={formRef}
-                        fields={{
-                          MLThresholdsTable: MLThresholdsTableField,
-                          MultiSelect: MultiSelectField
-                        }}
-                        formData={formData}
-                        validator={validator}
-                        onSubmit={handleSubmit}
-                      >
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            flexWrap: 'wrap',
-                            gap: 2,
-                            mt: 1
-                          }}
-                        >
-                          <Stack direction="row" spacing={1}>
-                            <Button
-                              variant="contained"
-                              type="submit"
-                              disabled={submitting || !pluginId}
-                            >
-                              {submitting ? 'Saving…' : 'Save'}
-                            </Button>
-                            <Button
-                              variant="outlined"
-                              disabled={submitting || !pluginId}
-                              onClick={() => {
-                                handleSubmit({
-                                  formData: formRef.current.state.formData,
-                                  saveNew: true
-                                });
-                              }}
-                            >
-                              Save as new
-                            </Button>
-                          </Stack>
-
-                          {jobId !== 0 && (
-                            <Button
-                              variant="outlined"
-                              color="error"
-                              disabled={submitting}
-                              onClick={handleDeleteJob}
-                            >
-                              Delete
-                            </Button>
-                          )}
-                        </Box>
-                      </Form>
-                    )}
-
-                    {activeTab === 'json' && (
-                      <Box
-                        sx={{
-                          p: 2,
-                          borderRadius: 2,
-                          backgroundColor: '#0b0d13',
-                          border: '1px solid #1f2937',
-                          fontFamily: 'monospace',
-                          fontSize: '0.9rem',
-                          whiteSpace: 'pre-wrap',
-                          position: 'relative'
-                        }}
-                      >
-                        <Tooltip title={copiedJson ? 'Copied!' : 'Copy JSON'}>
-                          <IconButton
-                            size="small"
-                            onClick={handleCopyJson}
-                            sx={{ position: 'absolute', top: 8, right: 8 }}
-                          >
-                            <ContentCopy fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        {JSON.stringify(formData, null, 2)}
-                      </Box>
-                    )}
-
-                    {activeTab === 'logs' && (
-                      <LogViewer jobInstanceId={`${pluginId}/${userId}`} />
-                    )}
-                  </Stack>
-                )}
-
-                {!schema && (
-                  <Typography variant="body2" sx={{ color: '#9da3af' }}>
-                    Pick a plugin to load its schema and jobs.
-                  </Typography>
-                )}
-              </CardContent>
-            </Card>
-
-            {result && (
-              <Card
-                sx={{
-                  mt: 2,
-                  border: '1px solid #1f2937',
-                  backgroundColor: '#0b0d13'
-                }}
-              >
-                <CardHeader title="Server response" />
-                <CardContent>
-                  <pre
-                    style={{
-                      margin: 0,
-                      background: '#000',
-                      color: '#0f0',
-                      padding: 16,
-                      borderRadius: 6,
-                      maxHeight: 320,
-                      overflow: 'auto'
-                    }}
-                  >
-                    {JSON.stringify(result, null, 2)}
-                  </pre>
-                </CardContent>
-              </Card>
-            )}
-          </Grid>
-        </Grid>
-      </Container>
+        </Container>
+      </Box>
     </ThemeProvider>
   );
 }
