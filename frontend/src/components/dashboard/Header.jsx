@@ -1,5 +1,4 @@
-import { Box, Typography, IconButton, Tooltip } from '@mui/material';
-import { Refresh } from '@mui/icons-material';
+import { Box, Typography } from '@mui/material';
 
 export function Header({ isLoading }) {
   return (
@@ -10,7 +9,7 @@ export function Header({ isLoading }) {
         justifyContent: 'space-between',
         py: 3,
         borderBottom: 1,
-        borderColor: 'divider'
+        borderColor: 'divider',
       }}
     >
       <Box>
@@ -21,7 +20,7 @@ export function Header({ isLoading }) {
             background: 'linear-gradient(135deg, #fff 0%, #a5b4fc 100%)',
             backgroundClip: 'text',
             WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent'
+            WebkitTextFillColor: 'transparent',
           }}
         >
           Job Scheduler Dashboard

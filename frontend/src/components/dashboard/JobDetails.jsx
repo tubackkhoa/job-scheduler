@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Card,
@@ -14,7 +14,7 @@ import {
   IconButton,
   Tooltip,
   Divider,
-} from "@mui/material";
+} from '@mui/material';
 import {
   PlayArrow,
   Pause,
@@ -26,9 +26,9 @@ import {
   Delete,
   Save,
   AddCircleOutline,
-} from "@mui/icons-material";
-import { ConfigForm } from "./ConfigForm";
-import LogViewer from "../../LogViewer";
+} from '@mui/icons-material';
+import { ConfigForm } from './ConfigForm';
+import LogViewer from '../../LogViewer';
 
 function TabPanel(props) {
   const { children, value, index, ...other } = props;
@@ -140,8 +140,15 @@ export function JobDetails({
             </Stack>
           )
         }
-        titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-        subheaderTypographyProps={{ variant: 'body2' }}
+        slotProps={{
+          title: {
+            variant: 'h6',
+            fontWeight: 600,
+          },
+          subheader: {
+            variant: 'body2',
+          },
+        }}
       />
 
       <Divider />
@@ -265,14 +272,17 @@ export function JobDetails({
                     variant="contained"
                     startIcon={<Save />}
                     onClick={() => {
-                      const currentData = formRef.current?.state?.formData || localFormData || {};
+                      const currentData =
+                        formRef.current?.state?.formData || localFormData || {};
                       onSave(currentData);
                     }}
                     disabled={isSubmitting}
                     sx={{
-                      background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                      background:
+                        'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
                       '&:hover': {
-                        background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                        background:
+                          'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
                       },
                     }}
                   >
@@ -282,7 +292,8 @@ export function JobDetails({
                     variant="outlined"
                     startIcon={<AddCircleOutline />}
                     onClick={() => {
-                      const currentData = formRef.current?.state?.formData || localFormData || {};
+                      const currentData =
+                        formRef.current?.state?.formData || localFormData || {};
                       onSaveAsNew(currentData);
                     }}
                     disabled={isSubmitting}
@@ -310,4 +321,3 @@ export function JobDetails({
     </Card>
   );
 }
-

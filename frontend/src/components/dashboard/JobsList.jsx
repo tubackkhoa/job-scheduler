@@ -11,8 +11,8 @@ import {
   Stack,
   Chip,
   Switch,
-} from "@mui/material";
-import { Add } from "@mui/icons-material";
+} from '@mui/material';
+import { Add } from '@mui/icons-material';
 
 export function JobsList({
   jobs,
@@ -47,8 +47,15 @@ export function JobsList({
             New
           </Button>
         }
-        titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-        subheaderTypographyProps={{ variant: 'body2' }}
+        slotProps={{
+          title: {
+            variant: 'h6',
+            fontWeight: 600,
+          },
+          subheader: {
+            variant: 'body2',
+          },
+        }}
       />
       <CardContent sx={{ pt: 0, maxHeight: 450, overflowY: 'auto' }}>
         <List disablePadding>
@@ -61,8 +68,12 @@ export function JobsList({
                 mb: 1,
                 borderRadius: 2,
                 border: 1,
-                borderColor: selectedJobId === job.id ? 'primary.main' : 'divider',
-                bgcolor: selectedJobId === job.id ? 'rgba(99, 102, 241, 0.08)' : 'transparent',
+                borderColor:
+                  selectedJobId === job.id ? 'primary.main' : 'divider',
+                bgcolor:
+                  selectedJobId === job.id
+                    ? 'rgba(99, 102, 241, 0.08)'
+                    : 'transparent',
                 '&:hover': {
                   bgcolor: 'action.hover',
                   borderColor: 'primary.light',
@@ -103,7 +114,16 @@ export function JobsList({
                   </Stack>
                 }
                 secondary={
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      display: 'block',
+                    }}
+                  >
                     #{job.id} • {pluginPackage || 'Plugin'}
                   </Typography>
                 }
@@ -138,4 +158,3 @@ export function JobsList({
     </Card>
   );
 }
-

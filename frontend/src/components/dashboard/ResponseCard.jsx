@@ -1,12 +1,5 @@
-import {
-  Card,
-  CardHeader,
-  CardContent,
-  IconButton,
-  Box,
-  Typography,
-} from "@mui/material";
-import { CheckCircle, Cancel, Close } from "@mui/icons-material";
+import { Card, CardHeader, CardContent, IconButton, Box } from '@mui/material';
+import { CheckCircle, Cancel, Close } from '@mui/icons-material';
 
 export function ResponseCard({ result, onClose }) {
   const isSuccess = result?.success !== false;
@@ -22,11 +15,7 @@ export function ResponseCard({ result, onClose }) {
     >
       <CardHeader
         avatar={
-          isSuccess ? (
-            <CheckCircle color="success" />
-          ) : (
-            <Cancel color="error" />
-          )
+          isSuccess ? <CheckCircle color="success" /> : <Cancel color="error" />
         }
         title="Server Response"
         action={
@@ -34,7 +23,12 @@ export function ResponseCard({ result, onClose }) {
             <Close />
           </IconButton>
         }
-        titleTypographyProps={{ variant: 'subtitle1', fontWeight: 600 }}
+        slotProps={{
+          title: {
+            variant: 'subtitle1',
+            fontWeight: 600,
+          },
+        }}
         sx={{ pb: 0 }}
       />
       <CardContent>
@@ -58,4 +52,3 @@ export function ResponseCard({ result, onClose }) {
     </Card>
   );
 }
-
