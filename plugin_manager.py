@@ -127,12 +127,12 @@ class PluginManager:
             self.scheduler.shutdown()
 
     def reload_module(self, module_path: str):
-        root = module_path.partition(".")[0]
-        prefix = root + "."
+        root, sep = module_path.partition(".")[0]
+        prefix = root + sep
 
-        # reload all modules, later import it again to make sure in right order
+        # reload all modules, later import it again to make sure in right order, do not reload root to prevent circulation import
         for name, module in list(sys.modules.items()):
-            if name == root or name.startswith(prefix):
+            if name.startswith(prefix):
                 importlib.reload(module)
 
     def get_plugin_names(self):
@@ -168,7 +168,7 @@ class PluginManager:
             self.manager.unregister(existing_plugin, package)
 
     def load_plugin(self, package: str, override: bool = False):
-        module_path, class_name = package.rsplit(".", 1)
+        module_path, _, class_name = package.rpartition(".")
 
         if override:
             self.unload_plugin(package)
