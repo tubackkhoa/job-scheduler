@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from models import Job, Plugin
 
-PROJECT_NAME = "alpha-miner"
+PROJECT_NAME = "job-scheduler"
 
 hookspec = pluggy.HookspecMarker(PROJECT_NAME)
 
