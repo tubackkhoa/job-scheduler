@@ -1,26 +1,15 @@
-import { forwardRef } from "react";
-import { Box, Paper, Stack, Typography, Grid } from "@mui/material";
-import { Settings } from "@mui/icons-material";
+import { forwardRef } from 'react';
+import { Box, Paper, Stack, Typography, Grid } from '@mui/material';
+import { Settings } from '@mui/icons-material';
 import Form from '@rjsf/mui';
 import validator from '@rjsf/validator-ajv8';
-import { MLThresholdsTableField, MultiSelectField } from "./fields";
+import { extractUiSchema } from '../../utils';
+import { MLThresholdsTableField, MultiSelectField } from './fields';
 
-const uiSchema = {
-  ml_filtering_thresholds: {
-    'ui:field': 'MLThresholdsTable'
-  },
-  strategy_config: {
-    'ui:classNames': 'two-column-flex',
-    token_blacklist: {
-      'ui:field': 'MultiSelect'
-    },
-    token_whitelist: {
-      'ui:field': 'MultiSelect'
-    }
-  }
-};
-
-export const ConfigForm = forwardRef(function ConfigForm({ schema, formData, onChange }, ref) {
+export const ConfigForm = forwardRef(function ConfigForm(
+  { schema, formData, onChange },
+  ref
+) {
   const handleChange = ({ formData: newFormData }) => {
     if (onChange) {
       onChange(newFormData);
@@ -35,14 +24,14 @@ export const ConfigForm = forwardRef(function ConfigForm({ schema, formData, onC
   const ObjectFieldTemplate = (props) => {
     const { title, description, properties, schema } = props;
     const isRoot = !props.idSchema || props.idSchema.$id === 'root';
-    
+
     // Check if this is a nested object (like strategy_config)
-    
+
     if (isRoot) {
       // Root level - separate object fields from regular fields
       const objectFields = [];
       const regularFields = [];
-      
+
       properties.forEach((prop) => {
         const fieldSchema = prop.content?.props?.schema;
         if (fieldSchema?.type === 'object' && fieldSchema?.properties) {
@@ -51,9 +40,15 @@ export const ConfigForm = forwardRef(function ConfigForm({ schema, formData, onC
           regularFields.push(prop);
         }
       });
-      
+
       return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 4
+          }}
+        >
           {/* General Settings section for non-object fields */}
           {regularFields.length > 0 && (
             <Paper
@@ -63,10 +58,15 @@ export const ConfigForm = forwardRef(function ConfigForm({ schema, formData, onC
                 bgcolor: 'rgba(99, 102, 241, 0.04)',
                 border: 1,
                 borderColor: 'divider',
-                borderRadius: 3,
+                borderRadius: 3
               }}
             >
-              <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 3 }}>
+              <Stack
+                direction="row"
+                alignItems="center"
+                spacing={1.5}
+                sx={{ mb: 3 }}
+              >
                 <Settings fontSize="small" color="primary" />
                 <Typography variant="subtitle1" fontWeight={600}>
                   General Settings
@@ -74,12 +74,8 @@ export const ConfigForm = forwardRef(function ConfigForm({ schema, formData, onC
               </Stack>
               <Grid container spacing={2}>
                 {regularFields.map((prop, index) => {
-                 
-                  
-              
-                  let gridSize = 3; // Default 2 columns
                   return (
-                    <Grid item size={gridSize} key={index}>
+                    <Grid item size={3} key={index} className="config-field">
                       {prop.content}
                     </Grid>
                   );
@@ -87,13 +83,13 @@ export const ConfigForm = forwardRef(function ConfigForm({ schema, formData, onC
               </Grid>
             </Paper>
           )}
-          
+
           {/* Object fields (sections) */}
           {objectFields.map((prop) => prop.content)}
         </Box>
       );
     }
-    
+
     // Nested object - render as Paper section
     return (
       <Paper
@@ -103,7 +99,7 @@ export const ConfigForm = forwardRef(function ConfigForm({ schema, formData, onC
           bgcolor: 'rgba(236, 72, 153, 0.04)',
           border: 1,
           borderColor: 'divider',
-          borderRadius: 3,
+          borderRadius: 3
         }}
       >
         <Box sx={{ mb: 3 }}>
@@ -118,7 +114,6 @@ export const ConfigForm = forwardRef(function ConfigForm({ schema, formData, onC
         </Box>
         <Grid container spacing={2}>
           {properties.map((prop, index) => {
-            
             return (
               <Grid item xs={12} size={3} key={index}>
                 {prop.content}
@@ -131,17 +126,19 @@ export const ConfigForm = forwardRef(function ConfigForm({ schema, formData, onC
   };
 
   return (
-    <Box sx={{ 
-      width: '100%',
-      '& .rjsf': { 
-        '& .form-group': { mb: 0 },
-        '& .field': { mb: 0 },
-        '& .control-label': { mb: 1 },
-      } 
-    }}>
+    <Box
+      sx={{
+        width: '100%',
+        '& .rjsf': {
+          '& .form-group': { mb: 0 },
+          '& .field': { mb: 0 },
+          '& .control-label': { mb: 1 }
+        }
+      }}
+    >
       <Form
         schema={schema}
-        uiSchema={uiSchema}
+        uiSchema={extractUiSchema(schema)}
         ref={ref}
         fields={{
           MLThresholdsTable: MLThresholdsTableField,
@@ -152,7 +149,6 @@ export const ConfigForm = forwardRef(function ConfigForm({ schema, formData, onC
         onChange={handleChange}
         liveValidate={false}
         showErrorList={false}
-        
         templates={{
           ObjectFieldTemplate,
           FieldTemplate: (props) => {
