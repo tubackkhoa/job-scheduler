@@ -127,7 +127,7 @@ class PluginManager:
             self.scheduler.shutdown()
 
     def reload_module(self, module_path: str):
-        root, sep = module_path.partition(".")[0]
+        root, sep, _ = module_path.partition(".")
         prefix = root + sep
 
         # reload all modules, later import it again to make sure in right order, do not reload root to prevent circulation import
