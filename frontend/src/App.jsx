@@ -27,69 +27,69 @@ const darkTheme = createTheme({
     primary: {
       main: '#6366f1',
       light: '#818cf8',
-      dark: '#4f46e5',
+      dark: '#4f46e5'
     },
     secondary: {
       main: '#ec4899',
       light: '#f472b6',
-      dark: '#db2777',
+      dark: '#db2777'
     },
     success: {
       main: '#22c55e',
       light: '#4ade80',
-      dark: '#16a34a',
+      dark: '#16a34a'
     },
     warning: {
       main: '#f59e0b',
       light: '#fbbf24',
-      dark: '#d97706',
+      dark: '#d97706'
     },
     error: {
       main: '#ef4444',
       light: '#f87171',
-      dark: '#dc2626',
+      dark: '#dc2626'
     },
     background: {
       default: '#0a0a0f',
-      paper: '#111119',
+      paper: '#111119'
     },
-    divider: 'rgba(255, 255, 255, 0.08)',
+    divider: 'rgba(255, 255, 255, 0.08)'
   },
   typography: {
-    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif'
   },
   shape: {
-    borderRadius: 12,
+    borderRadius: 12
   },
   components: {
     MuiCard: {
       styleOverrides: {
         root: {
           backgroundImage: 'none',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-        },
-      },
+          border: '1px solid rgba(255, 255, 255, 0.08)'
+        }
+      }
     },
     MuiButton: {
       styleOverrides: {
         root: {
           textTransform: 'none',
-          fontWeight: 500,
-        },
-      },
+          fontWeight: 500
+        }
+      }
     },
     MuiTextField: {
       defaultProps: {
         variant: 'outlined',
-        size: 'small',
-      },
+        size: 'small'
+      }
     },
     MuiSelect: {
       defaultProps: {
-        size: 'small',
-      },
-    },
-  },
+        size: 'small'
+      }
+    }
+  }
 });
 
 export default function App() {
@@ -268,7 +268,7 @@ export default function App() {
         <LoadingBar isLoading={loading || submitting} />
 
         <Container maxWidth={false} sx={{ py: 3, px: { xs: 2, sm: 3, md: 4 } }}>
-          <Header onReload={reloadPlugins} isLoading={submitting} />
+          <Header isLoading={submitting} />
 
           {error && (
             <Box sx={{ mt: 3 }}>
@@ -320,8 +320,12 @@ export default function App() {
                 schema={schema}
                 onDescChange={setJobDesc}
                 onToggleActive={() => handleJobActivation(!isActive)}
-                onSave={(data) => handleSubmit({ formData: data, saveNew: false })}
-                onSaveAsNew={(data) => handleSubmit({ formData: data, saveNew: true })}
+                onSave={(data) =>
+                  handleSubmit({ formData: data, saveNew: false })
+                }
+                onSaveAsNew={(data) =>
+                  handleSubmit({ formData: data, saveNew: true })
+                }
                 onDelete={handleDeleteJob}
                 isSubmitting={submitting}
                 userId={userId}

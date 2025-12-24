@@ -4,7 +4,7 @@ import importlib
 from models import Base, Job, Plugin
 from plugin_manager import PluginSpec
 
-plugin_data = [
+PLUGIN_DATA = [
     {
         "package": "plugins.sample_plugin@v0_1_0.Plugin",
         "interval": 1,
@@ -33,7 +33,7 @@ plugin_data = [
 ]
 
 
-def create_data(engine: Engine, user_ids: list[int] = [1, 2]):
+def create_data(engine: Engine, user_ids: list[int] = [1, 2], plugin_data=PLUGIN_DATA):
     Base.metadata.create_all(engine)
     with Session(engine) as session:
 

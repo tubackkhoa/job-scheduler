@@ -1,7 +1,7 @@
-import { Box, Typography, IconButton, Tooltip } from "@mui/material";
-import { Refresh } from "@mui/icons-material";
+import { Box, Typography, IconButton, Tooltip } from '@mui/material';
+import { Refresh } from '@mui/icons-material';
 
-export function Header({ onReload, isLoading }) {
+export function Header({ isLoading }) {
   return (
     <Box
       sx={{
@@ -10,7 +10,7 @@ export function Header({ onReload, isLoading }) {
         justifyContent: 'space-between',
         py: 3,
         borderBottom: 1,
-        borderColor: 'divider',
+        borderColor: 'divider'
       }}
     >
       <Box>
@@ -21,7 +21,7 @@ export function Header({ onReload, isLoading }) {
             background: 'linear-gradient(135deg, #fff 0%, #a5b4fc 100%)',
             backgroundClip: 'text',
             WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
+            WebkitTextFillColor: 'transparent'
           }}
         >
           Job Scheduler Dashboard
@@ -30,29 +30,6 @@ export function Header({ onReload, isLoading }) {
           Manage plugins, jobs, configurations, and live logs in one view.
         </Typography>
       </Box>
-      {onReload && (
-        <Tooltip title="Reload plugins">
-          <IconButton
-            onClick={onReload}
-            disabled={isLoading}
-            sx={{
-              bgcolor: 'action.hover',
-              '&:hover': { bgcolor: 'action.selected' },
-            }}
-          >
-            <Refresh
-              sx={{
-                animation: isLoading ? 'spin 1s linear infinite' : 'none',
-                '@keyframes spin': {
-                  '0%': { transform: 'rotate(0deg)' },
-                  '100%': { transform: 'rotate(360deg)' },
-                },
-              }}
-            />
-          </IconButton>
-        </Tooltip>
-      )}
     </Box>
   );
 }
-
