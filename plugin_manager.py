@@ -130,10 +130,14 @@ class PluginManager:
         root, sep, _ = module_path.partition(".")
         prefix = root + sep
 
-        # reload all modules, later import it again to make sure in right order, do not reload root to prevent circulation import
+        # reload all sub modules, later import root module to make sure in right order
         for name, module in list(sys.modules.items()):
             if name.startswith(prefix):
                 importlib.reload(module)
+
+        root_module = sys.modules.get(root)
+        if root_module:
+            importlib.reload(root_module)
 
     def get_plugin_names(self):
         return [name for name, _ in self.manager.list_name_plugin()]
