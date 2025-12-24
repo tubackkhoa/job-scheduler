@@ -17,8 +17,8 @@ export const extractUiSchema = (schema) => {
       const uiEntry = {};
 
       // Copy ui:field and ui:classNames if present
-      for (const uiKey of ['ui:field', 'ui:classNames']) {
-        if (prop[uiKey] !== undefined) {
+      for (const uiKey in prop) {
+        if (uiKey.startsWith('ui:')) {
           uiEntry[uiKey] = prop[uiKey];
         }
       }
