@@ -1,25 +1,14 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import {
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Button,
-  Input,
-  Checkbox,
-  Box,
-  Stack,
-  Container,
-  Typography
-} from '@mui/material';
-
-import Form from '@rjsf/mui';
-import validator from '@rjsf/validator-ajv8';
+import { Box, Container, Grid, CssBaseline } from '@mui/material';
+import { Header } from './components/dashboard/Header';
+import { ContextPanel } from './components/dashboard/ContextPanel';
+import { JobsList } from './components/dashboard/JobsList';
+import { JobDetails } from './components/dashboard/JobDetails';
+import { LoadingBar } from './components/dashboard/LoadingBar';
+import { ErrorAlert } from './components/dashboard/ErrorAlert';
+import { ResponseCard } from './components/dashboard/ResponseCard';
 import api from './api';
-import LogViewer from './LogViewer';
-import { MLThresholdsTableField, MultiSelectField } from './fields';
-import { extractUiSchema, getSystemTheme } from './utils';
 
 const users = [
   {
@@ -32,12 +21,83 @@ const users = [
   }
 ];
 
+const darkTheme = createTheme({
+  palette: {
+    mode: 'dark',
+    primary: {
+      main: '#6366f1',
+      light: '#818cf8',
+      dark: '#4f46e5',
+    },
+    secondary: {
+      main: '#ec4899',
+      light: '#f472b6',
+      dark: '#db2777',
+    },
+    success: {
+      main: '#22c55e',
+      light: '#4ade80',
+      dark: '#16a34a',
+    },
+    warning: {
+      main: '#f59e0b',
+      light: '#fbbf24',
+      dark: '#d97706',
+    },
+    error: {
+      main: '#ef4444',
+      light: '#f87171',
+      dark: '#dc2626',
+    },
+    background: {
+      default: '#0a0a0f',
+      paper: '#111119',
+    },
+    divider: 'rgba(255, 255, 255, 0.08)',
+  },
+  typography: {
+    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+  },
+  shape: {
+    borderRadius: 12,
+  },
+  components: {
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          backgroundImage: 'none',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+        },
+      },
+    },
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          textTransform: 'none',
+          fontWeight: 500,
+        },
+      },
+    },
+    MuiTextField: {
+      defaultProps: {
+        variant: 'outlined',
+        size: 'small',
+      },
+    },
+    MuiSelect: {
+      defaultProps: {
+        size: 'small',
+      },
+    },
+  },
+});
+
 export default function App() {
-  const [mode, setMode] = useState(getSystemTheme());
   const [plugins, setPlugins] = useState([]);
   const [pluginId, setPluginId] = useState(0);
   const [jobId, setJobId] = useState(0);
   const [jobDesc, setJobDesc] = useState('');
+  const [newJobDraft, setNewJobDraft] = useState(null);
   const [configVersions, setConfigVersions] = useState([]);
   const [schema, setSchema] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -45,29 +105,6 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [userId, setUserId] = useState(users[0].id);
   const [error, setError] = useState(null);
-  const formRef = useRef(null);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-
-    // Event handler for changes
-    const handleChange = (event) => {
-      setMode(event.matches ? 'dark' : 'light');
-    };
-
-    // Listen for changes
-    mediaQuery.addEventListener('change', handleChange);
-
-    // Cleanup listener on unmount
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
-
-  // Create theme based on current mode
-  const theme = createTheme({
-    palette: {
-      mode
-    }
-  });
 
   // Load plugin list
   useEffect(() => {
@@ -90,13 +127,21 @@ export default function App() {
     setSchema(null);
 
     try {
-      const { schema, configs } = await api.fetchSchema(
+      const { schema: fetchedSchema, configs } = await api.fetchSchema(
         currentUserId ?? userId,
         currentPluginId
       );
-      setSchema(schema);
+      setSchema(fetchedSchema);
       setConfigVersions(configs);
-      const newJobId = currentJobId ?? configs[0].id;
+      const templateConfig =
+        configs.find((c) => c.id === 0)?.config ?? configs[0]?.config ?? '{}';
+      setNewJobDraft({
+        id: 0,
+        description: '',
+        active: 0,
+        config: templateConfig
+      });
+      const newJobId = currentJobId ?? configs[0]?.id ?? 0;
       handleChangeJob(newJobId, configs);
     } catch (err) {
       setError(err.message);
@@ -133,21 +178,23 @@ export default function App() {
     }
   };
 
-  const handleJobActivation = async (activation) => {
+  const handleJobActivation = async (activation, targetJobId = jobId) => {
     setError(null);
+    if (!targetJobId) return;
     try {
-      const response = await api.activateJob(jobId, activation);
+      const response = await api.activateJob(targetJobId, activation);
       if (response.success) {
         // update the config at local to sync with server
         const newConfigVersions = [...configVersions];
         for (const version of newConfigVersions) {
-          if (version.id === jobId) {
+          if (version.id === targetJobId) {
             version.active = activation ? 1 : 0;
           } else {
             version.active = 0;
           }
         }
         setConfigVersions(newConfigVersions);
+        setJobId(targetJobId);
       }
       handleSetResult(response);
     } catch (err) {
@@ -157,10 +204,9 @@ export default function App() {
 
   const handleChangeJob = (newJobId, configs) => {
     setJobId(newJobId);
-    setJobDesc(
-      (configs ?? configVersions).find((version) => version.id === newJobId)
-        ?.description ?? ''
-    );
+    const collection = configs ?? configVersions;
+    const found = collection.find((version) => version.id === newJobId);
+    setJobDesc(found?.description ?? '');
   };
 
   const handleChangeUser = async (currentUserId) => {
@@ -206,195 +252,89 @@ export default function App() {
   };
 
   const currentConfig = configVersions.find((version) => version.id === jobId);
-  const uiSchema = extractUiSchema(schema);
+  const displayedConfig = jobId === 0 ? newJobDraft : currentConfig;
+  const pluginInfo = plugins.find((p) => p.id === pluginId);
+  const formData = displayedConfig
+    ? JSON.parse(displayedConfig.config ?? '{}')
+    : null;
+  const isActive = (currentConfig?.active ?? 0) === 1;
+
+  const jobs = configVersions;
 
   return (
-    <ThemeProvider theme={theme}>
-      <Container sx={{ minHeight: '100vh', pb: 4 }}>
-        <h1>Job Scheduler – Plugin Config</h1>
-        <Box
-          sx={{
-            display: 'flex',
-            gap: 2, // space between items (8px * 2 = 16px)
-            alignItems: 'center', // vertically align inputs
-            flexWrap: 'wrap' // allow wrapping on small screens
-          }}
-        >
-          <FormControl size="small">
-            <InputLabel id="config-version-select-label">
-              -- Select user --
-            </InputLabel>
-            <Select
-              labelId="config-version-select-label"
-              value={userId}
-              onChange={(e) => {
-                handleChangeUser(e.target.value);
-              }}
-            >
-              {users.map((user) => (
-                <MenuItem key={user.id} value={user.id}>
-                  {user.fullName}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <FormControl size="small" sx={{ minWidth: 360 }}>
-              <InputLabel id="plugin-select-label">
-                -- Select a plugin --
-              </InputLabel>
-              <Select
-                labelId="plugin-select-label"
-                value={pluginId}
-                label="-- Select a plugin --"
-                onChange={(e) => loadSchema(Number(e.target.value))}
-              >
-                {plugins.map((plugin) => (
-                  <MenuItem
-                    key={plugin.id}
-                    value={plugin.id}
-                    title={plugin.description}
-                  >
-                    {plugin.package} (interval {plugin.interval} seconds)
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            {!!pluginId && (
-              <Button
-                variant="contained"
-                color="warning"
-                onClick={reloadPlugins}
-              >
-                Reload plugin (development)
-              </Button>
-            )}
-          </Stack>
+    <ThemeProvider theme={darkTheme}>
+      <CssBaseline />
+      <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+        <LoadingBar isLoading={loading || submitting} />
 
-          <FormControl size="small" fullWidth>
-            <InputLabel id="config-version-select-label">
-              -- Select a job --
-            </InputLabel>
-            <Select
-              labelId="config-version-select-label"
-              value={jobId}
-              label="-- Select a job --"
-              onChange={(e) => {
-                handleChangeJob(e.target.value);
-              }}
-            >
-              {configVersions.map((version) => (
-                <MenuItem key={version.id} value={version.id}>
-                  {version.description} {version.active ? ' (active)' : ''}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Box>
+        <Container maxWidth={false} sx={{ py: 3, px: { xs: 2, sm: 3, md: 4 } }}>
+          <Header onReload={reloadPlugins} isLoading={submitting} />
 
-        {!!pluginId && !!userId && (
-          <LogViewer jobInstanceId={`${pluginId}/${userId}`} />
-        )}
-
-        {loading && <p>Loading schema...</p>}
-        {error && <p style={{ color: 'red' }}>{error}</p>}
-        {schema && currentConfig && (
-          <FormControl sx={{ my: 2 }} fullWidth>
-            <Typography variant="h5">Description</Typography>
-            <Input
-              value={jobDesc}
-              onChange={(e) => setJobDesc(e.target.value)}
-            />
-          </FormControl>
-        )}
-        {schema && currentConfig && (
-          <Form
-            schema={schema}
-            uiSchema={uiSchema}
-            ref={formRef}
-            fields={{
-              MLThresholdsTable: MLThresholdsTableField,
-              MultiSelect: MultiSelectField
-            }}
-            formData={JSON.parse(currentConfig.config)}
-            validator={validator}
-            onSubmit={handleSubmit}
-          >
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'space-between'
-              }}
-            >
-              <Box
-                sx={{
-                  display: 'flex',
-                  gap: 2
-                }}
-              >
-                <Button variant="contained" type="submit" disabled={submitting}>
-                  {submitting ? 'Saving…' : 'Save'}
-                </Button>
-                <InputLabel>
-                  <Checkbox
-                    checked={currentConfig.active}
-                    onChange={(e) => handleJobActivation(e.target.checked)}
-                  />
-                  Activate
-                </InputLabel>
-              </Box>
-
-              {jobId !== 0 && (
-                <Box
-                  sx={{
-                    display: 'flex',
-                    gap: 2
-                  }}
-                >
-                  <Button
-                    variant="contained"
-                    color="secondary"
-                    disabled={submitting}
-                    onClick={() => {
-                      handleSubmit({
-                        formData: formRef.current.state.formData,
-                        saveNew: true
-                      });
-                    }}
-                  >
-                    Save as new
-                  </Button>
-
-                  <Button
-                    variant="contained"
-                    color="error"
-                    disabled={submitting}
-                    onClick={handleDeleteJob}
-                  >
-                    Delete
-                  </Button>
-                </Box>
-              )}
+          {error && (
+            <Box sx={{ mt: 3 }}>
+              <ErrorAlert message={error} onClose={() => setError(null)} />
             </Box>
-          </Form>
-        )}
+          )}
 
-        {result && (
-          <pre
-            style={{
-              marginTop: 24,
-              background: '#111',
-              color: '#0f0',
-              padding: 16,
-              borderRadius: 6,
-              maxHeight: 400,
-              overflow: 'auto'
-            }}
-          >
-            {JSON.stringify(result, null, 2)}
-          </pre>
-        )}
-      </Container>
+          <Grid container spacing={3} sx={{ mt: 1 }}>
+            {/* Left sidebar */}
+            <Grid item xs={12} size={3}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <ContextPanel
+                  users={users}
+                  plugins={plugins}
+                  userId={userId}
+                  pluginId={pluginId}
+                  onUserChange={handleChangeUser}
+                  onPluginChange={loadSchema}
+                  onReloadPlugin={reloadPlugins}
+                  isLoading={submitting}
+                />
+
+                <JobsList
+                  jobs={jobs}
+                  selectedJobId={jobId}
+                  pluginPackage={pluginInfo?.package}
+                  onSelectJob={(id) => {
+                    handleChangeJob(id);
+                  }}
+                  onToggleJob={(id, active) => handleJobActivation(active, id)}
+                  onNewJob={() => {
+                    setJobId(0);
+                    setJobDesc('');
+                  }}
+                  disabled={!schema}
+                />
+              </Box>
+            </Grid>
+
+            {/* Main content */}
+            <Grid item xs={12} size={9}>
+              <JobDetails
+                jobId={jobId}
+                jobDesc={jobDesc}
+                pluginPackage={pluginInfo?.package}
+                pluginInterval={pluginInfo?.interval}
+                isActive={isActive}
+                formData={formData}
+                schema={schema}
+                onDescChange={setJobDesc}
+                onToggleActive={() => handleJobActivation(!isActive)}
+                onSave={(data) => handleSubmit({ formData: data, saveNew: false })}
+                onSaveAsNew={(data) => handleSubmit({ formData: data, saveNew: true })}
+                onDelete={handleDeleteJob}
+                isSubmitting={submitting}
+                userId={userId}
+                pluginId={pluginId}
+              />
+
+              {result && (
+                <ResponseCard result={result} onClose={() => setResult(null)} />
+              )}
+            </Grid>
+          </Grid>
+        </Container>
+      </Box>
     </ThemeProvider>
   );
 }

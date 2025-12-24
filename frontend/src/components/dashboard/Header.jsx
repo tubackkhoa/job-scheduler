@@ -1,0 +1,58 @@
+import { Box, Typography, IconButton, Tooltip } from "@mui/material";
+import { Refresh } from "@mui/icons-material";
+
+export function Header({ onReload, isLoading }) {
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        py: 3,
+        borderBottom: 1,
+        borderColor: 'divider',
+      }}
+    >
+      <Box>
+        <Typography
+          variant="h4"
+          sx={{
+            fontWeight: 700,
+            background: 'linear-gradient(135deg, #fff 0%, #a5b4fc 100%)',
+            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}
+        >
+          Job Scheduler Dashboard
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          Manage plugins, jobs, configurations, and live logs in one view.
+        </Typography>
+      </Box>
+      {onReload && (
+        <Tooltip title="Reload plugins">
+          <IconButton
+            onClick={onReload}
+            disabled={isLoading}
+            sx={{
+              bgcolor: 'action.hover',
+              '&:hover': { bgcolor: 'action.selected' },
+            }}
+          >
+            <Refresh
+              sx={{
+                animation: isLoading ? 'spin 1s linear infinite' : 'none',
+                '@keyframes spin': {
+                  '0%': { transform: 'rotate(0deg)' },
+                  '100%': { transform: 'rotate(360deg)' },
+                },
+              }}
+            />
+          </IconButton>
+        </Tooltip>
+      )}
+    </Box>
+  );
+}
+
