@@ -14,13 +14,17 @@ logging.basicConfig(level=logging.INFO, handlers=[logging.NullHandler()])
 async def main(package: str):
     db_engine = create_engine("sqlite:///:memory:?check_same_thread=false")
     # test a sample plugin in memory DB
-    plugin_data = [
-        {
-            "package": package,
-            "interval": 1,
-            "description": "Sample plugin version 0.1.0 running frequently.",
-        }
-    ]
+    plugin_data = (
+        [
+            {
+                "package": package,
+                "interval": 1,
+                "description": "Sample plugin version 0.1.0 running frequently.",
+            }
+        ]
+        if package
+        else []
+    )
 
     create_data(db_engine, user_ids=[1], plugin_data=plugin_data)
 
