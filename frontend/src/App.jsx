@@ -19,11 +19,7 @@ import validator from '@rjsf/validator-ajv8';
 import api from './api';
 import LogViewer from './LogViewer';
 import { MLThresholdsTableField, MultiSelectField } from './fields';
-
-const getSystemTheme = () =>
-  window.matchMedia?.('(prefers-color-scheme: dark)').matches
-    ? 'dark'
-    : 'light';
+import { extractUiSchema, getSystemTheme } from './utils';
 
 const users = [
   {
@@ -35,21 +31,6 @@ const users = [
     fullName: 'Ngoc Diep'
   }
 ];
-
-const uiSchema = {
-  ml_filtering_thresholds: {
-    'ui:field': 'MLThresholdsTable'
-  },
-  strategy_config: {
-    'ui:classNames': 'two-column-flex',
-    token_blacklist: {
-      'ui:field': 'MultiSelect'
-    },
-    token_whitelist: {
-      'ui:field': 'MultiSelect'
-    }
-  }
-};
 
 export default function App() {
   const [mode, setMode] = useState(getSystemTheme());
@@ -225,6 +206,8 @@ export default function App() {
   };
 
   const currentConfig = configVersions.find((version) => version.id === jobId);
+  const uiSchema = extractUiSchema(schema);
+  console.log(uiSchema);
 
   return (
     <ThemeProvider theme={theme}>
