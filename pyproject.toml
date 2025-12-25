@@ -1,5 +1,5 @@
 [project]
-name = "alpha-miner-plugins"
+name = "job-scheduler"
 version = "0.1.0"
 description = "A pluggy-based plugin management system for alpha-miner workers"
 readme = "README.md"
@@ -33,9 +33,9 @@ dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/oraichain/py-plugin-starterkit"
-"Repository" = "https://github.com/oraichain/py-plugin-starterkit.git"
-"Issues" = "https://github.com/oraichain/py-plugin-starterkit/issues"
+"Homepage" = "https://github.com/oraichain/job-scheduler"
+"Repository" = "https://github.com/oraichain/job-scheduler.git"
+"Issues" = "https://github.com/oraichain/job-scheduler/issues"
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff", "black"]
