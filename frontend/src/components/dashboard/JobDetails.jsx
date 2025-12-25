@@ -260,65 +260,61 @@ export function JobDetails({
           </TabPanel>
 
           {/* Actions */}
-          {tabIndex === 0 && (
-            <>
-              <Divider />
-              <Stack
-                direction="row"
-                justifyContent="space-between"
-                alignItems="center"
-                flexWrap="wrap"
-                gap={2}
+          <Divider />
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            flexWrap="wrap"
+            gap={2}
+          >
+            <Stack direction="row" spacing={1.5}>
+              <Button
+                variant="contained"
+                startIcon={<Save />}
+                onClick={() => {
+                  const currentData =
+                    formRef.current?.state?.formData || localFormData || {};
+                  onSave(currentData);
+                }}
+                disabled={isSubmitting}
+                sx={{
+                  background:
+                    'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                  '&:hover': {
+                    background:
+                      'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                  },
+                }}
               >
-                <Stack direction="row" spacing={1.5}>
-                  <Button
-                    variant="contained"
-                    startIcon={<Save />}
-                    onClick={() => {
-                      const currentData =
-                        formRef.current?.state?.formData || localFormData || {};
-                      onSave(currentData);
-                    }}
-                    disabled={isSubmitting}
-                    sx={{
-                      background:
-                        'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-                      '&:hover': {
-                        background:
-                          'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-                      },
-                    }}
-                  >
-                    {isSubmitting ? 'Saving...' : 'Save'}
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    startIcon={<AddCircleOutline />}
-                    onClick={() => {
-                      const currentData =
-                        formRef.current?.state?.formData || localFormData || {};
-                      onSaveAsNew(currentData);
-                    }}
-                    disabled={isSubmitting}
-                  >
-                    Save as new
-                  </Button>
-                </Stack>
+                {isSubmitting ? 'Saving...' : 'Save'}
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<AddCircleOutline />}
+                onClick={() => {
+                  const currentData =
+                    formRef.current?.state?.formData || localFormData || {};
+                  onSaveAsNew(currentData);
+                }}
+                disabled={isSubmitting}
+              >
+                Save as new
+              </Button>
+            </Stack>
 
-                {jobId !== 0 && (
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    startIcon={<Delete />}
-                    onClick={onDelete}
-                    disabled={isSubmitting}
-                  >
-                    Delete
-                  </Button>
-                )}
-              </Stack>
-            </>
-          )}
+            {jobId !== 0 && (
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<Delete />}
+                onClick={onDelete}
+                disabled={isSubmitting}
+              >
+                Delete
+              </Button>
+            )}
+          </Stack>
         </Stack>
       </CardContent>
     </Card>
