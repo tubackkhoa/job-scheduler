@@ -10,5 +10,15 @@
   "files.eol": "\n",
   "javascript.format.enable": false,
   "typescript.format.enable": false,
-  "python-envs.pythonProjects": []
+  "python.languageServer": "None",
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.useLibraryCodeForTypes": true,
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportMissingTypeStubs": "none",
+    "reportUnknownMemberType": "none",
+    "reportUnknownVariableType": "none",
+    "reportUnknownArgumentType": "none",
+    "reportGeneralTypeIssues": "warning"
+  }
 }
