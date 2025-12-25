@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Card,
@@ -14,7 +14,7 @@ import {
   IconButton,
   Tooltip,
   Divider,
-} from "@mui/material";
+} from '@mui/material';
 import {
   PlayArrow,
   Pause,
@@ -26,9 +26,9 @@ import {
   Delete,
   Save,
   AddCircleOutline,
-} from "@mui/icons-material";
-import { ConfigForm } from "./ConfigForm";
-import LogViewer from "../../LogViewer";
+} from '@mui/icons-material';
+import { ConfigForm } from './ConfigForm';
+import LogViewer from '../../LogViewer';
 
 function TabPanel(props) {
   const { children, value, index, ...other } = props;
@@ -53,7 +53,7 @@ export function JobDetails({
   onSaveAsNew,
   onDelete,
   isSubmitting,
-  userId,
+  sessionId,
   pluginId,
 }) {
   const [tabIndex, setTabIndex] = useState(0);
@@ -140,8 +140,15 @@ export function JobDetails({
             </Stack>
           )
         }
-        titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
-        subheaderTypographyProps={{ variant: 'body2' }}
+        slotProps={{
+          title: {
+            variant: 'h6',
+            fontWeight: 600,
+          },
+          subheader: {
+            variant: 'body2',
+          },
+        }}
       />
 
       <Divider />
@@ -246,68 +253,70 @@ export function JobDetails({
           </TabPanel>
 
           <TabPanel value={tabIndex} index={2}>
-            <LogViewer jobInstanceId={`${pluginId}/${userId}`} />
+            <LogViewer
+              jobInstanceId={`${pluginId}/${sessionId}`}
+              description={jobDesc}
+            />
           </TabPanel>
 
           {/* Actions */}
-          {tabIndex === 0 && (
-            <>
-              <Divider />
-              <Stack
-                direction="row"
-                justifyContent="space-between"
-                alignItems="center"
-                flexWrap="wrap"
-                gap={2}
+          <Divider />
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            flexWrap="wrap"
+            gap={2}
+          >
+            <Stack direction="row" spacing={1.5}>
+              <Button
+                variant="contained"
+                startIcon={<Save />}
+                onClick={() => {
+                  const currentData =
+                    formRef.current?.state?.formData || localFormData || {};
+                  onSave(currentData);
+                }}
+                disabled={isSubmitting}
+                sx={{
+                  background:
+                    'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                  '&:hover': {
+                    background:
+                      'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                  },
+                }}
               >
-                <Stack direction="row" spacing={1.5}>
-                  <Button
-                    variant="contained"
-                    startIcon={<Save />}
-                    onClick={() => {
-                      const currentData = formRef.current?.state?.formData || localFormData || {};
-                      onSave(currentData);
-                    }}
-                    disabled={isSubmitting}
-                    sx={{
-                      background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-                      '&:hover': {
-                        background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-                      },
-                    }}
-                  >
-                    {isSubmitting ? 'Saving...' : 'Save'}
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    startIcon={<AddCircleOutline />}
-                    onClick={() => {
-                      const currentData = formRef.current?.state?.formData || localFormData || {};
-                      onSaveAsNew(currentData);
-                    }}
-                    disabled={isSubmitting}
-                  >
-                    Save as new
-                  </Button>
-                </Stack>
+                {isSubmitting ? 'Saving...' : 'Save'}
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<AddCircleOutline />}
+                onClick={() => {
+                  const currentData =
+                    formRef.current?.state?.formData || localFormData || {};
+                  onSaveAsNew(currentData);
+                }}
+                disabled={isSubmitting}
+              >
+                Save as new
+              </Button>
+            </Stack>
 
-                {jobId !== 0 && (
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    startIcon={<Delete />}
-                    onClick={onDelete}
-                    disabled={isSubmitting}
-                  >
-                    Delete
-                  </Button>
-                )}
-              </Stack>
-            </>
-          )}
+            {jobId !== 0 && (
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<Delete />}
+                onClick={onDelete}
+                disabled={isSubmitting}
+              >
+                Delete
+              </Button>
+            )}
+          </Stack>
         </Stack>
       </CardContent>
     </Card>
   );
 }
-

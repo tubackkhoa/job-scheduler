@@ -10,15 +10,15 @@ import { ErrorAlert } from './components/dashboard/ErrorAlert';
 import { ResponseCard } from './components/dashboard/ResponseCard';
 import api from './api';
 
-const users = [
+const sessions = [
   {
     id: 1,
-    fullName: 'Chung Dao'
+    name: 'Staging',
   },
   {
     id: 2,
-    fullName: 'Ngoc Diep'
-  }
+    name: 'Production',
+  },
 ];
 
 const darkTheme = createTheme({
@@ -27,69 +27,69 @@ const darkTheme = createTheme({
     primary: {
       main: '#6366f1',
       light: '#818cf8',
-      dark: '#4f46e5'
+      dark: '#4f46e5',
     },
     secondary: {
       main: '#ec4899',
       light: '#f472b6',
-      dark: '#db2777'
+      dark: '#db2777',
     },
     success: {
       main: '#22c55e',
       light: '#4ade80',
-      dark: '#16a34a'
+      dark: '#16a34a',
     },
     warning: {
       main: '#f59e0b',
       light: '#fbbf24',
-      dark: '#d97706'
+      dark: '#d97706',
     },
     error: {
       main: '#ef4444',
       light: '#f87171',
-      dark: '#dc2626'
+      dark: '#dc2626',
     },
     background: {
       default: '#0a0a0f',
-      paper: '#111119'
+      paper: '#111119',
     },
-    divider: 'rgba(255, 255, 255, 0.08)'
+    divider: 'rgba(255, 255, 255, 0.08)',
   },
   typography: {
-    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif'
+    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
   },
   shape: {
-    borderRadius: 12
+    borderRadius: 12,
   },
   components: {
     MuiCard: {
       styleOverrides: {
         root: {
           backgroundImage: 'none',
-          border: '1px solid rgba(255, 255, 255, 0.08)'
-        }
-      }
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+        },
+      },
     },
     MuiButton: {
       styleOverrides: {
         root: {
           textTransform: 'none',
-          fontWeight: 500
-        }
-      }
+          fontWeight: 500,
+        },
+      },
     },
     MuiTextField: {
       defaultProps: {
         variant: 'outlined',
-        size: 'small'
-      }
+        size: 'small',
+      },
     },
     MuiSelect: {
       defaultProps: {
-        size: 'small'
-      }
-    }
-  }
+        size: 'small',
+      },
+    },
+  },
 });
 
 export default function App() {
@@ -103,7 +103,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
-  const [userId, setUserId] = useState(users[0].id);
+  const [sessionId, setSessionId] = useState(sessions[0].id);
   const [error, setError] = useState(null);
 
   // Load plugin list
@@ -119,7 +119,11 @@ export default function App() {
     setTimeout(() => setResult(null), 3000);
   };
 
-  const loadSchema = async (currentPluginId, currentUserId, currentJobId) => {
+  const loadSchema = async (
+    currentPluginId,
+    currentSessionId,
+    currentJobId
+  ) => {
     if (!currentPluginId) return;
     setPluginId(currentPluginId);
     setLoading(true);
@@ -128,7 +132,7 @@ export default function App() {
 
     try {
       const { schema: fetchedSchema, configs } = await api.fetchSchema(
-        currentUserId ?? userId,
+        currentSessionId ?? sessionId,
         currentPluginId
       );
       setSchema(fetchedSchema);
@@ -139,7 +143,7 @@ export default function App() {
         id: 0,
         description: '',
         active: 0,
-        config: templateConfig
+        config: templateConfig,
       });
       const newJobId = currentJobId ?? configs[0]?.id ?? 0;
       handleChangeJob(newJobId, configs);
@@ -158,19 +162,23 @@ export default function App() {
     try {
       const jobItem = {
         config: formData,
-        description: jobDesc
+        description: jobDesc,
       };
 
       let response;
       if (!jobId || saveNew) {
         // add new job
-        response = await api.updateConfig(0, { ...jobItem, userId, pluginId });
+        response = await api.updateConfig(0, {
+          ...jobItem,
+          sessionId,
+          pluginId,
+        });
       } else {
         response = await api.updateConfig(jobId, jobItem);
       }
 
       handleSetResult(response);
-      await loadSchema(pluginId, userId, jobId);
+      await loadSchema(pluginId, sessionId, jobId);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -209,10 +217,10 @@ export default function App() {
     setJobDesc(found?.description ?? '');
   };
 
-  const handleChangeUser = async (currentUserId) => {
-    setUserId(currentUserId);
+  const handleChangeSession = async (currentSessionId) => {
+    setSessionId(currentSessionId);
     // reload schema
-    await loadSchema(pluginId, currentUserId);
+    await loadSchema(pluginId, currentSessionId);
   };
 
   const handleDeleteJob = async () => {
@@ -224,7 +232,7 @@ export default function App() {
     try {
       const response = await api.deleteJob(jobId);
       handleSetResult(response);
-      await loadSchema(pluginId, userId);
+      await loadSchema(pluginId, sessionId);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -243,7 +251,7 @@ export default function App() {
       const response = await api.reloadPlugin(pkg);
       handleSetResult(response);
       // update schema
-      loadSchema(pluginId, userId, jobId);
+      loadSchema(pluginId, sessionId, jobId);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -279,13 +287,21 @@ export default function App() {
           <Grid container spacing={3} sx={{ mt: 1 }}>
             {/* Left sidebar */}
             <Grid item xs={12} size={3}>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 3,
+                  position: 'sticky',
+                  top: 30,
+                }}
+              >
                 <ContextPanel
-                  users={users}
+                  sessions={sessions}
                   plugins={plugins}
-                  userId={userId}
+                  sessionId={sessionId}
                   pluginId={pluginId}
-                  onUserChange={handleChangeUser}
+                  onSessionChange={handleChangeSession}
                   onPluginChange={loadSchema}
                   onReloadPlugin={reloadPlugins}
                   isLoading={submitting}
@@ -328,7 +344,7 @@ export default function App() {
                 }
                 onDelete={handleDeleteJob}
                 isSubmitting={submitting}
-                userId={userId}
+                sessionId={sessionId}
                 pluginId={pluginId}
               />
 

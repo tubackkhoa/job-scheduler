@@ -26,7 +26,7 @@ async def main(package: str):
         else []
     )
 
-    create_data(db_engine, user_ids=[1], plugin_data=plugin_data)
+    create_data(db_engine, session_ids=[1], plugin_data=plugin_data)
 
     plugin_manager = PluginManager(
         db_engine,

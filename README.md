@@ -22,23 +22,25 @@ For a deeper dive on authoring plugins, see **[Plugin Development](./docs/PLUGIN
 ## Project structure
 
 - **Backend (FastAPI)**
+
   - `server.py` – creates the FastAPI app, configures the DB engine, starts/stops the `PluginManager`, and exposes:
     - `GET /plugins` – list all plugins.
-    - `GET /schema/{user_id}/{plugin_id}` – plugin JSON schema + all saved configs for that user/plugin.
+    - `GET /schema/{session_id}/{plugin_id}` – plugin JSON schema + all saved configs for that user/plugin.
     - `POST /config/{job_id}` – create/update a job config.
     - `POST /activate/{job_id}/{activation}` – activate/deactivate a job.
     - `POST /delete/{job_id}` – delete a job.
     - `POST /reload/{package}` – hot‑reload a plugin class.
-    - `GET /ws/logs/{plugin_id}/{user_id}` – WebSocket streaming of job logs.
+    - `GET /ws/logs/{plugin_id}/{session_id}` – WebSocket streaming of job logs.
   - `plugin_manager.py` – loads plugins from the DB, manages pluggy registration, sets up APScheduler jobs, activates/deactivates jobs, and forwards scheduler events to the logging system.
   - `models.py` – SQLAlchemy models:
     - `Plugin(id, package, interval, description)`
-    - `Job(id, user_id, plugin_id, config, description, active)`
-  - `ws_manager.py` – manages WebSocket connections keyed by `"{plugin_id}/{user_id}"` and broadcasts logs.
+    - `Job(id, session_id, plugin_id, config, description, active)`
+  - `ws_manager.py` – manages WebSocket connections keyed by `"{plugin_id}/{session_id}"` and broadcasts logs.
   - `create_data.py` – creates tables and seeds example plugins and jobs for demo/testing.
   - `scripts/database.sql` – raw schema for the `plugins` and `jobs` tables.
 
 - **Plugins (Python)**
+
   - Located under `plugins/`, usually with versioned folders, for example:
     - `plugins/sample_plugin@v0_1_0/`
     - `plugins/sample_plugin@v0_2_0/`
@@ -50,11 +52,11 @@ For a deeper dive on authoring plugins, see **[Plugin Development](./docs/PLUGIN
 - **Frontend (React + Vite)**
   - `frontend/src/App.jsx` – main UI:
     - Fetches plugins from `/plugins`.
-    - Loads schema + configs from `/schema/{user_id}/{plugin_id}`.
+    - Loads schema + configs from `/schema/{session_id}/{plugin_id}`.
     - Renders a JSON‑schema form for the selected job.
     - Lets you save, clone, activate, and delete jobs.
     - Shows live logs via `LogViewer`.
-  - `frontend/src/LogViewer.jsx` – connects to `/ws/logs/{plugin_id}/{user_id}`, renders colored, streaming logs.
+  - `frontend/src/LogViewer.jsx` – connects to `/ws/logs/{plugin_id}/{session_id}`, renders colored, streaming logs.
   - `frontend/src/api.ts` – small API wrapper around backend endpoints (see file for exact signatures).
 
 ---
@@ -190,5 +192,3 @@ At a high level:
    - watch logs in real time.
 
 For a complete walkthrough (including example code and SQL), see **[Plugin Development](./docs/PLUGIN_DEVELOPMENT.md)**.
-
-

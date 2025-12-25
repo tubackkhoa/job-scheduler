@@ -12,26 +12,26 @@ import {
   Tooltip,
   OutlinedInput,
   InputAdornment,
-  Avatar
+  Avatar,
 } from '@mui/material';
 import { Refresh, Person } from '@mui/icons-material';
 
 export function ContextPanel({
-  users,
+  sessions,
   plugins,
-  userId,
+  sessionId,
   pluginId,
-  onUserChange,
+  onSessionChange,
   onPluginChange,
   onReloadPlugin,
-  isLoading
+  isLoading,
 }) {
   return (
     <Card
       sx={{
         bgcolor: 'background.paper',
         backgroundImage:
-          'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(236, 72, 153, 0.05) 100%)'
+          'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(236, 72, 153, 0.05) 100%)',
       }}
     >
       <CardContent sx={{ p: 3 }}>
@@ -40,7 +40,7 @@ export function ContextPanel({
             sx={{
               bgcolor: 'primary.main',
               width: 44,
-              height: 44
+              height: 44,
             }}
           >
             <Person />
@@ -50,22 +50,22 @@ export function ContextPanel({
               Context
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Choose user and plugin
+              Choose session and plugin
             </Typography>
           </Box>
         </Stack>
 
         <Stack spacing={2.5}>
           <FormControl fullWidth>
-            <InputLabel>User</InputLabel>
+            <InputLabel>Session</InputLabel>
             <Select
-              value={userId}
-              onChange={(e) => onUserChange(Number(e.target.value))}
-              label="User"
+              value={sessionId}
+              onChange={(e) => onSessionChange(Number(e.target.value))}
+              label="Session"
             >
-              {users.map((user) => (
-                <MenuItem key={user.id} value={user.id}>
-                  {user.fullName}
+              {sessions.map((session) => (
+                <MenuItem key={session.id} value={session.id}>
+                  {session.name}
                 </MenuItem>
               ))}
             </Select>
@@ -93,8 +93,8 @@ export function ContextPanel({
                               sx={{
                                 bgcolor: 'rgba(245, 158, 11, 0.1)',
                                 '&:hover': {
-                                  bgcolor: 'rgba(245, 158, 11, 0.2)'
-                                }
+                                  bgcolor: 'rgba(245, 158, 11, 0.2)',
+                                },
                               }}
                             >
                               <Refresh
@@ -104,8 +104,8 @@ export function ContextPanel({
                                     : 'none',
                                   '@keyframes spin': {
                                     '0%': { transform: 'rotate(0deg)' },
-                                    '100%': { transform: 'rotate(360deg)' }
-                                  }
+                                    '100%': { transform: 'rotate(360deg)' },
+                                  },
                                 }}
                               />
                             </IconButton>
@@ -127,7 +127,7 @@ export function ContextPanel({
                         sx={{
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap'
+                          whiteSpace: 'nowrap',
                         }}
                       >
                         {plugin.package}
