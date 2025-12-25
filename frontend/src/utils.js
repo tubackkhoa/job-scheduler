@@ -93,3 +93,15 @@ export const formatMessage = (message) => {
     }
   );
 };
+
+const LEVEL_COLOR_MAP = {
+  CRITICAL: 'error.dark',
+  ERROR: 'error.main',
+  WARNING: 'warning.main',
+  INFO: 'info.main',
+  DEBUG: 'success.main',
+  NOTSET: 'primary.main',
+};
+
+export const getLevelColor = (level) =>
+  LEVEL_COLOR_MAP[level.toUpperCase()] ?? LEVEL_COLOR_MAP.NOTSET;

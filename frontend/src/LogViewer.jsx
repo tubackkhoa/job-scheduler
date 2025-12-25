@@ -9,7 +9,7 @@ import {
 } from '@mui/material';
 import { Terminal, Delete } from '@mui/icons-material';
 import { API_BASE_URL } from './api';
-import { formatMessage } from './utils';
+import { formatMessage, getLevelColor } from './utils';
 
 export default function LogViewer({
   jobInstanceId,
@@ -24,17 +24,6 @@ export default function LogViewer({
   const handleClearLogs = () => {
     setLogs([]);
     logIdRef.current = 0;
-  };
-
-  const getLevelColor = (level) => {
-    switch (level) {
-      case 'ERROR':
-        return 'error.main';
-      case 'WARNING':
-        return 'warning.main';
-      default:
-        return 'primary.main';
-    }
   };
 
   useEffect(() => {
