@@ -48,6 +48,7 @@ class PluginManager:
     _active_job_cache: Dict[str, str] = {}
     # static pluggy manager, so that all pluginmanager share the same plugins
     manager = pluggy.PluginManager(PROJECT_NAME)
+    manager.add_hookspecs(PluginSpec)
 
     def __init__(
         self,
@@ -76,7 +77,6 @@ class PluginManager:
             | EVENT_JOB_ERROR,
         )
 
-        self.manager.add_hookspecs(PluginSpec)
         self.log_handler = log_handler
 
         # Register all plugins from the database
