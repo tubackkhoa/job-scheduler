@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 
 class JobLogHandler(logging.Handler):
@@ -8,9 +8,11 @@ class JobLogHandler(logging.Handler):
         self,
         log_callback: Callable[[Any], Any],
         loop: asyncio.AbstractEventLoop,
+        log_service: Optional[Any] = None,
     ):
         super().__init__()
         self.log_callback = log_callback
+        self.log_service = log_service
         self.loop = loop
         self.queue: asyncio.Queue = asyncio.Queue()
 
@@ -21,6 +23,18 @@ class JobLogHandler(logging.Handler):
         while True:
             log_event = await self.queue.get()
             try:
+                # Write to file service (synchronous, but fast)
+                if self.log_service:
+                    try:
+                        self.log_service.write_log(
+                            log_event["job_id"],
+                            log_event["level"],
+                            log_event["message"],
+                        )
+                    except Exception:
+                        pass  # Don't fail on file write errors
+
+                # Send via websocket
                 await self.log_callback(log_event)
             except Exception:
                 pass
