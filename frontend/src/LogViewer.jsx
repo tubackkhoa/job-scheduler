@@ -9,47 +9,7 @@ import {
 } from '@mui/material';
 import { Terminal, Delete } from '@mui/icons-material';
 import { API_BASE_URL } from './api';
-
-// Map log levels to MUI color palette or CSS colors
-const LEVEL_STYLES = {
-  INFO: { color: '#4fc3f7', bg: 'rgba(79, 195, 247, 0.15)' },
-  ERROR: { color: '#ef5350', bg: 'rgba(239, 83, 80, 0.15)' },
-  WARNING: { color: '#ffb74d', bg: 'rgba(255, 183, 77, 0.15)' },
-  DEBUG: { color: '#ba68c8', bg: 'rgba(186, 104, 200, 0.15)' },
-};
-
-const DEFAULT_STYLE = { color: '#d4d4d4', bg: 'transparent' };
-
-/**
- * Formats ugly Python datetime repr strings like:
- * "datetime.datetime(2025, 12, 18, 10, 57, 15, 461066, tzinfo=...)"
- * → "12/18/2025, 10:57:15 AM"
- */
-function formatMessage(message) {
-  if (typeof message !== 'string') return message;
-
-  return message.replace(
-    /\[?datetime\.datetime\(([^)]+)\)/g,
-    (match, dtStr) => {
-      try {
-        const parts = dtStr.split(', ').map(Number);
-        const [year, month, day, hour, minute, second] = parts;
-        const date = new Date(year, month - 1, day, hour, minute, second || 0);
-        return date.toLocaleString(undefined, {
-          year: 'numeric',
-          month: 'numeric',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: true,
-        });
-      } catch {
-        return match; // fallback if parsing fails
-      }
-    }
-  );
-}
+import { formatMessage } from './utils';
 
 export default function LogViewer({
   jobInstanceId,
