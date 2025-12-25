@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from typing import Any, Callable, Optional
+from log_service import LogService
 
 
 class JobLogHandler(logging.Handler):
@@ -8,7 +9,7 @@ class JobLogHandler(logging.Handler):
         self,
         log_callback: Callable[[Any], Any],
         loop: asyncio.AbstractEventLoop,
-        log_service: Optional[Any] = None,
+        log_service: Optional[LogService] = None,
     ):
         super().__init__()
         self.log_callback = log_callback
