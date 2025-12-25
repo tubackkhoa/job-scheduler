@@ -94,9 +94,9 @@ app.add_middleware(
 )
 
 
-@app.websocket("/ws/logs/{plugin_id}/{user_id}")
-async def websocket_logs_endpoint(websocket: WebSocket, plugin_id: int, user_id: int):
-    job_id = f"{plugin_id}/{user_id}"
+@app.websocket("/ws/logs/{plugin_id}/{session_id}")
+async def websocket_logs_endpoint(websocket: WebSocket, plugin_id: int, session_id: int):
+    job_id = f"{plugin_id}/{session_id}"
     await manager.connect(websocket, job_id)
     try:
         while True:
@@ -183,8 +183,8 @@ def create_plugin(plugin_manager: PluginManagerState, payload: dict = Body(...))
 #     if plugin_id is None:
 #         raise HTTPException(status_code=400, detail="pluginId is required")
 
-#     user_ids = payload.get("userIds") or [1]
-#     if not isinstance(user_ids, list):
+#     session_ids = payload.get("userIds") or [1]
+#     if not isinstance(session_ids, list):
 #         raise HTTPException(status_code=400, detail="userIds must be a list")
 
 #     description = payload.get("description")
@@ -211,9 +211,9 @@ def create_plugin(plugin_manager: PluginManagerState, payload: dict = Body(...))
 
 #     created_jobs = []
 #     with Session(plugin_manager.db_engine) as session:
-#         for user_id in user_ids:
+#         for session_id in session_ids:
 #             job = Job(
-#                 user_id=int(user_id),
+#                 session_id=int(session_id),
 #                 plugin_id=plugin_item.id,
 #                 config=config_json,
 #                 active=1 if active else 0,
@@ -230,7 +230,7 @@ def create_plugin(plugin_manager: PluginManagerState, payload: dict = Body(...))
 #             created_jobs.append(
 #                 {
 #                     "id": job.id,
-#                     "user_id": job.user_id,
+#                     "session_id": job.session_id,
 #                     "plugin_id": job.plugin_id,
 #                     "config": job.config,
 #                     "description": job.description,
@@ -251,15 +251,15 @@ def create_plugin(plugin_manager: PluginManagerState, payload: dict = Body(...))
 #     }
 
 
-@app.get("/schema/{user_id}/{plugin_id}")
-def schema(plugin_manager: PluginManagerState, user_id: int, plugin_id: int):
+@app.get("/schema/{session_id}/{plugin_id}")
+def schema(plugin_manager: PluginManagerState, session_id: int, plugin_id: int):
     plugin_item = plugin_manager.get_plugin_by_id(plugin_id)
     assert plugin_item
 
     try:
         plugin = plugin_manager.get_plugin_instance(str(plugin_item.package))
         if plugin != None:
-            configs = plugin_manager.get_jobs_for_plugin_and_user(plugin_id, user_id)
+            configs = plugin_manager.get_jobs_for_plugin_and_user(plugin_id, session_id)
             if len(configs) == 0:
                 # add empty config so that when saving it will be new job
                 configs.append(
@@ -269,7 +269,7 @@ def schema(plugin_manager: PluginManagerState, user_id: int, plugin_id: int):
                         id=0,
                         config=plugin.config().model_dump_json(),
                         plugin_id=plugin_id,
-                        user_id=user_id,
+                        session_id=session_id,
                     )
                 )
             return {

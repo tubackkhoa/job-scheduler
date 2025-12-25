@@ -3,8 +3,8 @@ export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? '';
 
 export default {
-  async fetchSchema(userId: number, pluginId: number) {
-    const res = await fetch(`${API_BASE_URL}/schema/${userId}/${pluginId}`);
+  async fetchSchema(sessionId: number, pluginId: number) {
+    const res = await fetch(`${API_BASE_URL}/schema/${sessionId}/${pluginId}`);
 
     if (!res.ok) {
       throw new Error((await res.text()) || `Schema not found`);
@@ -26,9 +26,9 @@ export default {
     const res = await fetch(`${API_BASE_URL}/config/${jobId}`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     });
 
     if (!res.ok) {
@@ -41,8 +41,8 @@ export default {
     const res = await fetch(`${API_BASE_URL}/activate/${jobId}/${activation}`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
-      }
+        'Content-Type': 'application/json',
+      },
     });
 
     if (!res.ok) {
@@ -56,8 +56,8 @@ export default {
     const res = await fetch(`${API_BASE_URL}/delete/${jobId}`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
-      }
+        'Content-Type': 'application/json',
+      },
     });
 
     if (!res.ok) {
@@ -71,8 +71,8 @@ export default {
     const res = await fetch(`${API_BASE_URL}/reload/${pkg}`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
-      }
+        'Content-Type': 'application/json',
+      },
     });
 
     if (!res.ok) {
@@ -81,5 +81,5 @@ export default {
     }
 
     return res.json();
-  }
+  },
 };

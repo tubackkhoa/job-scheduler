@@ -10,14 +10,14 @@ import { ErrorAlert } from './components/dashboard/ErrorAlert';
 import { ResponseCard } from './components/dashboard/ResponseCard';
 import api from './api';
 
-const users = [
+const sessions = [
   {
     id: 1,
-    fullName: 'Chung Dao',
+    name: 'Staging',
   },
   {
     id: 2,
-    fullName: 'Ngoc Diep',
+    name: 'Production',
   },
 ];
 
@@ -103,7 +103,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
-  const [userId, setUserId] = useState(users[0].id);
+  const [sessionId, setSessionId] = useState(sessions[0].id);
   const [error, setError] = useState(null);
 
   // Load plugin list
@@ -119,7 +119,11 @@ export default function App() {
     setTimeout(() => setResult(null), 3000);
   };
 
-  const loadSchema = async (currentPluginId, currentUserId, currentJobId) => {
+  const loadSchema = async (
+    currentPluginId,
+    currentSessionId,
+    currentJobId
+  ) => {
     if (!currentPluginId) return;
     setPluginId(currentPluginId);
     setLoading(true);
@@ -128,7 +132,7 @@ export default function App() {
 
     try {
       const { schema: fetchedSchema, configs } = await api.fetchSchema(
-        currentUserId ?? userId,
+        currentSessionId ?? sessionId,
         currentPluginId
       );
       setSchema(fetchedSchema);
@@ -164,13 +168,17 @@ export default function App() {
       let response;
       if (!jobId || saveNew) {
         // add new job
-        response = await api.updateConfig(0, { ...jobItem, userId, pluginId });
+        response = await api.updateConfig(0, {
+          ...jobItem,
+          sessionId,
+          pluginId,
+        });
       } else {
         response = await api.updateConfig(jobId, jobItem);
       }
 
       handleSetResult(response);
-      await loadSchema(pluginId, userId, jobId);
+      await loadSchema(pluginId, sessionId, jobId);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -209,10 +217,10 @@ export default function App() {
     setJobDesc(found?.description ?? '');
   };
 
-  const handleChangeUser = async (currentUserId) => {
-    setUserId(currentUserId);
+  const handleChangeSession = async (currentSessionId) => {
+    setSessionId(currentSessionId);
     // reload schema
-    await loadSchema(pluginId, currentUserId);
+    await loadSchema(pluginId, currentSessionId);
   };
 
   const handleDeleteJob = async () => {
@@ -224,7 +232,7 @@ export default function App() {
     try {
       const response = await api.deleteJob(jobId);
       handleSetResult(response);
-      await loadSchema(pluginId, userId);
+      await loadSchema(pluginId, sessionId);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -243,7 +251,7 @@ export default function App() {
       const response = await api.reloadPlugin(pkg);
       handleSetResult(response);
       // update schema
-      loadSchema(pluginId, userId, jobId);
+      loadSchema(pluginId, sessionId, jobId);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -289,11 +297,11 @@ export default function App() {
                 }}
               >
                 <ContextPanel
-                  users={users}
+                  sessions={sessions}
                   plugins={plugins}
-                  userId={userId}
+                  sessionId={sessionId}
                   pluginId={pluginId}
-                  onUserChange={handleChangeUser}
+                  onSessionChange={handleChangeSession}
                   onPluginChange={loadSchema}
                   onReloadPlugin={reloadPlugins}
                   isLoading={submitting}
@@ -336,7 +344,7 @@ export default function App() {
                 }
                 onDelete={handleDeleteJob}
                 isSubmitting={submitting}
-                userId={userId}
+                sessionId={sessionId}
                 pluginId={pluginId}
               />
 

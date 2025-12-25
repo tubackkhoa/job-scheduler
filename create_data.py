@@ -33,7 +33,7 @@ PLUGIN_DATA = [
 ]
 
 
-def create_data(engine: Engine, user_ids: list[int] = [1, 2], plugin_data=PLUGIN_DATA):
+def create_data(engine: Engine, session_ids: list[int] = [1, 2], plugin_data=PLUGIN_DATA):
     Base.metadata.create_all(engine)
     with Session(engine) as session:
 
@@ -43,7 +43,7 @@ def create_data(engine: Engine, user_ids: list[int] = [1, 2], plugin_data=PLUGIN
         # Get inserted plugins in order (by insertion order, since bulk_insert preserves it)
         plugins = session.query(Plugin).order_by(Plugin.id).all()
 
-        for user_id in user_ids:
+        for session_id in session_ids:
             for plugin_ind, (plugin_row, plugin_item) in enumerate(
                 zip(plugins, plugin_data), start=1
             ):
@@ -54,7 +54,7 @@ def create_data(engine: Engine, user_ids: list[int] = [1, 2], plugin_data=PLUGIN
 
                 default_config = plugin_class.config()  # Get default Pydantic model
                 job = Job(
-                    user_id=user_id,
+                    session_id=session_id,
                     plugin_id=plugin_row.id,  # Use actual inserted plugin ID
                     config=default_config.model_dump_json(),
                     active=1,

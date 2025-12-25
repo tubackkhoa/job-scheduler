@@ -192,14 +192,14 @@ class PluginManager:
 
     def add_job(
         self,
-        user_id: int,
+        session_id: int,
         plugin_id: int,
         config: str,
         description: Optional[str] = None,
     ):
         with Session(self.db_engine) as session:
             job = Job(
-                user_id=user_id,
+                session_id=session_id,
                 plugin_id=plugin_id,
                 config=config,
                 active=0,
@@ -213,7 +213,7 @@ class PluginManager:
             self.add_job_instance(job, plugin)
 
     def add_job_instance(self, job: Job, plugin: Plugin):
-        scheduler_job_id = f"{plugin.id}/{job.user_id}"
+        scheduler_job_id = f"{plugin.id}/{job.session_id}"
 
         if self.scheduler.get_job(scheduler_job_id) is None:
             # make sure job run 1 time
@@ -248,7 +248,7 @@ class PluginManager:
                     job.description = description  # type: ignore
                 # update the active config
                 if bool(job.active):
-                    scheduler_job_id = f"{job.plugin_id}/{job.user_id}"
+                    scheduler_job_id = f"{job.plugin_id}/{job.session_id}"
                     self._active_job_cache[scheduler_job_id] = str(job.config)
                 session.commit()
 
@@ -258,8 +258,8 @@ class PluginManager:
             if not job:
                 return
             plugin_id = job.plugin_id
-            user_id = job.user_id
-            scheduler_job_id = f"{plugin_id}/{user_id}"
+            session_id = job.session_id
+            scheduler_job_id = f"{plugin_id}/{session_id}"
             session.delete(job)
             session.commit()
 
@@ -268,7 +268,7 @@ class PluginManager:
                 session.query(Job)
                 .filter(
                     Job.plugin_id == plugin_id,
-                    Job.user_id == user_id,
+                    Job.session_id == session_id,
                 )
                 .count()
             )
@@ -293,7 +293,7 @@ class PluginManager:
                 .where(
                     Job.active == 1,
                     Job.plugin_id == job.plugin_id,
-                    Job.user_id == job.user_id,
+                    Job.session_id == job.session_id,
                 )
                 .values(active=0)
             )
@@ -302,7 +302,7 @@ class PluginManager:
             session.commit()
 
             # this is active config
-            scheduler_job_id = f"{job.plugin_id}/{job.user_id}"
+            scheduler_job_id = f"{job.plugin_id}/{job.session_id}"
             self._active_job_cache[scheduler_job_id] = str(job.config)
             self.scheduler.resume_job(scheduler_job_id)
 
@@ -314,20 +314,20 @@ class PluginManager:
 
             # so no config is active
             if bool(job.active):
-                scheduler_job_id = f"{job.plugin_id}/{job.user_id}"
+                scheduler_job_id = f"{job.plugin_id}/{job.session_id}"
                 self._active_job_cache.pop(scheduler_job_id)
                 self.scheduler.pause_job(scheduler_job_id)
 
             job.active = 0  # type: ignore
             session.commit()
 
-    def get_jobs_for_plugin_and_user(self, plugin_id: int, user_id: int):
+    def get_jobs_for_plugin_and_user(self, plugin_id: int, session_id: int):
         with Session(self.db_engine) as session:
             jobs = (
                 session.query(Job)
                 .filter(
                     Job.plugin_id == plugin_id,
-                    Job.user_id == user_id,
+                    Job.session_id == session_id,
                 )
                 .all()
             )

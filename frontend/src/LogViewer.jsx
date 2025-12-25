@@ -15,7 +15,7 @@ const LEVEL_STYLES = {
   INFO: { color: '#4fc3f7', bg: 'rgba(79, 195, 247, 0.15)' },
   ERROR: { color: '#ef5350', bg: 'rgba(239, 83, 80, 0.15)' },
   WARNING: { color: '#ffb74d', bg: 'rgba(255, 183, 77, 0.15)' },
-  DEBUG: { color: '#ba68c8', bg: 'rgba(186, 104, 200, 0.15)' }
+  DEBUG: { color: '#ba68c8', bg: 'rgba(186, 104, 200, 0.15)' },
 };
 
 const DEFAULT_STYLE = { color: '#d4d4d4', bg: 'transparent' };
@@ -42,7 +42,7 @@ function formatMessage(message) {
           hour: '2-digit',
           minute: '2-digit',
           second: '2-digit',
-          hour12: true
+          hour12: true,
         });
       } catch {
         return match; // fallback if parsing fails
@@ -51,7 +51,11 @@ function formatMessage(message) {
   );
 }
 
-export default function LogViewer({ jobInstanceId, maxMessages = 500 }) {
+export default function LogViewer({
+  jobInstanceId,
+  maxMessages = 500,
+  description,
+}) {
   const [logs, setLogs] = useState([]);
   const ws = useRef(null);
   const logIdRef = useRef(0);
@@ -95,7 +99,7 @@ export default function LogViewer({ jobInstanceId, maxMessages = 500 }) {
       // 🔑 Assign stable, monotonic indices
       const withIdx = items.map((item) => ({
         ...item,
-        id: logIdRef.current++
+        id: logIdRef.current++,
       }));
       // Always use latest jobInstanceId
       setLogs((prevLogs) => {
@@ -129,7 +133,7 @@ export default function LogViewer({ jobInstanceId, maxMessages = 500 }) {
         <Stack direction="row" alignItems="center" spacing={1}>
           <Terminal fontSize="small" color="action" />
           <Typography variant="body2" color="text.secondary">
-            Live logs for {jobInstanceId}
+            Live logs for {description}
           </Typography>
         </Stack>
         <Tooltip title="Clear logs">
@@ -139,8 +143,8 @@ export default function LogViewer({ jobInstanceId, maxMessages = 500 }) {
         </Tooltip>
       </Stack>
 
-    <Paper
-          variant="outlined"
+      <Paper
+        variant="outlined"
         sx={{
           p: 2,
           height: 300,
@@ -152,8 +156,8 @@ export default function LogViewer({ jobInstanceId, maxMessages = 500 }) {
         }}
       >
         {logs.length === 0 ? (
-              <Box
-                sx={{
+          <Box
+            sx={{
               height: '100%',
               display: 'flex',
               alignItems: 'center',
@@ -163,45 +167,45 @@ export default function LogViewer({ jobInstanceId, maxMessages = 500 }) {
             <Typography variant="body2" color="text.secondary">
               No logs available
             </Typography>
-              </Box>
+          </Box>
         ) : (
           <Stack spacing={0.5}>
             {logs.map((log) => (
-                <Stack key={log.id} direction="row" spacing={2}>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ fontFamily: 'inherit', flexShrink: 0 }}
-                  >
-                    {log.time}
-                  </Typography>
-              <Typography
-                variant="caption"
-                sx={{
-                      fontFamily: 'inherit',
-                      color: getLevelColor(log.level),
-                      textTransform: 'uppercase',
-                      fontWeight: 600,
-                      flexShrink: 0,
-                }}
-              >
-                    [{log.level}]
-              </Typography>
-              <Typography
-                    variant="caption"
-                sx={{
-                      fontFamily: 'inherit',
-                      color: 'text.primary',
-                      opacity: 0.9,
-                }}
-              >
-                {formatMessage(log.message)}
-              </Typography>
-                </Stack>
+              <Stack key={log.id} direction="row" spacing={2}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ fontFamily: 'inherit', flexShrink: 0 }}
+                >
+                  {log.time}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontFamily: 'inherit',
+                    color: getLevelColor(log.level),
+                    textTransform: 'uppercase',
+                    fontWeight: 600,
+                    flexShrink: 0,
+                  }}
+                >
+                  [{log.level}]
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontFamily: 'inherit',
+                    color: 'text.primary',
+                    opacity: 0.9,
+                  }}
+                >
+                  {formatMessage(log.message)}
+                </Typography>
+              </Stack>
             ))}
           </Stack>
         )}
-    </Paper>
+      </Paper>
     </Stack>
   );
 }

@@ -19,16 +19,14 @@ class Plugin(Base):
     interval = Column(Integer, nullable=False)
     description = Column(Text)
 
-    __table_args__ = (
-        CheckConstraint("interval > 0", name="ck_plugins_interval_positive"),
-    )
+    __table_args__ = (CheckConstraint("interval > 0", name="ck_plugins_interval_positive"),)
 
 
 class Job(Base):
     __tablename__ = "jobs"
 
     id = Column(Integer, Sequence("jobs_id_seq"), primary_key=True)
-    user_id = Column(Integer, nullable=False)
+    session_id = Column(Integer, nullable=False)
     plugin_id = Column(Integer, nullable=False)
     description = Column(Text)
     config = Column(Text, nullable=True)
