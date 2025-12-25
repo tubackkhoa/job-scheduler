@@ -68,14 +68,14 @@ class PluginManager:
 
         # Pass any additional user-provided args
         self.scheduler = AsyncIOScheduler(**(scheduler_kwargs or {}))
-        self.scheduler.add_listener(
-            self.job_listener,
-            EVENT_JOB_ADDED
-            | EVENT_JOB_REMOVED
-            | EVENT_JOB_SUBMITTED
-            | EVENT_JOB_EXECUTED
-            | EVENT_JOB_ERROR,
-        )
+        # self.scheduler.add_listener(
+        #     self.job_listener,
+        #     EVENT_JOB_ADDED
+        #     | EVENT_JOB_REMOVED
+        #     | EVENT_JOB_SUBMITTED
+        #     | EVENT_JOB_EXECUTED
+        #     | EVENT_JOB_ERROR,
+        # )
 
         self.log_handler = log_handler
 
@@ -107,6 +107,7 @@ class PluginManager:
         elif event.code == EVENT_JOB_ERROR:
             level = logging.ERROR
             message = f"Job failed with exception: {event.exception}"
+        
 
         log_event = logging.LogRecord(
             event.job_id,

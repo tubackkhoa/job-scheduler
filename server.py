@@ -1,5 +1,5 @@
 import asyncio
-from typing import Annotated
+from typing import Annotated, Optional
 from fastapi import (
     Depends,
     FastAPI,
@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine
 from create_data import create_data
 from log_handler import JobLogHandler
+from log_service import LogService
 from models import Job, Plugin
 from plugin_manager import PluginManager
 from ws_manager import WSConnectionManager
@@ -37,7 +38,12 @@ def get_plugin_manager(request: Request) -> PluginManager:
     return request.app.state.plugin_manager
 
 
+def get_log_service(request: Request) -> LogService:
+    return request.app.state.log_service
+
+
 PluginManagerState = Annotated[PluginManager, Depends(get_plugin_manager)]
+LogServiceState = Annotated[LogService, Depends(get_log_service)]
 
 
 @asynccontextmanager
@@ -57,9 +63,16 @@ async def lifespan(app: FastAPI):
     else:
         db_engine = create_engine(db_connection)
 
-    # Initialise log handler and plugin manager once we have a running event loop
+    # Initialise log service and handler
+    log_service = LogService(
+        log_dir=os.getenv("LOG_DIR", "logs"),
+        max_file_size=int(os.getenv("LOG_MAX_SIZE", 10 * 1024 * 1024)),
+        max_files=int(os.getenv("LOG_MAX_FILES", 10)),
+        retention_days=int(os.getenv("LOG_RETENTION_DAYS", 7)),
+    )
+
     loop = asyncio.get_running_loop()
-    log_handler = JobLogHandler(manager.send_log, loop)
+    log_handler = JobLogHandler(manager.send_log, loop, log_service=log_service)
 
     plugin_manager = PluginManager(
         db_engine,
@@ -72,6 +85,7 @@ async def lifespan(app: FastAPI):
 
     # store in app state
     app.state.plugin_manager = plugin_manager
+    app.state.log_service = log_service
 
     yield
 
@@ -333,6 +347,34 @@ def update_config(plugin_manager: PluginManagerState, job_id: int, payload: dict
         return config
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update config: {str(e)}")
+
+
+@app.get("/api/logs/{job_id}")
+def search_logs(
+    log_service: LogServiceState,
+    job_id: str,
+    search: Optional[str] = None,
+    offset: Optional[int] = None,
+    limit: int = 1000,
+):
+    """
+    Search logs for a job_id.
+    Query params:
+    - job_id: job identifier (format: plugin_id/session_id, e.g., "5/1")
+    - search: text to search for (optional)
+    - offset: start from this offset (optional)
+    - limit: max results (default 1000)
+    """
+    try:
+        result = log_service.search_logs(
+            job_id=job_id,
+            search_text=search,
+            offset=offset,
+            limit=limit,
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to search logs: {str(e)}")
 
 
 # static site
