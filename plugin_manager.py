@@ -145,6 +145,9 @@ class PluginManager:
     def get_plugin_names(self):
         return [name for name, _ in self.manager.list_name_plugin()]
 
+    def get_plugin_instance(self, package: str) -> Optional[PluginSpec]:
+        return self.manager.get_plugin(package)
+
     @classmethod
     def run_plugin_job(cls, package: str, scheduler_job_id: str):
         """
