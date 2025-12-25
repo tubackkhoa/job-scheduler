@@ -30,6 +30,11 @@ PLUGIN_DATA = [
         "interval": 3,
         "description": "Production plugin with standard interval.",
     },
+    {
+        "package": "alpha_miner.plugins.MockUserCustomConfigPlugin",
+        "interval": 1,
+        "description": "Mock user custom config plugin for testing.",
+    },
 ]
 
 
