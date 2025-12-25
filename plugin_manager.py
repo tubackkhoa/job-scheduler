@@ -44,6 +44,12 @@ class PluginManager:
     Manages plugin loading/unloading, job scheduling, and execution
     """
 
+    # static cache of active job configs
+    _active_job_cache: Dict[str, str] = {}
+    # static pluggy manager, so that all pluginmanager share the same plugins
+    manager = pluggy.PluginManager(PROJECT_NAME)
+    manager.add_hookspecs(PluginSpec)
+
     def __init__(
         self,
         db_engine: Engine,
@@ -58,7 +64,6 @@ class PluginManager:
                 if path and path not in sys.path:
                     sys.path.insert(0, path)
 
-        self.manager = pluggy.PluginManager(PROJECT_NAME)
         self.db_engine = db_engine
 
         # Pass any additional user-provided args
@@ -72,7 +77,6 @@ class PluginManager:
             | EVENT_JOB_ERROR,
         )
 
-        self.manager.add_hookspecs(PluginSpec)
         self.log_handler = log_handler
 
         # Register all plugins from the database
@@ -84,7 +88,6 @@ class PluginManager:
 
         all_jobs = self.get_all_jobs()
 
-        self._active_job_cache: Dict[str, str] = {}
         for job in all_jobs:
             self.add_job_instance(job, look_up[job.plugin_id])  # type: ignore
 
@@ -145,16 +148,17 @@ class PluginManager:
     def get_plugin_instance(self, package: str) -> Optional[PluginSpec]:
         return self.manager.get_plugin(package)
 
-    def run_plugin_job(self, package: str, scheduler_job_id: str):
+    @classmethod
+    def run_plugin_job(cls, package: str, scheduler_job_id: str):
         """
         Wrapper to run a plugin's 'run' method synchronously within asyncio event loop,
         fetching config from the active job for the user/plugin.
         """
-        plugin = self.get_plugin_instance(package)
+        plugin = cls.manager.get_plugin(package)
         if plugin is None:
             return None
 
-        job_config = self._active_job_cache.get(scheduler_job_id)
+        job_config = cls._active_job_cache.get(scheduler_job_id)
 
         if job_config is None:
             # No active job means no config to run this plugin instance for this user
@@ -227,6 +231,7 @@ class PluginManager:
                 name=scheduler_job_id,
                 coalesce=True,
                 max_instances=1,
+                replace_existing=True,
             )
 
             # add handler for this logger

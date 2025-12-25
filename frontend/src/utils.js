@@ -6,8 +6,8 @@ export const extractUiSchema = (schema) => {
     {
       props: schema.properties,
       target: uiSchema,
-      path: []
-    }
+      path: [],
+    },
   ];
 
   while (stack.length > 0) {
@@ -46,7 +46,7 @@ export const extractUiSchema = (schema) => {
         stack.push({
           props: nestedProps,
           target: target[key],
-          path: [...path, key]
+          path: [...path, key],
         });
       } else if (Object.keys(uiEntry).length > 0) {
         // Only add uiEntry if not empty and no nested props
@@ -62,3 +62,34 @@ export const getSystemTheme = () =>
   window.matchMedia?.('(prefers-color-scheme: dark)').matches
     ? 'dark'
     : 'light';
+
+/**
+ * Formats ugly Python datetime repr strings like:
+ * "datetime.datetime(2025, 12, 18, 10, 57, 15, 461066, tzinfo=...)"
+ * → "12/18/2025, 10:57:15 AM"
+ */
+export const formatMessage = (message) => {
+  if (typeof message !== 'string') return message;
+
+  return message.replace(
+    /\[?datetime\.datetime\(([^)]+)\)/g,
+    (match, dtStr) => {
+      try {
+        const parts = dtStr.split(', ').map(Number);
+        const [year, month, day, hour, minute, second] = parts;
+        const date = new Date(year, month - 1, day, hour, minute, second || 0);
+        return date.toLocaleString(undefined, {
+          year: 'numeric',
+          month: 'numeric',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        });
+      } catch {
+        return match; // fallback if parsing fails
+      }
+    }
+  );
+};

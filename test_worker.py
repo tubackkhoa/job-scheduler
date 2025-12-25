@@ -7,12 +7,16 @@ from sqlalchemy import create_engine
 from create_data import create_data
 from plugin_manager import PluginManager
 
+# from apscheduler.jobstores.redis import RedisJobStore
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+
 dotenv.load_dotenv()
 logging.basicConfig(level=logging.INFO, handlers=[logging.NullHandler()])
 
 
 async def main(package: str):
     db_engine = create_engine("sqlite:///:memory:?check_same_thread=false")
+
     # test a sample plugin in memory DB
     plugin_data = (
         [
@@ -32,13 +36,17 @@ async def main(package: str):
         db_engine,
         log_handler=logging.StreamHandler(),
         module_paths=os.getenv("MODULE_PATH", "").split(":"),
+        scheduler_kwargs={
+            # "jobstores": {"default": RedisJobStore(host="localhost", port=6379, db=0)},
+            "jobstores": {"default": SQLAlchemyJobStore(url="sqlite:///data/jobs.sqlite")}
+        },
     )
 
     # run specific package or run all from database
     plugin_manager.start()
 
     try:
-        await asyncio.sleep(3600)  # Keep process alive
+        await asyncio.Event().wait()
     except (KeyboardInterrupt, asyncio.CancelledError):
         print("\nShutting down gracefully...")
     finally:
