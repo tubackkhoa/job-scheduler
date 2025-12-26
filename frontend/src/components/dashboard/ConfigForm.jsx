@@ -75,7 +75,7 @@ export const ConfigForm = forwardRef(function ConfigForm(
               <Grid container spacing={2}>
                 {regularFields.map((prop, index) => {
                   const isEditor =
-                    prop.content.props.uiSchema['ui:field'] === 'Sql';
+                    prop.content.props?.uiSchema['ui:field'] === 'Sql';
                   return (
                     <Grid
                       item
