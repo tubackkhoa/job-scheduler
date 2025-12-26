@@ -2,7 +2,6 @@
 name = "job-scheduler"
 version = "0.1.0"
 description = "A pluggy-based plugin management system for alpha-miner workers"
-readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "Pham Tu", email = "tu@orai.io" }]

@@ -1,6 +1,6 @@
 __pycache__/
 data
-uv.lock
+# uv.lock
 logs
 *.egg-info
 .env
