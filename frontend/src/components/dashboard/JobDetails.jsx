@@ -53,8 +53,6 @@ export function JobDetails({
   onSaveAsNew,
   onDelete,
   isSubmitting,
-  sessionId,
-  pluginId,
 }) {
   const [tabIndex, setTabIndex] = useState(0);
   const [copied, setCopied] = useState(false);
