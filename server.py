@@ -79,6 +79,7 @@ async def lifespan(app: FastAPI):
         log_handler=log_handler,
         module_paths=os.getenv("MODULE_PATH", "").split(":"),
     )
+    plugin_manager.reload_all_jobs()
 
     # ---- STARTUP ----
     plugin_manager.start()
@@ -108,11 +109,9 @@ app.add_middleware(
 )
 
 
-@app.websocket("/ws/logs/{plugin_id}/{session_id}/{job_id}")
-async def websocket_logs_endpoint(
-    websocket: WebSocket, plugin_id: int, session_id: int, job_id: int
-):
-    scheduler_job_id = f"{plugin_id}/{session_id}/{job_id}"
+@app.websocket("/ws/logs/{job_id}")
+async def websocket_logs_endpoint(websocket: WebSocket, job_id: int):
+    scheduler_job_id = PluginManager.get_job_scheduler_id(job_id)
     await manager.connect(websocket, scheduler_job_id)
     try:
         while True:
@@ -124,7 +123,6 @@ async def websocket_logs_endpoint(
 
 @app.get("/plugins")
 def plugins(plugin_manager: PluginManagerState):
-    # plugin_manager: PluginManager = app.state.plugin_manager
     return plugin_manager.get_all_plugins()
 
 
@@ -149,28 +147,14 @@ def create_plugin(plugin_manager: PluginManagerState, payload: dict = Body(...))
             detail="Missing required fields: package, interval",
         )
 
-    package = payload["package"]
-    interval = payload["interval"]
-    description = payload.get("description")
-
     # Load into manager
     try:
-        plugin_manager.load_plugin(package)
-        # Insert into DB
-        with Session(plugin_manager.db_engine) as session:
-            plugin_row = Plugin(
-                package=package,
-                interval=interval,
-                description=description,
-            )
-
-            session.add(plugin_row)
-            session.flush()  # get ID
-            plugin_id = plugin_row.id
-            session.commit()
-            return {
-                "id": plugin_id,
-            }
+        plugin_id = plugin_manager.add_plugin(
+            payload["package"], int(payload["interval"]), payload.get("description")
+        )
+        return {
+            "id": plugin_id,
+        }
     except Exception as e:
         raise HTTPException(
             status_code=400,
@@ -191,7 +175,7 @@ def schema(plugin_manager: PluginManagerState, session_id: int, plugin_id: int):
                 # add empty config so that when saving it will be new job
                 configs.append(
                     Job(
-                        active=0,
+                        active=False,
                         description="",
                         id=0,
                         config=plugin.config().model_dump_json(),
@@ -266,11 +250,9 @@ def update_config(plugin_manager: PluginManagerState, job_id: int, payload: dict
         raise HTTPException(status_code=500, detail=f"Failed to update config: {str(e)}")
 
 
-@app.get("/api/logs/{plugin_id}/{session_id}/{job_id}")
+@app.get("/api/logs/{job_id}")
 def search_logs(
     log_service: LogServiceState,
-    plugin_id: int,
-    session_id: int,
     job_id: int,
     search: Optional[str] = None,
     offset: Optional[int] = None,
@@ -285,7 +267,7 @@ def search_logs(
     - limit: max results (default 1000)
     """
     try:
-        scheduler_job_id = f"{plugin_id}/{session_id}/{job_id}"
+        scheduler_job_id = PluginManager.get_job_scheduler_id(job_id)
         result = log_service.search_logs(
             job_id=scheduler_job_id,
             search_text=search,

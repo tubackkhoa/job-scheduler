@@ -53,8 +53,6 @@ export function JobDetails({
   onSaveAsNew,
   onDelete,
   isSubmitting,
-  sessionId,
-  pluginId,
 }) {
   const [tabIndex, setTabIndex] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -253,10 +251,7 @@ export function JobDetails({
           </TabPanel>
 
           <TabPanel value={tabIndex} index={2}>
-            <LogViewer
-              jobInstanceId={`${pluginId}/${sessionId}/${jobId}`}
-              description={jobDesc}
-            />
+            <LogViewer jobId={jobId} description={jobDesc} />
           </TabPanel>
 
           {/* Actions */}

@@ -3,8 +3,8 @@ import { Box, Paper, Stack, Typography, Grid } from '@mui/material';
 import { Settings } from '@mui/icons-material';
 import Form from '@rjsf/mui';
 import validator from '@rjsf/validator-ajv8';
-import { extractUiSchema } from '../../utils';
-import { MLThresholdsTableField, MultiSelectField } from './fields';
+import { extractUiSchema, evaluate } from '../../utils';
+import fields from './fields';
 
 export const ConfigForm = forwardRef(function ConfigForm(
   { schema, formData, onChange },
@@ -46,7 +46,7 @@ export const ConfigForm = forwardRef(function ConfigForm(
           sx={{
             display: 'flex',
             flexDirection: 'column',
-            gap: 4
+            gap: 4,
           }}
         >
           {/* General Settings section for non-object fields */}
@@ -58,7 +58,7 @@ export const ConfigForm = forwardRef(function ConfigForm(
                 bgcolor: 'rgba(99, 102, 241, 0.04)',
                 border: 1,
                 borderColor: 'divider',
-                borderRadius: 3
+                borderRadius: 3,
               }}
             >
               <Stack
@@ -74,8 +74,15 @@ export const ConfigForm = forwardRef(function ConfigForm(
               </Stack>
               <Grid container spacing={2}>
                 {regularFields.map((prop, index) => {
+                  const isEditor =
+                    prop.content.props.uiSchema?.['ui:field'] === 'Sql';
                   return (
-                    <Grid item size={3} key={index} className="config-field">
+                    <Grid
+                      item
+                      size={isEditor ? 12 : 3}
+                      key={index}
+                      className="config-field"
+                    >
                       {prop.content}
                     </Grid>
                   );
@@ -99,7 +106,7 @@ export const ConfigForm = forwardRef(function ConfigForm(
           bgcolor: 'rgba(236, 72, 153, 0.04)',
           border: 1,
           borderColor: 'divider',
-          borderRadius: 3
+          borderRadius: 3,
         }}
       >
         <Box sx={{ mb: 3 }}>
@@ -132,39 +139,50 @@ export const ConfigForm = forwardRef(function ConfigForm(
         '& .rjsf': {
           '& .form-group': { mb: 0 },
           '& .field': { mb: 0 },
-          '& .control-label': { mb: 1 }
-        }
+          '& .control-label': { mb: 1 },
+        },
       }}
     >
-      <Form
-        schema={schema}
-        uiSchema={extractUiSchema(schema)}
-        ref={ref}
-        fields={{
-          MLThresholdsTable: MLThresholdsTableField,
-          MultiSelect: MultiSelectField
-        }}
-        formData={formData || {}}
-        validator={validator}
-        onChange={handleChange}
-        liveValidate={false}
-        showErrorList={false}
-        templates={{
-          ObjectFieldTemplate,
-          FieldTemplate: (props) => {
-            const { help, errors, children } = props;
-            return (
-              <Box sx={{ width: '100%' }}>
-                {children}
-                {errors}
-                {help}
-              </Box>
-            );
-          }
-        }}
-      >
-        <div style={{ display: 'none' }} />
-      </Form>
+      {formData && (
+        <Form
+          schema={schema}
+          uiSchema={extractUiSchema(schema)}
+          ref={ref}
+          fields={fields}
+          formData={formData}
+          formContext={formData}
+          validator={validator}
+          onChange={handleChange}
+          liveValidate={false}
+          showErrorList={false}
+          templates={{
+            ObjectFieldTemplate,
+            FieldTemplate: (props) => {
+              const { help, errors, children, schema, registry } = props;
+              if (schema['ui:options']) {
+                const isHidden = evaluate(
+                  schema['ui:options'].hidden,
+                  registry.formContext,
+                  false
+                );
+                if (isHidden) {
+                  return null;
+                }
+              }
+
+              return (
+                <Box sx={{ width: '100%' }}>
+                  {children}
+                  {errors}
+                  {help}
+                </Box>
+              );
+            },
+          }}
+        >
+          <div style={{ display: 'none' }} />
+        </Form>
+      )}
     </Box>
   );
 });

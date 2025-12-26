@@ -43,6 +43,7 @@ async def main(package: str):
     )
 
     # run specific package or run all from database
+    plugin_manager.reload_all_jobs()
     plugin_manager.start()
 
     try:
@@ -55,5 +56,5 @@ async def main(package: str):
 
 
 if __name__ == "__main__":
-    # python test.py "plugins.sample_plugin@v0_1_0.Plugin"
+    # python test_worker.py "plugins.sample_plugin@v0_1_0.Plugin"
     asyncio.run(main(sys.argv[1] if len(sys.argv) > 1 else ""))
