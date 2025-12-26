@@ -46,6 +46,19 @@ class PluginManager:
 
     # static cache of job configs, to remove access to database
     # TODO: move this to redis to cache across multiple workers, later can implement locking to prevent multiple runs of same job
+    # @classmethod
+    # def run_plugin_job(cls, job_id: int):
+    #     lock = cls.redis_client.lock(
+    #         f"lock:{PROJECT_NAME}:{job_id}",
+    #         timeout=plugin.interval * 2,
+    #         blocking=False,
+    #     )
+    #     if not lock.acquire():
+    #         return
+    #     try:
+    #         return asyncio.run(plugin.run(config, logger))
+    #     finally:
+    #         lock.release()
     _active_job_cache: Dict[int, str] = {}
     # static pluggy manager, so that all pluginmanager share the same plugins
     manager = pluggy.PluginManager(PROJECT_NAME)
