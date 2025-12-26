@@ -110,8 +110,10 @@ app.add_middleware(
 
 
 @app.websocket("/ws/logs/{job_id}")
-async def websocket_logs_endpoint(websocket: WebSocket, job_id: int):
-    scheduler_job_id = PluginManager.get_job_scheduler_id(job_id)
+async def websocket_logs_endpoint(
+    websocket: WebSocket, plugin_manager: PluginManagerState, job_id: int
+):
+    scheduler_job_id = plugin_manager.get_job_scheduler_id(job_id)
     await manager.connect(websocket, scheduler_job_id)
     try:
         while True:
@@ -264,11 +266,10 @@ def update_config(plugin_manager: PluginManagerState, job_id: int, payload: dict
         raise HTTPException(status_code=500, detail=f"Failed to update config: {str(e)}")
 
 
-@app.get("/api/logs/{plugin_id}/{session_id}/{job_id}")
+@app.get("/api/logs/{job_id}")
 def search_logs(
+    plugin_manager: PluginManagerState,
     log_service: LogServiceState,
-    plugin_id: int,
-    session_id: int,
     job_id: int,
     search: Optional[str] = None,
     offset: Optional[int] = None,
@@ -283,7 +284,7 @@ def search_logs(
     - limit: max results (default 1000)
     """
     try:
-        scheduler_job_id = f"{plugin_id}/{session_id}/{job_id}"
+        scheduler_job_id = plugin_manager.get_job_scheduler_id(job_id)
         result = log_service.search_logs(
             job_id=scheduler_job_id,
             search_text=search,

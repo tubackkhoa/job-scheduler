@@ -2,6 +2,7 @@
 Log Service - File-based logging with rotation, retention, and search.
 Inspired by pm2-logrotate: rotate by size/date, keep N files, auto-cleanup.
 """
+
 import os
 import gzip
 import re
@@ -114,20 +115,24 @@ class LogService:
                 match = re.match(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(\w+)\] (.+)$", line)
                 if match:
                     timestamp, level, message = match.groups()
-                    entries.append({
-                        "offset": line_num,
-                        "timestamp": timestamp,
-                        "level": level,
-                        "message": message,
-                    })
+                    entries.append(
+                        {
+                            "offset": line_num,
+                            "timestamp": timestamp,
+                            "level": level,
+                            "message": message,
+                        }
+                    )
                 else:
                     # Fallback: treat as message only
-                    entries.append({
-                        "offset": line_num,
-                        "timestamp": "",
-                        "level": "INFO",
-                        "message": line,
-                    })
+                    entries.append(
+                        {
+                            "offset": line_num,
+                            "timestamp": "",
+                            "level": "INFO",
+                            "message": line,
+                        }
+                    )
         except Exception:
             pass  # Skip corrupted files
 
@@ -176,8 +181,7 @@ class LogService:
                 all_entries = [
                     e
                     for e in all_entries
-                    if search_lower in e["message"].lower()
-                    or search_lower in e["level"].lower()
+                    if search_lower in e["message"].lower() or search_lower in e["level"].lower()
                 ]
 
             # Filter by offset (start from offset)
@@ -209,4 +213,3 @@ class LogService:
                 pass
 
         return deleted_count
-
