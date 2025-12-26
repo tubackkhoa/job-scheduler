@@ -1,3 +1,9 @@
-export { MLThresholdsTableField } from './MLThresholdsTableField';
-export { MultiSelectField } from './MultiSelectField';
+import { MLThresholdsTableField } from './MLThresholdsTableField';
+import { MultiSelectField } from './MultiSelectField';
+import { SqlField } from './SqlField';
 
+export default {
+  MLThresholdsTable: MLThresholdsTableField,
+  MultiSelect: MultiSelectField,
+  Sql: SqlField,
+};
