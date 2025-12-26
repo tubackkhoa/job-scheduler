@@ -13,8 +13,9 @@ import {
   OutlinedInput,
   InputAdornment,
   Avatar,
+  Button,
 } from '@mui/material';
-import { Refresh, Person } from '@mui/icons-material';
+import { Refresh, Person, Add } from '@mui/icons-material';
 
 export function ContextPanel({
   sessions,
@@ -24,6 +25,7 @@ export function ContextPanel({
   onSessionChange,
   onPluginChange,
   onReloadPlugin,
+  onCreatePlugin,
   isLoading,
 }) {
   return (
@@ -141,6 +143,26 @@ export function ContextPanel({
               </Select>
             </FormControl>
           </Stack>
+
+          <Button
+            variant="outlined"
+            startIcon={<Add />}
+            onClick={onCreatePlugin}
+            disabled={isLoading}
+            fullWidth
+            sx={{
+              mt: 1,
+              borderStyle: 'dashed',
+              borderColor: 'primary.main',
+              color: 'primary.main',
+              '&:hover': {
+                borderStyle: 'solid',
+                bgcolor: 'rgba(99, 102, 241, 0.08)',
+              },
+            }}
+          >
+            Create New Plugin
+          </Button>
         </Stack>
       </CardContent>
     </Card>

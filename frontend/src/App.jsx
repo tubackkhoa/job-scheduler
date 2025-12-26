@@ -8,6 +8,7 @@ import { JobDetails } from './components/dashboard/JobDetails';
 import { LoadingBar } from './components/dashboard/LoadingBar';
 import { ErrorAlert } from './components/dashboard/ErrorAlert';
 import { ResponseCard } from './components/dashboard/ResponseCard';
+import { CreatePluginModal } from './components/dashboard/CreatePluginModal';
 import api from './api';
 
 const sessions = [
@@ -105,6 +106,7 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [sessionId, setSessionId] = useState(sessions[0].id);
   const [error, setError] = useState(null);
+  const [createPluginModalOpen, setCreatePluginModalOpen] = useState(false);
 
   // Load plugin list
   useEffect(() => {
@@ -258,6 +260,32 @@ export default function App() {
     }
   };
 
+  const handleCreatePlugin = async (pluginData) => {
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const response = await api.createPlugin(
+        pluginData.package,
+        pluginData.interval,
+        pluginData.description
+      );
+      handleSetResult({ success: true, message: 'Plugin created successfully' });
+      setCreatePluginModalOpen(false);
+      // Reload plugins list
+      const updatedPlugins = await api.fetchPlugins();
+      setPlugins(updatedPlugins);
+      // Optionally select the newly created plugin
+      if (response.id) {
+        await loadSchema(response.id, sessionId);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const currentConfig = configVersions.find((version) => version.id === jobId);
   const displayedConfig = jobId === 0 ? newJobDraft : currentConfig;
   const pluginInfo = plugins.find((p) => p.id === pluginId);
@@ -303,6 +331,7 @@ export default function App() {
                   onSessionChange={handleChangeSession}
                   onPluginChange={loadSchema}
                   onReloadPlugin={reloadPlugins}
+                  onCreatePlugin={() => setCreatePluginModalOpen(true)}
                   isLoading={submitting}
                 />
 
@@ -353,6 +382,13 @@ export default function App() {
             </Grid>
           </Grid>
         </Container>
+
+        <CreatePluginModal
+          open={createPluginModalOpen}
+          onClose={() => setCreatePluginModalOpen(false)}
+          onSubmit={handleCreatePlugin}
+          isLoading={submitting}
+        />
       </Box>
     </ThemeProvider>
   );
