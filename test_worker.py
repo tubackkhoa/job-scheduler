@@ -43,6 +43,7 @@ async def main(package: str):
     )
 
     # run specific package or run all from database
+    plugin_manager.reload_all_jobs()
     plugin_manager.start()
 
     try:

@@ -79,6 +79,7 @@ async def lifespan(app: FastAPI):
         log_handler=log_handler,
         module_paths=os.getenv("MODULE_PATH", "").split(":"),
     )
+    plugin_manager.reload_all_jobs()
 
     # ---- STARTUP ----
     plugin_manager.start()
