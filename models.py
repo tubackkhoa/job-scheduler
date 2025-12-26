@@ -6,9 +6,11 @@ from sqlalchemy import (
     text,
     Sequence,
 )
-from sqlalchemy.orm import declarative_base, mapped_column, Mapped
+from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped
 
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    pass
 
 
 class Plugin(Base):
