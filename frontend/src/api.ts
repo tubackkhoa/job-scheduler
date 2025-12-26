@@ -82,4 +82,28 @@ export default {
 
     return res.json();
   },
+  async createPlugin(
+    packageName: string,
+    interval: number,
+    description?: string
+  ) {
+    const res = await fetch(`${API_BASE_URL}/plugins`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        package: packageName,
+        interval,
+        description: description || '',
+      }),
+    });
+
+    if (!res.ok) {
+      const msg = await res.text();
+      throw new Error(msg || 'Failed to create plugin');
+    }
+
+    return res.json();
+  },
 };
