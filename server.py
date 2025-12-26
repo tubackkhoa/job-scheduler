@@ -109,6 +109,29 @@ app.add_middleware(
 )
 
 
+@app.get("/health")
+def health_check(plugin_manager: PluginManagerState):
+   
+    from sqlalchemy import text
+
+    try:
+        # Check database connection
+        db_engine = plugin_manager.db_engine
+        with db_engine.connect() as conn:
+            conn.execute(text("SELECT 1"))        
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "plugin_manager": "initialized",
+            "plugins_count": len(plugins),
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Health check failed: {str(e)}",
+        )
+
+
 @app.websocket("/ws/logs/{job_id}")
 async def websocket_logs_endpoint(websocket: WebSocket, job_id: int):
     scheduler_job_id = PluginManager.get_job_scheduler_id(job_id)
