@@ -25,9 +25,8 @@ class Config(BaseModel):
     @classmethod
     def validate_sql(cls, sql: str, info: ValidationInfo):
         """Validate raw_sql using sqlglot for DuckDB SQL syntax."""
-        sql = generate_sql(sql, info.data)
         try:
-            sqlglot.parse_one(sql)
+            sqlglot.parse_one(generate_sql(sql, info.data))
             return sql
         except Exception as e:
             raise ValueError(f"Error validating SQL: {str(e)}")
