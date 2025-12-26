@@ -45,6 +45,7 @@ class PluginManager:
     """
 
     # static cache of job configs, to remove access to database
+    # TODO: move this to redis to cache across multiple workers, later can implement locking to prevent multiple runs of same job
     _active_job_cache: Dict[int, str] = {}
     # static pluggy manager, so that all pluginmanager share the same plugins
     manager = pluggy.PluginManager(PROJECT_NAME)
