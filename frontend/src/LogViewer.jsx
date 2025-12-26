@@ -76,7 +76,7 @@ const LogRow = React.memo(function LogRow({ log, searchText }) {
 
         <Typography
           variant="caption"
-          sx={{ fontFamily: 'inherit', opacity: 0.9 }}
+          sx={{ fontFamily: 'inherit', opacity: 0.9, whiteSpace: 'pre-wrap' }}
         >
           {highlightMessage(formatMessage(log.message), searchText)}
         </Typography>

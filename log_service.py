@@ -96,7 +96,7 @@ class LogService:
                 f.write(log_line)
 
     def _read_log_file(self, file_path: Path) -> List[Dict]:
-        """Read log entries from a file (plain or gzipped)."""
+        """Read log entries from a file (plain or gzipped), supporting multiline log messages."""
         entries = []
         try:
             if file_path.suffix == ".gz":
@@ -106,33 +106,58 @@ class LogService:
                 with open(file_path, "r", encoding="utf-8") as f:
                     lines = f.readlines()
 
-            for line_num, line in enumerate(lines, 1):
-                line = line.strip()
-                if not line:
+            current_entry = None
+            line_num = 0
+
+            for raw_line in lines:
+                line_num += 1
+                line = raw_line.rstrip("\n")
+                if not line.strip():
                     continue
 
-                # Parse log line: "timestamp [LEVEL] message"
-                match = re.match(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(\w+)\] (.+)$", line)
-                if match:
-                    timestamp, level, message = match.groups()
-                    entries.append(
-                        {
+                # Check if line starts with timestamp pattern: "YYYY-MM-DD HH:MM:SS"
+                if re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", line):
+                    # Save previous entry if any
+                    if current_entry:
+                        entries.append(current_entry)
+
+                    # Parse new log entry line: timestamp, level, message
+                    match = re.match(
+                        r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(\w+)\] (.+)$", line
+                    )
+                    if match:
+                        timestamp, level, message = match.groups()
+                        current_entry = {
                             "offset": line_num,
                             "timestamp": timestamp,
                             "level": level,
                             "message": message,
                         }
-                    )
-                else:
-                    # Fallback: treat as message only
-                    entries.append(
-                        {
+                    else:
+                        # Fallback: treat whole line as message
+                        current_entry = {
                             "offset": line_num,
                             "timestamp": "",
                             "level": "INFO",
                             "message": line,
                         }
-                    )
+                else:
+                    # Continuation line: append to last message with newline
+                    if current_entry:
+                        current_entry["message"] += "\n" + line
+                    else:
+                        # No current entry? Treat as standalone info line
+                        current_entry = {
+                            "offset": line_num,
+                            "timestamp": "",
+                            "level": "INFO",
+                            "message": line,
+                        }
+
+            # Append last entry if exists
+            if current_entry:
+                entries.append(current_entry)
+
         except Exception:
             pass  # Skip corrupted files
 
