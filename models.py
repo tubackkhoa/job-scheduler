@@ -34,5 +34,5 @@ class Job(Base):
     session_id: Mapped[int] = mapped_column(Integer, nullable=False)
     plugin_id: Mapped[int] = mapped_column(Integer, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
-    config: Mapped[str | None] = mapped_column(Text, nullable=True)
+    config: Mapped[str] = mapped_column(Text, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))

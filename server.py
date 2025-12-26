@@ -109,7 +109,9 @@ app.add_middleware(
 
 
 @app.websocket("/ws/logs/{plugin_id}/{session_id}/{job_id}")
-async def websocket_logs_endpoint(websocket: WebSocket, plugin_id: int, session_id: int, job_id: int):
+async def websocket_logs_endpoint(
+    websocket: WebSocket, plugin_id: int, session_id: int, job_id: int
+):
     scheduler_job_id = f"{plugin_id}/{session_id}/{job_id}"
     await manager.connect(websocket, scheduler_job_id)
     try:
@@ -176,102 +178,13 @@ def create_plugin(plugin_manager: PluginManagerState, payload: dict = Body(...))
         )
 
 
-# TODO: change logic of /config/{job_id} instead
-
-# @app.post("/jobs/default")
-# def create_default_jobs(plugin_manager: PluginManagerState, payload: dict = Body(...)):
-#     """
-#     Create jobs using the plugin's default config for one or more users.
-
-#     Expected payload:
-#     {
-#       "pluginId": 1,
-#       "userIds": [1, 2],          # optional, defaults to [1]
-#       "description": "optional",  # optional
-#       "active": true              # optional, default true
-#     }
-#     """
-#     from sqlalchemy.orm import Session
-
-#     plugin_id = payload.get("pluginId")
-#     if plugin_id is None:
-#         raise HTTPException(status_code=400, detail="pluginId is required")
-
-#     session_ids = payload.get("userIds") or [1]
-#     if not isinstance(session_ids, list):
-#         raise HTTPException(status_code=400, detail="userIds must be a list")
-
-#     description = payload.get("description")
-#     active = bool(payload.get("active", True))
-
-#     plugin_item = plugin_manager.get_plugin_by_id(plugin_id)
-#     if not plugin_item:
-#         raise HTTPException(status_code=404, detail=f"Plugin with id {plugin_id} not found")
-
-#     plugin = plugin_manager.get_plugin_instance(str(plugin_item.package))
-#     if not plugin:
-#         # try to load once
-#         plugin_manager.load_plugin(str(plugin_item.package), True)
-#         plugin = plugin_manager.get_plugin_instance(str(plugin_item.package))
-#     if not plugin:
-#         raise HTTPException(status_code=500, detail="Failed to load plugin instance")
-
-#     # default config from plugin
-#     try:
-#         default_config = plugin.config()  # pydantic model
-#         config_json = default_config.model_dump_json()
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Failed to get default config: {str(e)}")
-
-#     created_jobs = []
-#     with Session(plugin_manager.db_engine) as session:
-#         for session_id in session_ids:
-#             job = Job(
-#                 session_id=int(session_id),
-#                 plugin_id=plugin_item.id,
-#                 config=config_json,
-#                 active=1 if active else 0,
-#                 description=description,
-#             )
-#             session.add(job)
-#             session.flush()
-
-#             # schedule job
-#             plugin_manager.add_job_instance(job, plugin_item)
-#             if active:
-#                 plugin_manager.activate_job(job.id)
-
-#             created_jobs.append(
-#                 {
-#                     "id": job.id,
-#                     "session_id": job.session_id,
-#                     "plugin_id": job.plugin_id,
-#                     "config": job.config,
-#                     "description": job.description,
-#                     "active": job.active,
-#                 }
-#             )
-
-#         session.commit()
-
-#     return {
-#         "plugin": {
-#             "id": plugin_item.id,
-#             "package": plugin_item.package,
-#             "interval": plugin_item.interval,
-#             "description": plugin_item.description,
-#         },
-#         "jobs": created_jobs,
-#     }
-
-
 @app.get("/schema/{session_id}/{plugin_id}")
 def schema(plugin_manager: PluginManagerState, session_id: int, plugin_id: int):
     plugin_item = plugin_manager.get_plugin_by_id(plugin_id)
     assert plugin_item
 
     try:
-        plugin = plugin_manager.get_plugin_instance(str(plugin_item.package))
+        plugin = plugin_manager.get_plugin_instance(plugin_item.package)
         if plugin != None:
             configs = plugin_manager.get_jobs_for_plugin_and_user(plugin_id, session_id)
             if len(configs) == 0:
@@ -326,11 +239,11 @@ def update_config(plugin_manager: PluginManagerState, job_id: int, payload: dict
         else:
             job_item = plugin_manager.get_job_by_id(job_id)
             assert job_item
-            plugin_id = int(job_item.plugin_id)  # type: ignore
+            plugin_id = job_item.plugin_id
 
         plugin_item = plugin_manager.get_plugin_by_id(plugin_id)
         assert plugin_item
-        plugin = plugin_manager.get_plugin_instance(str(plugin_item.package))
+        plugin = plugin_manager.get_plugin_instance(plugin_item.package)
         if not plugin:
             return {"error": "Plugin not found"}
         config = plugin.config(payload.get("config"))

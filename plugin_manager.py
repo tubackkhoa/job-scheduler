@@ -83,7 +83,7 @@ class PluginManager:
         all_plugins = self.get_all_plugins()
         look_up = {}
         for plugin in all_plugins:
-            self.load_plugin(str(plugin.package))
+            self.load_plugin(plugin.package)
             look_up[plugin.id] = plugin
 
         all_jobs = self.get_all_jobs()
@@ -244,7 +244,7 @@ class PluginManager:
 
         # active job
         if bool(job.active):
-            self._active_job_cache[scheduler_job_id] = str(job.config)
+            self._active_job_cache[scheduler_job_id] = job.config
             self.scheduler.resume_job(scheduler_job_id)
 
     def update_job(self, id: int, config: str, description: Optional[str] = None):
@@ -257,7 +257,7 @@ class PluginManager:
                 # update the active config
                 if bool(job.active):
                     scheduler_job_id = f"{job.plugin_id}/{job.session_id}/{job.id}"
-                    self._active_job_cache[scheduler_job_id] = str(job.config)
+                    self._active_job_cache[scheduler_job_id] = job.config
                 session.commit()
 
     def remove_job(self, job_id: int):
@@ -307,7 +307,7 @@ class PluginManager:
 
             # Use unique scheduler_job_id per job to allow multiple active configs
             scheduler_job_id = f"{job.plugin_id}/{job.session_id}/{job.id}"
-            self._active_job_cache[scheduler_job_id] = str(job.config)
+            self._active_job_cache[scheduler_job_id] = job.config
 
             # Check if this specific job's scheduler exists, if not create it
             plugin = session.get(Plugin, job.plugin_id)
