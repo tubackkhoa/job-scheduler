@@ -16,11 +16,7 @@ import { Terminal, Delete, Search, Refresh } from '@mui/icons-material';
 import { API_BASE_URL } from './api';
 import { formatMessage, getLevelColor } from './utils';
 
-export default function LogViewer({
-  jobInstanceId,
-  maxMessages = 500,
-  description,
-}) {
+export default function LogViewer({ jobId, maxMessages = 500, description }) {
   const [searchText, setSearchText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [totalLogs, setTotalLogs] = useState(0);
@@ -47,8 +43,8 @@ export default function LogViewer({
   // Fetch historical logs from API
   const fetchHistoricalLogs = useCallback(
     async (offset = null, search = null, limit = 100) => {
-      if (!jobInstanceId) return null;
-      // jobInstanceId format: "plugin_id/session_id/job_id"
+      if (!jobId) return null;
+
       setIsLoading(true);
       try {
         const params = new URLSearchParams();
@@ -57,7 +53,7 @@ export default function LogViewer({
         params.append('limit', limit.toString());
 
         const response = await fetch(
-          `${API_BASE_URL}/api/logs/${jobInstanceId}?${params.toString()}`
+          `${API_BASE_URL}/api/logs/${jobId}?${params.toString()}`
         );
         if (!response.ok) {
           throw new Error('Failed to fetch logs');
@@ -89,7 +85,7 @@ export default function LogViewer({
         setIsLoading(false);
       }
     },
-    [jobInstanceId]
+    [jobId]
   );
 
   const mergedLogs = useMemo(() => {
@@ -121,7 +117,7 @@ export default function LogViewer({
 
   // Load logs based on view mode
   const loadLogs = useCallback(async () => {
-    if (!jobInstanceId) return;
+    if (!jobId) return;
 
     const searchParam = searchText.trim() || null;
     let offset = null;
@@ -152,31 +148,31 @@ export default function LogViewer({
       // Trigger re-render of merged logs
       setLogsUpdateTrigger((prev) => prev + 1);
     }
-  }, [jobInstanceId, searchText, sliderOffset, totalLogs, fetchHistoricalLogs]);
+  }, [jobId, searchText, sliderOffset, totalLogs, fetchHistoricalLogs]);
 
   useEffect(() => {
     maxMessagesRef.current = maxMessages;
   }, [maxMessages]);
 
   useEffect(() => {
-    if (jobInstanceId) {
+    if (jobId) {
       loadLogs();
     }
-  }, [jobInstanceId, loadLogs]);
+  }, [jobId, loadLogs]);
 
   useEffect(() => {
-    if (!jobInstanceId) return;
+    if (!jobId) return;
 
     const timeoutId = setTimeout(() => {
       loadLogs();
     }, 500); // 500ms debounce
 
     return () => clearTimeout(timeoutId);
-  }, [searchText, jobInstanceId, loadLogs]);
+  }, [searchText, jobId, loadLogs]);
 
   // Load logs when slider changes (only in slider mode)
   useEffect(() => {
-    if (jobInstanceId) {
+    if (jobId) {
       loadLogs().then(() => {
         // After logs are loaded, scroll to the target position if needed
         if (scrollToOffset !== null) {
@@ -193,7 +189,7 @@ export default function LogViewer({
         }
       });
     }
-  }, [sliderOffset, jobInstanceId, loadLogs, scrollToOffset]);
+  }, [sliderOffset, jobId, loadLogs, scrollToOffset]);
 
   // Scroll to specific offset when scrollToOffset changes
   useEffect(() => {
@@ -225,11 +221,8 @@ export default function LogViewer({
   }, [scrollToOffset, mergedLogs]);
 
   useEffect(() => {
-    if (!jobInstanceId) return;
-    const url = `${API_BASE_URL.replace(
-      /^http/,
-      'ws'
-    )}/ws/logs/${jobInstanceId}`;
+    if (!jobId) return;
+    const url = `${API_BASE_URL.replace(/^http/, 'ws')}/ws/logs/${jobId}`;
     ws.current = new WebSocket(url);
 
     ws.current.onopen = () => {
@@ -272,7 +265,7 @@ export default function LogViewer({
         handleClearLogs();
       }
     };
-  }, [jobInstanceId, handleClearLogs]);
+  }, [jobId, handleClearLogs]);
 
   return (
     <Stack spacing={2}>

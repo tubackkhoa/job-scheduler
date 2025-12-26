@@ -109,11 +109,9 @@ app.add_middleware(
 )
 
 
-@app.websocket("/ws/logs/{plugin_id}/{session_id}/{job_id}")
-async def websocket_logs_endpoint(
-    websocket: WebSocket, plugin_id: int, session_id: int, job_id: int
-):
-    scheduler_job_id = f"{plugin_id}/{session_id}/{job_id}"
+@app.websocket("/ws/logs/{job_id}")
+async def websocket_logs_endpoint(websocket: WebSocket, job_id: int):
+    scheduler_job_id = PluginManager.get_job_scheduler_id(job_id)
     await manager.connect(websocket, scheduler_job_id)
     try:
         while True:
@@ -125,7 +123,6 @@ async def websocket_logs_endpoint(
 
 @app.get("/plugins")
 def plugins(plugin_manager: PluginManagerState):
-    # plugin_manager: PluginManager = app.state.plugin_manager
     return plugin_manager.get_all_plugins()
 
 

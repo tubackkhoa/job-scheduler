@@ -253,10 +253,7 @@ export function JobDetails({
           </TabPanel>
 
           <TabPanel value={tabIndex} index={2}>
-            <LogViewer
-              jobInstanceId={`${pluginId}/${sessionId}/${jobId}`}
-              description={jobDesc}
-            />
+            <LogViewer jobInstanceId={jobId} description={jobDesc} />
           </TabPanel>
 
           {/* Actions */}
