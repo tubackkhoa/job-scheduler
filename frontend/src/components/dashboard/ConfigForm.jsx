@@ -3,7 +3,7 @@ import { Box, Paper, Stack, Typography, Grid } from '@mui/material';
 import { Settings } from '@mui/icons-material';
 import Form from '@rjsf/mui';
 import validator from '@rjsf/validator-ajv8';
-import { extractUiSchema } from '../../utils';
+import { extractUiSchema, evaluate } from '../../utils';
 import fields from './fields';
 
 export const ConfigForm = forwardRef(function ConfigForm(
@@ -143,32 +143,45 @@ export const ConfigForm = forwardRef(function ConfigForm(
         },
       }}
     >
-      <Form
-        schema={schema}
-        uiSchema={extractUiSchema(schema)}
-        ref={ref}
-        fields={fields}
-        formData={formData || {}}
-        validator={validator}
-        onChange={handleChange}
-        liveValidate={false}
-        showErrorList={false}
-        templates={{
-          ObjectFieldTemplate,
-          FieldTemplate: (props) => {
-            const { help, errors, children } = props;
-            return (
-              <Box sx={{ width: '100%' }}>
-                {children}
-                {errors}
-                {help}
-              </Box>
-            );
-          },
-        }}
-      >
-        <div style={{ display: 'none' }} />
-      </Form>
+      {formData && (
+        <Form
+          schema={schema}
+          uiSchema={extractUiSchema(schema)}
+          ref={ref}
+          fields={fields}
+          formData={formData}
+          formContext={formData}
+          validator={validator}
+          onChange={handleChange}
+          liveValidate={false}
+          showErrorList={false}
+          templates={{
+            ObjectFieldTemplate,
+            FieldTemplate: (props) => {
+              const { help, errors, children, schema, registry } = props;
+              if (schema['ui:options']) {
+                const isHidden = evaluate(
+                  schema['ui:options'].hidden,
+                  registry.formContext
+                );
+                if (isHidden) {
+                  return null;
+                }
+              }
+
+              return (
+                <Box sx={{ width: '100%' }}>
+                  {children}
+                  {errors}
+                  {help}
+                </Box>
+              );
+            },
+          }}
+        >
+          <div style={{ display: 'none' }} />
+        </Form>
+      )}
     </Box>
   );
 });

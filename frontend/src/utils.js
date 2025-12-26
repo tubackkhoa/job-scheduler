@@ -105,3 +105,7 @@ const LEVEL_COLOR_MAP = {
 
 export const getLevelColor = (level) =>
   LEVEL_COLOR_MAP[level.toUpperCase()] ?? LEVEL_COLOR_MAP.NOTSET;
+
+export const evaluate = (expr, context) => {
+  return Function(...Object.keys(context), expr)(...Object.values(context));
+};

@@ -10,10 +10,16 @@ import {
   Divider,
   TextField,
   Box,
-  Paper
+  Paper,
 } from '@mui/material';
 
-export function MLThresholdsTableField({ schema, formData = {}, onChange, fieldPathId }) {
+export function MLThresholdsTableField({
+  schema,
+  formData = {},
+  registry,
+  onChange,
+  fieldPathId,
+}) {
   const modelSchemas = schema.properties ?? {};
   const firstModelKey = Object.keys(modelSchemas)[0];
   const thresholdSchema = modelSchemas[firstModelKey]?.properties ?? {};
@@ -27,30 +33,30 @@ export function MLThresholdsTableField({ schema, formData = {}, onChange, fieldP
           ...formData[modelKey],
           [thresholdKey]: {
             ...formData[modelKey]?.[thresholdKey],
-            ...patch
-          }
-        }
+            ...patch,
+          },
+        },
       },
       fieldPathId?.path
     );
   };
 
   return (
-    <Paper 
-      elevation={0} 
-      sx={{ 
-        p: 2, 
+    <Paper
+      elevation={0}
+      sx={{
+        p: 2,
         bgcolor: 'background.paper',
         border: '1px solid',
         borderColor: 'divider',
-        borderRadius: 2
+        borderRadius: 2,
       }}
     >
       <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
         {schema.title}
       </Typography>
       <Divider sx={{ mb: 2 }} />
-      
+
       <Box sx={{ mb: 2 }}>
         <Typography variant="body2" color="text.secondary">
           Configure rules per model
@@ -65,7 +71,10 @@ export function MLThresholdsTableField({ schema, formData = {}, onChange, fieldP
               <TableCell sx={{ fontWeight: 600 }}>Model Key</TableCell>
               {thresholdKeys.map((key) => (
                 <TableCell key={key} align="center" sx={{ minWidth: 120 }}>
-                  <Typography variant="caption" sx={{ fontWeight: 600, display: 'block' }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ fontWeight: 600, display: 'block' }}
+                  >
                     {thresholdSchema[key]?.title || key}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -77,11 +86,11 @@ export function MLThresholdsTableField({ schema, formData = {}, onChange, fieldP
           </TableHead>
           <TableBody>
             {Object.entries(formData).map(([modelKey, row]) => (
-              <TableRow 
-                key={modelKey} 
-                sx={{ 
+              <TableRow
+                key={modelKey}
+                sx={{
                   '&:hover': { bgcolor: 'action.hover' },
-                  '&:last-child td': { borderBottom: 0 }
+                  '&:last-child td': { borderBottom: 0 },
                 }}
               >
                 <TableCell>
@@ -90,7 +99,11 @@ export function MLThresholdsTableField({ schema, formData = {}, onChange, fieldP
                   </Typography>
                 </TableCell>
                 <TableCell>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ fontFamily: 'monospace' }}
+                  >
                     {modelKey}
                   </Typography>
                 </TableCell>
@@ -99,22 +112,27 @@ export function MLThresholdsTableField({ schema, formData = {}, onChange, fieldP
                   const cell = row?.[thKey] || { value: 0, disabled: false };
                   return (
                     <TableCell key={thKey} align="center">
-                      <Stack direction="row" spacing={1} alignItems="center" justifyContent="center">
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        alignItems="center"
+                        justifyContent="center"
+                      >
                         <TextField
                           type="number"
                           size="small"
                           value={cell.value ?? 0}
                           onChange={(e) =>
                             updateCell(modelKey, thKey, {
-                              value: Number(e.target.value)
+                              value: Number(e.target.value),
                             })
                           }
                           disabled={cell.disabled}
-                          sx={{ 
+                          sx={{
                             width: 70,
                             '& .MuiOutlinedInput-root': {
-                              fontSize: '0.875rem'
-                            }
+                              fontSize: '0.875rem',
+                            },
                           }}
                           inputProps={{ step: 0.01 }}
                         />
@@ -123,7 +141,7 @@ export function MLThresholdsTableField({ schema, formData = {}, onChange, fieldP
                           checked={cell.disabled ?? false}
                           onChange={(e) =>
                             updateCell(modelKey, thKey, {
-                              disabled: e.target.checked
+                              disabled: e.target.checked,
                             })
                           }
                         />
@@ -139,4 +157,3 @@ export function MLThresholdsTableField({ schema, formData = {}, onChange, fieldP
     </Paper>
   );
 }
-
