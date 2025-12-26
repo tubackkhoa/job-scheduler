@@ -18,7 +18,9 @@ PROJECT_NAME = "job-scheduler"
 hookspec = pluggy.HookspecMarker(PROJECT_NAME)
 
 scheduler_logger = logging.getLogger(PROJECT_NAME)
-scheduler_logger.addHandler(logging.StreamHandler())
+scheduler_handler = logging.StreamHandler()
+scheduler_handler.setLevel(logging.ERROR)
+scheduler_logger.addHandler(scheduler_handler)
 
 
 class PluginSpec:
