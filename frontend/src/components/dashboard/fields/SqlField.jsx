@@ -1,15 +1,26 @@
-import { Stack, Typography, Paper } from '@mui/material';
+import { useMemo, useState, useEffect } from 'react';
+import { Stack, Typography } from '@mui/material';
 import CodeMirror from '@uiw/react-codemirror';
 import { sql, PostgreSQL } from '@codemirror/lang-sql';
 
-/**
- * JSON Schema Form custom field
- *
- * props:
- * - formData: string
- * - onChange: (value, path?) => void
- */
 export function SqlField({ formData, onChange, schema, fieldPathId }) {
+  const extensions = useMemo(() => [sql({ dialect: PostgreSQL })], []);
+
+  // Local state for editor content during typing
+  const [localValue, setLocalValue] = useState(formData || '');
+
+  // Sync local state if formData changes externally
+  useEffect(() => {
+    setLocalValue(formData || '');
+  }, [formData]);
+
+  // Only notify parent on blur (when user finishes editing)
+  const handleBlur = () => {
+    if (localValue !== formData) {
+      onChange(localValue, fieldPathId?.path);
+    }
+  };
+
   return (
     <Stack spacing={1}>
       <Typography variant="subtitle2">{schema.title}</Typography>
@@ -26,13 +37,10 @@ export function SqlField({ formData, onChange, schema, fieldPathId }) {
         }}
         minHeight="200px"
         height="100%"
-        value={formData}
-        extensions={[
-          sql({
-            dialect: PostgreSQL, // DuckDB-compatible
-          }),
-        ]}
-        onChange={(value) => onChange(value, fieldPathId?.path)}
+        value={localValue}
+        extensions={extensions}
+        onChange={(value) => setLocalValue(value)} // update local only
+        onBlur={handleBlur} // sync on blur
         basicSetup={{
           lineNumbers: true,
           highlightActiveLine: true,
