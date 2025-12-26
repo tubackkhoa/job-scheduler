@@ -108,16 +108,16 @@ app.add_middleware(
 )
 
 
-@app.websocket("/ws/logs/{plugin_id}/{session_id}")
-async def websocket_logs_endpoint(websocket: WebSocket, plugin_id: int, session_id: int):
-    job_id = f"{plugin_id}/{session_id}"
-    await manager.connect(websocket, job_id)
+@app.websocket("/ws/logs/{plugin_id}/{session_id}/{job_id}")
+async def websocket_logs_endpoint(websocket: WebSocket, plugin_id: int, session_id: int, job_id: int):
+    scheduler_job_id = f"{plugin_id}/{session_id}/{job_id}"
+    await manager.connect(websocket, scheduler_job_id)
     try:
         while True:
             # Keep connection alive; you can also handle client messages here if needed
             await websocket.receive_text()
     except WebSocketDisconnect:
-        manager.disconnect(websocket, job_id)
+        manager.disconnect(websocket, scheduler_job_id)
 
 
 @app.get("/plugins")
@@ -335,8 +335,12 @@ def update_config(plugin_manager: PluginManagerState, job_id: int, payload: dict
             return {"error": "Plugin not found"}
         config = plugin.config(payload.get("config"))
         if job_id == 0:
+            # Accept both userId (legacy) and sessionId (new)
+            session_id = payload.get("sessionId") or payload.get("userId")
+            if not session_id:
+                raise HTTPException(status_code=400, detail="sessionId or userId is required")
             plugin_manager.add_job(
-                payload["userId"],
+                session_id,
                 plugin_id,
                 config.model_dump_json(),
                 payload.get("description"),
@@ -349,10 +353,12 @@ def update_config(plugin_manager: PluginManagerState, job_id: int, payload: dict
         raise HTTPException(status_code=500, detail=f"Failed to update config: {str(e)}")
 
 
-@app.get("/api/logs/{job_id}")
+@app.get("/api/logs/{plugin_id}/{session_id}/{job_id}")
 def search_logs(
     log_service: LogServiceState,
-    job_id: str,
+    plugin_id: int,
+    session_id: int,
+    job_id: int,
     search: Optional[str] = None,
     offset: Optional[int] = None,
     limit: int = 1000,
@@ -360,14 +366,15 @@ def search_logs(
     """
     Search logs for a job_id.
     Query params:
-    - job_id: job identifier (format: plugin_id/session_id, e.g., "5/1")
+    - job_id: job identifier (format: plugin_id/session_id/job_id, e.g., "5/1/10")
     - search: text to search for (optional)
     - offset: start from this offset (optional)
     - limit: max results (default 1000)
     """
     try:
+        scheduler_job_id = f"{plugin_id}/{session_id}/{job_id}"
         result = log_service.search_logs(
-            job_id=job_id,
+            job_id=scheduler_job_id,
             search_text=search,
             offset=offset,
             limit=limit,

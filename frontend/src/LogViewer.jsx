@@ -48,7 +48,7 @@ export default function LogViewer({
   const fetchHistoricalLogs = useCallback(
     async (offset = null, search = null, limit = 100) => {
       if (!jobInstanceId) return null;
-      const logJobId = jobInstanceId.split('/').join('_');
+      // jobInstanceId format: "plugin_id/session_id/job_id"
       setIsLoading(true);
       try {
         const params = new URLSearchParams();
@@ -57,7 +57,7 @@ export default function LogViewer({
         params.append('limit', limit.toString());
 
         const response = await fetch(
-          `${API_BASE_URL}/api/logs/${logJobId}?${params.toString()}`
+          `${API_BASE_URL}/api/logs/${jobInstanceId}?${params.toString()}`
         );
         if (!response.ok) {
           throw new Error('Failed to fetch logs');

@@ -152,7 +152,7 @@ class PluginManager:
     @classmethod
     def run_plugin_job(cls, package: str, scheduler_job_id: str):
         """
-        Wrapper to run a plugin's 'run' method synchronously within asyncio event loop,
+        Wrapper to run a plugin's 'run' method asynchronously,
         fetching config from the active job for the user/plugin.
         """
         plugin = cls.manager.get_plugin(package)
@@ -218,10 +218,13 @@ class PluginManager:
             self.add_job_instance(job, plugin)
 
     def add_job_instance(self, job: Job, plugin: Plugin):
-        scheduler_job_id = f"{plugin.id}/{job.session_id}"
+        # Use unique scheduler_job_id per job to allow multiple active configs
+        scheduler_job_id = f"{plugin.id}/{job.session_id}/{job.id}"
 
         if self.scheduler.get_job(scheduler_job_id) is None:
-            # make sure job run 1 time
+            # Allow multiple instances to run concurrently
+            # Note: max_instances controls how many concurrent executions of the SAME job are allowed
+            # Different jobs (different plugin/session combos) can always run in parallel
             self.scheduler.add_job(
                 self.run_plugin_job,
                 "interval",
@@ -230,8 +233,8 @@ class PluginManager:
                 next_run_time=None,
                 id=scheduler_job_id,
                 name=scheduler_job_id,
-                coalesce=True,
-                max_instances=1,
+                coalesce=False,  # Changed to False to allow queuing if job is running
+                max_instances=10,  # Allow up to 10 concurrent instances of the same job
                 replace_existing=True,
             )
 
@@ -254,7 +257,7 @@ class PluginManager:
                     job.description = description  # type: ignore
                 # update the active config
                 if bool(job.active):
-                    scheduler_job_id = f"{job.plugin_id}/{job.session_id}"
+                    scheduler_job_id = f"{job.plugin_id}/{job.session_id}/{job.id}"
                     self._active_job_cache[scheduler_job_id] = str(job.config)
                 session.commit()
 
@@ -265,27 +268,22 @@ class PluginManager:
                 return
             plugin_id = job.plugin_id
             session_id = job.session_id
-            scheduler_job_id = f"{plugin_id}/{session_id}"
+            scheduler_job_id = f"{plugin_id}/{session_id}/{job_id}"
             session.delete(job)
             session.commit()
 
-            # If no other jobs remain for this user/plugin, remove scheduled job
-            remaining_jobs = (
-                session.query(Job)
-                .filter(
-                    Job.plugin_id == plugin_id,
-                    Job.session_id == session_id,
-                )
-                .count()
-            )
-            if remaining_jobs == 0:
+            # Remove the specific job from scheduler
+            try:
                 self.scheduler.remove_job(scheduler_job_id)
-                self._active_job_cache.pop(scheduler_job_id)
+                self._active_job_cache.pop(scheduler_job_id, None)
 
                 # remove handler for this logger
                 logger = logging.getLogger(scheduler_job_id)
                 if self.log_handler:
                     logger.removeHandler(self.log_handler)
+            except Exception:
+                # Job might not be in scheduler
+                pass
 
     def activate_job(self, job_id: int):
         with Session(self.db_engine) as session:
@@ -293,24 +291,48 @@ class PluginManager:
             if not job:
                 return
 
-            # Deactivate other active jobs for the same user/plugin
-            session.execute(
-                update(Job)
-                .where(
-                    Job.active == 1,
-                    Job.plugin_id == job.plugin_id,
-                    Job.session_id == job.session_id,
-                )
-                .values(active=0)
-            )
+            # Allow multiple active jobs - don't deactivate others
+            # Old behavior (single active job): deactivate other jobs first
+            # session.execute(
+            #     update(Job)
+            #     .where(
+            #         Job.active == 1,
+            #         Job.plugin_id == job.plugin_id,
+            #         Job.session_id == job.session_id,
+            #     )
+            #     .values(active=0)
+            # )
 
             job.active = 1  # type: ignore
             session.commit()
 
-            # this is active config
-            scheduler_job_id = f"{job.plugin_id}/{job.session_id}"
+            # Use unique scheduler_job_id per job to allow multiple active configs
+            scheduler_job_id = f"{job.plugin_id}/{job.session_id}/{job.id}"
             self._active_job_cache[scheduler_job_id] = str(job.config)
-            self.scheduler.resume_job(scheduler_job_id)
+
+            # Check if this specific job's scheduler exists, if not create it
+            plugin = session.get(Plugin, job.plugin_id)
+            if plugin and self.scheduler.get_job(scheduler_job_id) is None:
+                self.scheduler.add_job(
+                    self.run_plugin_job,
+                    "interval",
+                    seconds=plugin.interval,
+                    args=[plugin.package, scheduler_job_id],
+                    next_run_time=None,
+                    id=scheduler_job_id,
+                    name=scheduler_job_id,
+                    coalesce=False,
+                    max_instances=10,
+                    replace_existing=True,
+                )
+                # add handler for this logger
+                logger = logging.getLogger(scheduler_job_id)
+                if self.log_handler:
+                    logger.addHandler(self.log_handler)
+
+            # Resume the job
+            if self.scheduler.get_job(scheduler_job_id):
+                self.scheduler.resume_job(scheduler_job_id)
 
     def deactivate_job(self, job_id: int):
         with Session(self.db_engine) as session:
@@ -320,9 +342,13 @@ class PluginManager:
 
             # so no config is active
             if bool(job.active):
-                scheduler_job_id = f"{job.plugin_id}/{job.session_id}"
-                self._active_job_cache.pop(scheduler_job_id)
-                self.scheduler.pause_job(scheduler_job_id)
+                scheduler_job_id = f"{job.plugin_id}/{job.session_id}/{job.id}"
+                self._active_job_cache.pop(scheduler_job_id, None)
+                try:
+                    self.scheduler.pause_job(scheduler_job_id)
+                except Exception:
+                    # Job might not be in scheduler
+                    pass
 
             job.active = 0  # type: ignore
             session.commit()

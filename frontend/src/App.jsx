@@ -197,9 +197,8 @@ export default function App() {
         for (const version of newConfigVersions) {
           if (version.id === targetJobId) {
             version.active = activation ? 1 : 0;
-          } else {
-            version.active = 0;
           }
+          // Don't deactivate other jobs - allow multiple active jobs
         }
         setConfigVersions(newConfigVersions);
         setJobId(targetJobId);
