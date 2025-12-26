@@ -162,6 +162,22 @@ class PluginManager:
 
         return plugin
 
+    def add_plugin(self, package: str, interval: int, description: Optional[str] = None) -> int:
+        self.load_plugin(package)
+        # Insert into DB
+        with Session(self.db_engine) as session:
+            plugin_row = Plugin(
+                package=package,
+                interval=interval,
+                description=description,
+            )
+
+            session.add(plugin_row)
+            session.flush()  # get ID
+            plugin_id = plugin_row.id
+            session.commit()
+            return plugin_id
+
     def add_job(
         self,
         session_id: int,

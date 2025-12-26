@@ -147,28 +147,14 @@ def create_plugin(plugin_manager: PluginManagerState, payload: dict = Body(...))
             detail="Missing required fields: package, interval",
         )
 
-    package = payload["package"]
-    interval = payload["interval"]
-    description = payload.get("description")
-
     # Load into manager
     try:
-        plugin_manager.load_plugin(package)
-        # Insert into DB
-        with Session(plugin_manager.db_engine) as session:
-            plugin_row = Plugin(
-                package=package,
-                interval=interval,
-                description=description,
-            )
-
-            session.add(plugin_row)
-            session.flush()  # get ID
-            plugin_id = plugin_row.id
-            session.commit()
-            return {
-                "id": plugin_id,
-            }
+        plugin_id = plugin_manager.add_plugin(
+            payload["package"], int(payload["interval"]), payload.get("description")
+        )
+        return {
+            "id": plugin_id,
+        }
     except Exception as e:
         raise HTTPException(
             status_code=400,
