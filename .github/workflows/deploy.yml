@@ -42,17 +42,10 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-      - &gitsubmodules
-        name: Checkout Repository (with submodules)
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - &addsubmodules
-        name: Update submodules to tracked branch
+      - &gitclone
+        name: Clone submodules
         run: |
-          git submodule update --init --remote
+          git clone -b ${{ env.repo_clone_branch }} ${{ env.repo_clone }}
 
       - &docker_login
         name: Login DockerHub
@@ -230,10 +223,13 @@ jobs:
   # ==========================
   build_docker:
     runs-on: ubuntu-latest
+    env:
+      repo_clone_branch: lab
+      repo_clone: git@github.com:oraichain/alpha-miner.git
     steps:
+      - *checkout
       - *setupssh
-      - *gitsubmodules
-      - *addsubmodules
+      - *gitclone
       - *docker_login
       - *set_short_commit
       - *build_push
