@@ -241,7 +241,7 @@ class PluginManager:
                 session_id=session_id,
                 plugin_id=plugin_id,
                 config=config,
-                active=0,
+                active=False,
                 description=description,
             )
             session.add(job)

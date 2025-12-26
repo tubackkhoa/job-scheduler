@@ -175,7 +175,7 @@ def schema(plugin_manager: PluginManagerState, session_id: int, plugin_id: int):
                 # add empty config so that when saving it will be new job
                 configs.append(
                     Job(
-                        active=0,
+                        active=False,
                         description="",
                         id=0,
                         config=plugin.config().model_dump_json(),
