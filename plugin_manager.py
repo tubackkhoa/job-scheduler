@@ -89,7 +89,7 @@ class PluginManager:
         all_jobs = self.get_all_jobs()
 
         for job in all_jobs:
-            self.add_job_instance(job, look_up[job.plugin_id])  # type: ignore
+            self.add_job_instance(job, look_up[job.plugin_id])
 
     def job_listener(self, event: JobExecutionEvent):
         level = logging.INFO
@@ -107,7 +107,6 @@ class PluginManager:
         elif event.code == EVENT_JOB_ERROR:
             level = logging.ERROR
             message = f"Job failed with exception: {event.exception}"
-        
 
         log_event = logging.LogRecord(
             event.job_id,
@@ -252,9 +251,9 @@ class PluginManager:
         with Session(self.db_engine) as session:
             job = session.get(Job, id)
             if job:
-                job.config = config  # type: ignore
+                job.config = config
                 if description:
-                    job.description = description  # type: ignore
+                    job.description = description
                 # update the active config
                 if bool(job.active):
                     scheduler_job_id = f"{job.plugin_id}/{job.session_id}/{job.id}"
@@ -303,7 +302,7 @@ class PluginManager:
             #     .values(active=0)
             # )
 
-            job.active = 1  # type: ignore
+            job.active = True
             session.commit()
 
             # Use unique scheduler_job_id per job to allow multiple active configs
@@ -350,7 +349,7 @@ class PluginManager:
                     # Job might not be in scheduler
                     pass
 
-            job.active = 0  # type: ignore
+            job.active = False
             session.commit()
 
     def get_jobs_for_plugin_and_user(self, plugin_id: int, session_id: int):

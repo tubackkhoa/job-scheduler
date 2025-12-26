@@ -1,12 +1,12 @@
 from sqlalchemy import (
-    Column,
+    Boolean,
     Integer,
     Text,
     CheckConstraint,
     text,
     Sequence,
 )
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import declarative_base, mapped_column, Mapped
 
 Base = declarative_base()
 
@@ -14,22 +14,25 @@ Base = declarative_base()
 class Plugin(Base):
     __tablename__ = "plugins"
 
-    id = Column(Integer, Sequence("plugins_id_seq"), primary_key=True)
-    package = Column(Text, nullable=False, unique=True)
-    interval = Column(Integer, nullable=False)
-    description = Column(Text)
+    id: Mapped[int] = mapped_column(Integer, Sequence("plugins_id_seq"), primary_key=True)
+    package: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    interval: Mapped[int] = mapped_column(Integer, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
 
-    __table_args__ = (CheckConstraint("interval > 0", name="ck_plugins_interval_positive"),)
+    __table_args__ = (
+        CheckConstraint(
+            "interval > 0",
+            name="ck_plugins_interval_positive",
+        ),
+    )
 
 
 class Job(Base):
     __tablename__ = "jobs"
 
-    id = Column(Integer, Sequence("jobs_id_seq"), primary_key=True)
-    session_id = Column(Integer, nullable=False)
-    plugin_id = Column(Integer, nullable=False)
-    description = Column(Text)
-    config = Column(Text, nullable=True)
-    active = Column(Integer, nullable=False, server_default=text("1"))
-
-    __table_args__ = (CheckConstraint("active IN (0,1)", name="ck_jobs_active_bool"),)
+    id: Mapped[int] = mapped_column(Integer, Sequence("jobs_id_seq"), primary_key=True)
+    session_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    plugin_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    config: Mapped[str | None] = mapped_column(Text, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
