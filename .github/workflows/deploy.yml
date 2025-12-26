@@ -46,9 +46,13 @@ jobs:
         name: Checkout Repository (with submodules)
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
           submodules: recursive
           fetch-depth: 0
+
+      - &addsubmodules
+        name: Update submodules to tracked branch
+        run: |
+          git submodule update --init --remote
 
       - &docker_login
         name: Login DockerHub
@@ -231,6 +235,7 @@ jobs:
       # - *setup_pnpm
       - *setupssh
       - *gitsubmodules
+      - *addsubmodules
       - *docker_login
       - *set_short_commit
       - *build_push
