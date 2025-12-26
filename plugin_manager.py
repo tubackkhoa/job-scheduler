@@ -6,6 +6,7 @@ import sys
 from typing import Any, Dict, Optional
 import pluggy
 from pydantic import BaseModel
+from apscheduler.util import undefined
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import Engine, update
 from sqlalchemy.orm import Session
@@ -121,6 +122,7 @@ class PluginManager:
         fetching config from the active job for the user/plugin.
         """
         plugin = cls.get_plugin_instance(package)
+
         if plugin is None:
             return None
 
@@ -132,8 +134,9 @@ class PluginManager:
 
         config = plugin.config(json.loads(job_config))
 
-        logger = logging.getLogger(cls.get_job_scheduler_id(job_id))
+        job_scheduler_id = cls.get_job_scheduler_id(job_id)
 
+        logger = logging.getLogger(job_scheduler_id)
         return asyncio.run(plugin.run(config, logger))
 
     @classmethod
@@ -202,9 +205,17 @@ class PluginManager:
 
     def add_job_instance(self, job: Job, plugin: Plugin):
 
+        # update cache
+        self._active_job_cache[job.id] = job.config
+
         job_scheduler_id = self.get_job_scheduler_id(job.id)
         if self.scheduler.get_job(job_scheduler_id) is not None:
             return  # job already exists
+
+        # add handler for this logger
+        logger = logging.getLogger(job_scheduler_id)
+        if self.log_handler:
+            logger.addHandler(self.log_handler)
 
         # replace_existing allow override
         self.scheduler.add_job(
@@ -212,22 +223,13 @@ class PluginManager:
             "interval",
             seconds=plugin.interval,
             args=[plugin.package, job.id],
-            next_run_time=None,
+            next_run_time=undefined if job.active else None,
             id=job_scheduler_id,
             name=job_scheduler_id,
             coalesce=True,
             max_instances=1,  # Single job for each id
             replace_existing=True,
         )
-
-        # add handler for this logger
-        logger = logging.getLogger(job_scheduler_id)
-        if self.log_handler:
-            logger.addHandler(self.log_handler)
-
-        # active job
-        if job.active:
-            self.scheduler.resume_job(job_scheduler_id)
 
     def update_job(self, id: int, config: str, description: Optional[str] = None):
         with Session(self.db_engine) as session:
