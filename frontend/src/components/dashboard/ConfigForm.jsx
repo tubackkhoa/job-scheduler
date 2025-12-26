@@ -162,7 +162,8 @@ export const ConfigForm = forwardRef(function ConfigForm(
               if (schema['ui:options']) {
                 const isHidden = evaluate(
                   schema['ui:options'].hidden,
-                  registry.formContext
+                  registry.formContext,
+                  false
                 );
                 if (isHidden) {
                   return null;

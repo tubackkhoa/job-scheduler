@@ -106,6 +106,14 @@ const LEVEL_COLOR_MAP = {
 export const getLevelColor = (level) =>
   LEVEL_COLOR_MAP[level.toUpperCase()] ?? LEVEL_COLOR_MAP.NOTSET;
 
-export const evaluate = (expr, context) => {
-  return Function(...Object.keys(context), expr)(...Object.values(context));
+export const evaluate = (expr, context, defaultValue) => {
+  try {
+    return Function(
+      ...Object.keys(context),
+      `return ${expr}`
+    )(...Object.values(context));
+  } catch (error) {
+    console.error('Expression evaluation error:', error);
+    return defaultValue;
+  }
 };
