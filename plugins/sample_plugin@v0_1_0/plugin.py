@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import pluggy
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 from typing import List
 import sqlglot
 from .sql_process import generate_sql
@@ -12,7 +12,6 @@ hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
 
 
 class Config(BaseModel):
-    sql: str = Field("1.0", json_schema_extra={"ui:field": "Sql"})
     warmup_bars: int = 150
     extra_bars: int = 1
     quote_asset: str = "USDT"
@@ -20,14 +19,16 @@ class Config(BaseModel):
         default_factory=list,
         json_schema_extra={"ui:field": "MultiSelect", "default": "BTC,ETH,SOL,BNB,LINK"},
     )
+    sql: str = Field("1.0", json_schema_extra={"ui:field": "Sql"})
 
-    @model_validator(mode="after")
-    def validate_sql_against_config(self):
+    @field_validator("sql", mode="after")
+    @classmethod
+    def validate_sql(cls, sql: str, info: ValidationInfo):
         """Validate raw_sql using sqlglot for DuckDB SQL syntax."""
-        sql = generate_sql(self.sql, self.model_dump(exclude={"sql"}))
+        sql = generate_sql(sql, info.data)
         try:
             sqlglot.parse_one(sql)
-            return self
+            return sql
         except Exception as e:
             raise ValueError(f"Error validating SQL: {str(e)}")
 
@@ -47,7 +48,7 @@ class Plugin:
     @hookimpl
     @classmethod
     async def run(cls, config: Config, logger: logging.Logger):
-        sql = generate_sql(config.sql, config.model_dump(exclude={"sql"}))
+        sql = generate_sql(config.sql, config.model_dump())
         logger.info(sql)
 
         return True
