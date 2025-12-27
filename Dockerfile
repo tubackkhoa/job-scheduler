@@ -1,5 +1,6 @@
 # Use Python 3.11 as base image
-FROM python:3.11-slim
+FROM python:3.12-slim
+
 
 # Set working directory
 WORKDIR /app
@@ -19,6 +20,9 @@ RUN uv sync
 
 # Copy application code
 COPY . .
+
+# Install submodule as editable package using uv
+RUN uv pip install -e alpha-miner
 
 # Expose the FastAPI port
 EXPOSE 8000
