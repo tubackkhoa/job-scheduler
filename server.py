@@ -111,18 +111,19 @@ app.add_middleware(
 
 @app.get("/health")
 def health_check(plugin_manager: PluginManagerState):
-   
+
     from sqlalchemy import text
 
     try:
         # Check database connection
         db_engine = plugin_manager.db_engine
         with db_engine.connect() as conn:
-            conn.execute(text("SELECT 1"))        
+            conn.execute(text("SELECT 1"))
         return {
             "status": "healthy",
             "database": "connected",
             "plugin_manager": "initialized",
+            "plugins_count": len(plugin_manager.get_plugin_names()),
         }
     except Exception as e:
         raise HTTPException(
@@ -184,6 +185,24 @@ def create_plugin(plugin_manager: PluginManagerState, payload: dict = Body(...))
         )
 
 
+@app.post("/template/{package}")
+def template(plugin_manager: PluginManagerState, package: str, payload: dict = Body(...)):
+    plugin_instance = plugin_manager.get_plugin_instance(package)
+    template_str = payload.get("template", "")
+    if plugin_instance is None:
+        return {"result": template_str}
+
+    try:
+        template_engine = plugin_instance.env().from_string(template_str)
+        result = template_engine.render(**payload["params"])
+        return {"result": result}
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to load plugin: {str(e)}",
+        )
+
+
 @app.get("/schema/{session_id}/{plugin_id}")
 def schema(plugin_manager: PluginManagerState, session_id: int, plugin_id: int):
     plugin_item = plugin_manager.get_plugin_by_id(plugin_id)
@@ -235,6 +254,22 @@ def reload_plugin(plugin_manager: PluginManagerState, package: str):
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to reload plugin: {str(e)}")
+
+
+
+@app.delete("/plugins/{plugin_id}")
+def delete_plugin(plugin_manager: PluginManagerState, plugin_id: int):
+    """
+    Delete a plugin from the database and unload it from memory.
+    Also removes all associated jobs.
+    """
+    try:
+        plugin_manager.delete_plugin(plugin_id)
+        return {"success": True, "message": f"Plugin with id {plugin_id} deleted"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete plugin: {str(e)}")
 
 
 @app.post("/config/{job_id}")
