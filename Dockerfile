@@ -20,6 +20,9 @@ RUN uv sync
 # Copy application code
 COPY . .
 
+
+RUN pip install -e alpha-miner
+
 # Expose the FastAPI port
 EXPOSE 8000
 
