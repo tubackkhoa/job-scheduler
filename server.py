@@ -123,7 +123,6 @@ def health_check(plugin_manager: PluginManagerState):
             "status": "healthy",
             "database": "connected",
             "plugin_manager": "initialized",
-            "plugins_count": len(plugins),
         }
     except Exception as e:
         raise HTTPException(

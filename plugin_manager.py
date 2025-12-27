@@ -224,6 +224,8 @@ class PluginManager:
             except Exception as e:
                 # show error to terminal to check but keep running
                 scheduler_logger.error(e, exc_info=True)
+                # Raise exception to prevent saving invalid plugin to database
+                raise RuntimeError(f"Failed to load plugin '{package}': {str(e)}") from e
 
         return plugin
 
