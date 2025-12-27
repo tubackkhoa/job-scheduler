@@ -237,6 +237,22 @@ def reload_plugin(plugin_manager: PluginManagerState, package: str):
         raise HTTPException(status_code=500, detail=f"Failed to reload plugin: {str(e)}")
 
 
+
+@app.delete("/plugins/{plugin_id}")
+def delete_plugin(plugin_manager: PluginManagerState, plugin_id: int):
+    """
+    Delete a plugin from the database and unload it from memory.
+    Also removes all associated jobs.
+    """
+    try:
+        plugin_manager.delete_plugin(plugin_id)
+        return {"success": True, "message": f"Plugin with id {plugin_id} deleted"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete plugin: {str(e)}")
+
+
 @app.post("/config/{job_id}")
 def update_config(plugin_manager: PluginManagerState, job_id: int, payload: dict = Body(...)):
     try:

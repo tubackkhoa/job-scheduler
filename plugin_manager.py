@@ -378,3 +378,34 @@ class PluginManager:
         with Session(self.db_engine) as session:
             jobs = session.query(Job).all()
             return jobs
+
+    def delete_plugin(self, plugin_id: int):
+        """
+        Delete a plugin from the database and unload it from memory.
+        Also removes all associated jobs.
+        """
+        with Session(self.db_engine) as session:
+            plugin = session.get(Plugin, plugin_id)
+            if not plugin:
+                raise ValueError(f"Plugin with id {plugin_id} not found")
+
+            # Get all jobs for this plugin
+            jobs = session.query(Job).filter(Job.plugin_id == plugin_id).all()
+
+            # Remove all jobs from scheduler and delete them
+            for job in jobs:
+                job_scheduler_id = self.get_job_scheduler_id(job.id)
+                if self.scheduler.get_job(job_scheduler_id) is not None:
+                    self.scheduler.remove_job(job_scheduler_id)
+                    self._active_job_cache.pop(job.id, None)
+                    # Remove logger handlers
+                    logger = logging.getLogger(job_scheduler_id)
+                    logger.handlers.clear()
+                session.delete(job)
+
+            # Unload plugin from memory
+            self.unload_plugin(plugin.package)
+
+            # Delete plugin from database
+            session.delete(plugin)
+            session.commit()
