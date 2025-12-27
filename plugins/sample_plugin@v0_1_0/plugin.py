@@ -1,10 +1,11 @@
-import asyncio
 import logging
 import pluggy
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 from typing import List
 import sqlglot
-from .sql_process import generate_sql
+from datetime import datetime
+from jinja2 import Environment, BaseLoader
+
 
 PROJECT_NAME = "alpha-miner"
 
@@ -26,13 +27,28 @@ class Config(BaseModel):
     def validate_sql(cls, sql: str, info: ValidationInfo):
         """Validate raw_sql using sqlglot for DuckDB SQL syntax."""
         try:
-            sqlglot.parse_one(generate_sql(sql, info.data))
+            template_engine = Plugin.env().from_string(sql)
+            sqlglot.parse_one(template_engine.render(**info.data))
             return sql
         except Exception as e:
             raise ValueError(f"Error validating SQL: {str(e)}")
 
 
 class Plugin:
+
+    _env = Environment(
+        loader=BaseLoader(),
+        autoescape=False,
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
+    _env.globals["datetime"] = datetime
+    _env.globals["get_users"] = lambda: ["tupt", "cuongnv"]
+
+    @hookimpl
+    @classmethod
+    def env(cls) -> Environment:
+        return cls._env
 
     @hookimpl
     @classmethod
@@ -47,7 +63,6 @@ class Plugin:
     @hookimpl
     @classmethod
     async def run(cls, config: Config, logger: logging.Logger):
-        sql = generate_sql(config.sql, config.model_dump())
-        logger.info(sql)
+        logger.info(config.model_dump())
 
         return True

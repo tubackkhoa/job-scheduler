@@ -8,6 +8,7 @@ import pluggy
 from pydantic import BaseModel
 from apscheduler.util import undefined
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from jinja2 import Environment
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 from apscheduler.events import (
@@ -29,6 +30,10 @@ scheduler_logger.addHandler(logging.StreamHandler())
 
 
 class PluginSpec:
+
+    @hookspec
+    def env(cls) -> Environment: ...
+
     @hookspec
     def schema(cls) -> dict[str, Any]: ...
 

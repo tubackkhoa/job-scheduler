@@ -111,18 +111,19 @@ app.add_middleware(
 
 @app.get("/health")
 def health_check(plugin_manager: PluginManagerState):
-   
+
     from sqlalchemy import text
 
     try:
         # Check database connection
         db_engine = plugin_manager.db_engine
         with db_engine.connect() as conn:
-            conn.execute(text("SELECT 1"))        
+            conn.execute(text("SELECT 1"))
         return {
             "status": "healthy",
             "database": "connected",
             "plugin_manager": "initialized",
+            "plugins_count": len(plugin_manager.get_plugin_names()),
         }
     except Exception as e:
         raise HTTPException(
@@ -177,6 +178,24 @@ def create_plugin(plugin_manager: PluginManagerState, payload: dict = Body(...))
         return {
             "id": plugin_id,
         }
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to load plugin: {str(e)}",
+        )
+
+
+@app.post("/template/{package}")
+def template(plugin_manager: PluginManagerState, package: str, payload: dict = Body(...)):
+    plugin_instance = plugin_manager.get_plugin_instance(package)
+    template_str = payload.get("template", "")
+    if plugin_instance is None:
+        return {"result": template_str}
+
+    try:
+        template_engine = plugin_instance.env().from_string(template_str)
+        result = template_engine.render(**payload["params"])
+        return {"result": result}
     except Exception as e:
         raise HTTPException(
             status_code=400,
