@@ -227,9 +227,6 @@ def schema(plugin_manager: PluginManagerState, session_id: int, plugin_id: int):
 
             # Built-in Jinja tags are provided by extensions
             env = plugin.env()
-            tags = set()
-            for ext in env.extensions.values():
-                tags.update(getattr(ext, "tags", []))
 
             return {
                 "schema": plugin.schema(),
@@ -238,7 +235,13 @@ def schema(plugin_manager: PluginManagerState, session_id: int, plugin_id: int):
                     "globals": sorted(env.globals.keys()),
                     "filters": sorted(env.filters.keys()),
                     "tests": sorted(env.tests.keys()),
-                    "tags": sorted(tags),
+                    "tags": sorted(
+                        set(
+                            tag
+                            for ext in env.extensions.values()
+                            for tag in getattr(ext, "tags", [])
+                        )
+                    ),
                 },
             }
     except Exception as e:

@@ -46,6 +46,11 @@ class Plugin:
     )
     _env.globals["datetime"] = datetime
     _env.globals["get_users"] = lambda: ["tupt", "cuongnv"]
+    _env.filters["in_clause"] = lambda values: (
+        "()"
+        if not values
+        else "(" + ",".join('"' + str(v).replace('"', '\\"') + '"' for v in values) + ")"
+    )
 
     @hookimpl
     @classmethod
