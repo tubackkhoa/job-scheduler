@@ -199,7 +199,7 @@ def template(plugin_manager: PluginManagerState, package: str, payload: dict = B
     except Exception as e:
         raise HTTPException(
             status_code=400,
-            detail=f"Failed to load plugin: {str(e)}",
+            detail=f"Failed to render template: {str(e)}",
         )
 
 
@@ -254,7 +254,6 @@ def reload_plugin(plugin_manager: PluginManagerState, package: str):
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to reload plugin: {str(e)}")
-
 
 
 @app.delete("/plugins/{plugin_id}")
