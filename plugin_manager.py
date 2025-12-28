@@ -50,7 +50,7 @@ class PluginManager:
     """
 
     # static cache of job configs, to remove access to database
-    # TODO: move this to redis to cache across multiple workers, later can implement locking to prevent multiple runs of same job
+    # TODO: because schedule only make sure 1 job is added to queue, but can not verify job is done on a machine
     # @classmethod
     # def run_plugin_job(cls, job_id: int):
     #     lock = cls.redis_client.lock(
