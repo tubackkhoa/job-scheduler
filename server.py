@@ -224,9 +224,22 @@ def schema(plugin_manager: PluginManagerState, session_id: int, plugin_id: int):
                         session_id=session_id,
                     )
                 )
+
+            # Built-in Jinja tags are provided by extensions
+            env = plugin.env()
+            tags = set()
+            for ext in env.extensions.values():
+                tags.update(getattr(ext, "tags", []))
+
             return {
                 "schema": plugin.schema(),
                 "configs": configs,
+                "env": {
+                    "globals": sorted(env.globals.keys()),
+                    "filters": sorted(env.filters.keys()),
+                    "tests": sorted(env.tests.keys()),
+                    "tags": sorted(tags),
+                },
             }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load schema: {str(e)}")
