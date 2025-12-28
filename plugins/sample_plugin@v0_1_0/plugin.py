@@ -20,7 +20,9 @@ class Config(BaseModel):
         default_factory=list,
         json_schema_extra={"ui:field": "MultiSelect", "default": "BTC,ETH,SOL,BNB,LINK"},
     )
-    sql: str = Field("1.0", json_schema_extra={"ui:field": "Sql"})
+    sql: str = Field("SELECT 1", json_schema_extra={"ui:field": "Template", "type": "sql"})
+    json_template: str = Field("{}", json_schema_extra={"ui:field": "Template", "type": "json"})
+    yaml_template: str = Field("root:1", json_schema_extra={"ui:field": "Template", "type": "yaml"})
 
     @field_validator("sql", mode="after")
     @classmethod
