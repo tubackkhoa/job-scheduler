@@ -250,7 +250,7 @@ class PluginManager:
 
     @classmethod
     def stop_job(cls, job_id: int, force_close: bool):
-        task = cls._active_task_cache[job_id]
+        task = cls._active_task_cache.get(job_id)
         if task and force_close and not task.done():
             task.cancel(f"deactivate")
         cls._active_task_cache.pop(job_id)
