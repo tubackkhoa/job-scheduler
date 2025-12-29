@@ -253,7 +253,7 @@ class PluginManager:
         task = cls._active_task_cache.get(job_id)
         if task and force_close and not task.done():
             task.cancel(f"deactivate")
-        cls._active_task_cache.pop(job_id)
+        cls._active_task_cache.pop(job_id, None)
 
     def add_plugin(self, package: str, interval: int, description: Optional[str] = None) -> int:
         self.load_plugin(package)
@@ -352,7 +352,7 @@ class PluginManager:
         job_scheduler_id = self.get_job_scheduler_id(job_id)
         if self.scheduler.get_job(job_scheduler_id) is not None:
             self.scheduler.remove_job(job_scheduler_id)
-            self._active_job_cache.pop(job_id)
+            self._active_job_cache.pop(job_id, None)
 
             self.cancel_job(job_id, self.close_job_on_deactivate)
             # remove all handlers for this logger to save memory
