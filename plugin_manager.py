@@ -214,7 +214,7 @@ class PluginManager:
         # Ensure logger level is set (default to INFO if not set)
         if logger.level == logging.NOTSET:
             logger.setLevel(logging.INFO)
-        
+
         task = asyncio.create_task(plugin.run(config, logger))
         cls._active_task_cache[job_id] = task
         return await task
@@ -249,7 +249,7 @@ class PluginManager:
         return plugin
 
     @classmethod
-    def stop_job(cls, job_id: int, force_close: bool):
+    def cancel_job(cls, job_id: int, force_close: bool):
         task = cls._active_task_cache.get(job_id)
         if task and force_close and not task.done():
             task.cancel(f"deactivate")
@@ -306,12 +306,11 @@ class PluginManager:
         logger.propagate = False
         if logger.level == logging.NOTSET:
             logger.setLevel(logging.INFO)
-        
-       
+
         existing_handlers = logger.handlers[:]
         for handler in existing_handlers:
             logger.removeHandler(handler)
-        
+
         # Add the handler - this handler uses record.name (job_scheduler_id) to determine file
         if self.log_handler:
             if self.log_handler not in logger.handlers:
@@ -355,7 +354,7 @@ class PluginManager:
             self.scheduler.remove_job(job_scheduler_id)
             self._active_job_cache.pop(job_id)
 
-            self.stop_job(job_id, self.close_job_on_deactivate)
+            self.cancel_job(job_id, self.close_job_on_deactivate)
             # remove all handlers for this logger to save memory
             logger = logging.getLogger(job_scheduler_id)
             logger.handlers.clear()
@@ -385,7 +384,7 @@ class PluginManager:
         # Pause the job
         job_scheduler_id = self.get_job_scheduler_id(job_id)
         self.scheduler.pause_job(job_scheduler_id)
-        self.stop_job(job_id, self.close_job_on_deactivate)
+        self.cancel_job(job_id, self.close_job_on_deactivate)
 
     def get_jobs_for_plugin_and_user(self, plugin_id: int, session_id: int):
         with Session(self.db_engine) as session:
@@ -437,7 +436,7 @@ class PluginManager:
                     self.scheduler.remove_job(job_scheduler_id)
                     self._active_job_cache.pop(job.id, None)
 
-                    self.stop_job(job.id, self.close_job_on_deactivate)
+                    self.cancel_job(job.id, self.close_job_on_deactivate)
                     # Remove logger handlers
                     logger = logging.getLogger(job_scheduler_id)
                     logger.handlers.clear()
