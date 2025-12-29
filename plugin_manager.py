@@ -211,6 +211,10 @@ class PluginManager:
         logger = logging.getLogger(job_scheduler_id)
         # prevent log propagation to root logger
         logger.propagate = False
+        # Ensure logger level is set (default to INFO if not set)
+        if logger.level == logging.NOTSET:
+            logger.setLevel(logging.INFO)
+        
         task = asyncio.create_task(plugin.run(config, logger))
         cls._active_task_cache[job_id] = task
         return await task
@@ -298,10 +302,20 @@ class PluginManager:
         if self.scheduler.get_job(job_scheduler_id) is not None:
             return  # job already exists
 
-        # add handler for this logger
         logger = logging.getLogger(job_scheduler_id)
+        logger.propagate = False
+        if logger.level == logging.NOTSET:
+            logger.setLevel(logging.INFO)
+        
+       
+        existing_handlers = logger.handlers[:]
+        for handler in existing_handlers:
+            logger.removeHandler(handler)
+        
+        # Add the handler - this handler uses record.name (job_scheduler_id) to determine file
         if self.log_handler:
-            logger.addHandler(self.log_handler)
+            if self.log_handler not in logger.handlers:
+                logger.addHandler(self.log_handler)
 
         # replace_existing allow override
         self.scheduler.add_job(
