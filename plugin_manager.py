@@ -108,7 +108,12 @@ class PluginManager:
         all_plugins = self.get_all_plugins()
         look_up = {}
         for plugin in all_plugins:
-            self.load_plugin(plugin.package)
+            print(f"Loading plugin: {plugin.package}")
+            try:
+                self.load_plugin(plugin.package)
+            except Exception as e:
+                logging.error(f"Error loading plugin: {e}", exc_info=True)
+                continue
             look_up[plugin.id] = plugin
 
         all_jobs = self.get_all_jobs()
