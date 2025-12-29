@@ -75,6 +75,7 @@ class PluginManager:
         db_engine: Engine,
         module_paths: Optional[list[str]] = None,
         log_handler: Optional[logging.Handler] = None,
+        close_job_on_deactivate=True,
         scheduler_kwargs: Optional[dict] = None,
     ) -> None:
 
@@ -85,7 +86,7 @@ class PluginManager:
                     sys.path.insert(0, path)
 
         self.db_engine = db_engine
-
+        self.close_job_on_deactivate = close_job_on_deactivate
         # Pass any additional user-provided args
         self.scheduler = AsyncIOScheduler(**(scheduler_kwargs or {}))
         self.scheduler.add_listener(
@@ -244,9 +245,9 @@ class PluginManager:
         return plugin
 
     @classmethod
-    def stop_job(cls, job_id: int):
+    def stop_job(cls, job_id: int, force_close: bool):
         task = cls._active_task_cache[job_id]
-        if task and not task.done():
+        if task and force_close and not task.done():
             task.cancel(f"deactivate")
         cls._active_task_cache.pop(job_id)
 
@@ -340,7 +341,7 @@ class PluginManager:
             self.scheduler.remove_job(job_scheduler_id)
             self._active_job_cache.pop(job_id)
 
-            self.stop_job(job_id)
+            self.stop_job(job_id, self.close_job_on_deactivate)
             # remove all handlers for this logger to save memory
             logger = logging.getLogger(job_scheduler_id)
             logger.handlers.clear()
@@ -370,7 +371,7 @@ class PluginManager:
         # Pause the job
         job_scheduler_id = self.get_job_scheduler_id(job_id)
         self.scheduler.pause_job(job_scheduler_id)
-        self.stop_job(job_id)
+        self.stop_job(job_id, self.close_job_on_deactivate)
 
     def get_jobs_for_plugin_and_user(self, plugin_id: int, session_id: int):
         with Session(self.db_engine) as session:
@@ -422,7 +423,7 @@ class PluginManager:
                     self.scheduler.remove_job(job_scheduler_id)
                     self._active_job_cache.pop(job.id, None)
 
-                    self.stop_job(job.id)
+                    self.stop_job(job.id, self.close_job_on_deactivate)
                     # Remove logger handlers
                     logger = logging.getLogger(job_scheduler_id)
                     logger.handlers.clear()
