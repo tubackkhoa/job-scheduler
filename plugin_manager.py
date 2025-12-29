@@ -11,14 +11,6 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from jinja2 import Environment
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
-from apscheduler.events import (
-    JobExecutionEvent,
-    EVENT_JOB_EXECUTED,
-    EVENT_JOB_ERROR,
-    EVENT_JOB_SUBMITTED,
-    EVENT_JOB_ADDED,
-    EVENT_JOB_REMOVED,
-)
 from models import Job, Plugin
 
 PROJECT_NAME = "job-scheduler"
@@ -64,6 +56,7 @@ class PluginManager:
     #         return asyncio.run(plugin.run(config, logger))
     #     finally:
     #         lock.release()
+
     _active_job_cache: Dict[int, str] = {}
     _active_task_cache: Dict[int, asyncio.Task] = {}
     # static pluggy manager, so that all pluginmanager share the same plugins
@@ -89,15 +82,6 @@ class PluginManager:
         self.close_job_on_deactivate = close_job_on_deactivate
         # Pass any additional user-provided args
         self.scheduler = AsyncIOScheduler(**(scheduler_kwargs or {}))
-        # self.scheduler.add_listener(
-        #     self.job_listener,
-        #     EVENT_JOB_ADDED
-        #     | EVENT_JOB_REMOVED
-        #     | EVENT_JOB_SUBMITTED
-        #     | EVENT_JOB_EXECUTED
-        #     | EVENT_JOB_ERROR,
-        # )
-
         self.log_handler = log_handler
 
     # reload all jobs from database
@@ -129,37 +113,6 @@ class PluginManager:
     def stop(self):
         if self.scheduler.running:
             self.scheduler.shutdown()
-
-    def job_listener(self, event: JobExecutionEvent):
-        level = logging.INFO
-        message = ""
-        if event.code == EVENT_JOB_ADDED:
-            message = f"Job added to scheduler (jobstore: {event.jobstore})"
-        elif event.code == EVENT_JOB_REMOVED:
-            message = "Job removed from scheduler"
-        elif event.code == EVENT_JOB_SUBMITTED:
-            message = (
-                f"Job submitted to executor (scheduled: {getattr(event, 'scheduled_run_times')})"
-            )
-        elif event.code == EVENT_JOB_EXECUTED:
-            message = f"Job executed successfully (return value: {event.retval})"
-        elif event.code == EVENT_JOB_ERROR:
-            level = logging.ERROR
-            message = f"Job failed with exception: {event.exception}"
-
-        log_event = logging.LogRecord(
-            event.job_id,
-            level,
-            pathname="",
-            lineno=-1,
-            args=None,
-            exc_info=None,
-            msg=message,
-        )
-
-        if self.log_handler:
-            self.log_handler.emit(log_event)
-        # TODO: other logic ....
 
     @staticmethod
     def get_job_scheduler_id(job_id: int) -> str:
