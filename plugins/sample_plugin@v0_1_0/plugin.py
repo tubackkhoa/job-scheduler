@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import pluggy
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
@@ -138,6 +139,9 @@ class Plugin:
     @hookimpl
     @classmethod
     async def run(cls, config: Config, logger: logging.Logger):
+        for i in range(10):
+            logger.info(f"Running step {i}")
+            await asyncio.sleep(0.5)
         logger.info(config.model_dump())
 
         return True

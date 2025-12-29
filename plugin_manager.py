@@ -65,6 +65,7 @@ class PluginManager:
     #     finally:
     #         lock.release()
     _active_job_cache: Dict[int, str] = {}
+    _active_task_cache: Dict[int, asyncio.Task] = {}
     # static pluggy manager, so that all pluginmanager share the same plugins
     manager = pluggy.PluginManager(PROJECT_NAME)
     manager.add_hookspecs(PluginSpec)
@@ -186,7 +187,7 @@ class PluginManager:
         return cls.manager.get_plugin(package)
 
     @classmethod
-    def run_plugin_job(cls, package: str, job_id: int):
+    async def run_plugin_job(cls, package: str, job_id: int):
         """
         Wrapper to run a plugin's 'run' method asynchronously,
         fetching config from the active job for the user/plugin.
@@ -209,7 +210,10 @@ class PluginManager:
         logger = logging.getLogger(job_scheduler_id)
         # prevent log propagation to root logger
         logger.propagate = False
-        return asyncio.run(plugin.run(config, logger))
+        task = asyncio.create_task(plugin.run(config, logger))
+        cls._active_task_cache[job_id] = task
+        return await task
+        # return asyncio.run(plugin.run(config, logger))
 
     @classmethod
     def unload_plugin(cls, package: str):
@@ -238,6 +242,13 @@ class PluginManager:
                 raise RuntimeError(f"Failed to load plugin '{package}': {str(e)}") from e
 
         return plugin
+
+    @classmethod
+    def stop_job(cls, job_id: int):
+        task = cls._active_task_cache[job_id]
+        if task and not task.done():
+            task.cancel(f"deactivate")
+        cls._active_task_cache.pop(job_id)
 
     def add_plugin(self, package: str, interval: int, description: Optional[str] = None) -> int:
         self.load_plugin(package)
@@ -327,8 +338,9 @@ class PluginManager:
         job_scheduler_id = self.get_job_scheduler_id(job_id)
         if self.scheduler.get_job(job_scheduler_id) is not None:
             self.scheduler.remove_job(job_scheduler_id)
-            self._active_job_cache.pop(job_id, None)
+            self._active_job_cache.pop(job_id)
 
+            self.stop_job(job_id)
             # remove all handlers for this logger to save memory
             logger = logging.getLogger(job_scheduler_id)
             logger.handlers.clear()
@@ -355,9 +367,10 @@ class PluginManager:
             job.active = False
             session.commit()
 
-            # Pause the job
-            job_scheduler_id = self.get_job_scheduler_id(job_id)
-            self.scheduler.pause_job(job_scheduler_id)
+        # Pause the job
+        job_scheduler_id = self.get_job_scheduler_id(job_id)
+        self.scheduler.pause_job(job_scheduler_id)
+        self.stop_job(job_id)
 
     def get_jobs_for_plugin_and_user(self, plugin_id: int, session_id: int):
         with Session(self.db_engine) as session:
@@ -408,6 +421,8 @@ class PluginManager:
                 if self.scheduler.get_job(job_scheduler_id) is not None:
                     self.scheduler.remove_job(job_scheduler_id)
                     self._active_job_cache.pop(job.id, None)
+
+                    self.stop_job(job.id)
                     # Remove logger handlers
                     logger = logging.getLogger(job_scheduler_id)
                     logger.handlers.clear()
