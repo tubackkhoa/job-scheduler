@@ -89,14 +89,14 @@ class PluginManager:
         self.close_job_on_deactivate = close_job_on_deactivate
         # Pass any additional user-provided args
         self.scheduler = AsyncIOScheduler(**(scheduler_kwargs or {}))
-        self.scheduler.add_listener(
-            self.job_listener,
-            EVENT_JOB_ADDED
-            | EVENT_JOB_REMOVED
-            | EVENT_JOB_SUBMITTED
-            | EVENT_JOB_EXECUTED
-            | EVENT_JOB_ERROR,
-        )
+        # self.scheduler.add_listener(
+        #     self.job_listener,
+        #     EVENT_JOB_ADDED
+        #     | EVENT_JOB_REMOVED
+        #     | EVENT_JOB_SUBMITTED
+        #     | EVENT_JOB_EXECUTED
+        #     | EVENT_JOB_ERROR,
+        # )
 
         self.log_handler = log_handler
 
@@ -217,8 +217,14 @@ class PluginManager:
 
         task = asyncio.create_task(plugin.run(config, logger))
         cls._active_task_cache[job_id] = task
-        return await task
-        # return asyncio.run(plugin.run(config, logger))
+        try:
+            retval = await task
+            logger.info(f"Job executed successfully (return value: {retval})")
+            return retval
+        except asyncio.CancelledError as e:
+            logger.warning(f"Job canceled (reason: {e})")
+        except Exception as e:
+            logger.error(f"Job failed with exception: {e}", exc_info=True)
 
     @classmethod
     def unload_plugin(cls, package: str):
