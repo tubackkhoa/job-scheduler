@@ -199,7 +199,7 @@ def template(plugin_manager: PluginManagerState, package: str, payload: dict = B
     except Exception as e:
         raise HTTPException(
             status_code=400,
-            detail=f"Failed to load plugin: {str(e)}",
+            detail=f"Failed to render template: {str(e)}",
         )
 
 
@@ -224,9 +224,25 @@ def schema(plugin_manager: PluginManagerState, session_id: int, plugin_id: int):
                         session_id=session_id,
                     )
                 )
+
+            # Built-in Jinja tags are provided by extensions
+            env = plugin.env()
+
             return {
                 "schema": plugin.schema(),
                 "configs": configs,
+                "env": {
+                    "globals": sorted(env.globals.keys()),
+                    "filters": sorted(env.filters.keys()),
+                    "tests": sorted(env.tests.keys()),
+                    "tags": sorted(
+                        set(
+                            tag
+                            for ext in env.extensions.values()
+                            for tag in getattr(ext, "tags", [])
+                        )
+                    ),
+                },
             }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load schema: {str(e)}")
@@ -254,7 +270,6 @@ def reload_plugin(plugin_manager: PluginManagerState, package: str):
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to reload plugin: {str(e)}")
-
 
 
 @app.delete("/plugins/{plugin_id}")
