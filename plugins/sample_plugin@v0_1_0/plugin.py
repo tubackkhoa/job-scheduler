@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field, ValidationInfo, field_validator
 from typing import List
 import sqlglot
 from datetime import datetime
-from jinja2 import Environment, BaseLoader
+from jinja2 import DictLoader, Environment, BaseLoader
 
 
 PROJECT_NAME = "alpha-miner"
@@ -20,9 +20,59 @@ class Config(BaseModel):
         default_factory=list,
         json_schema_extra={"ui:field": "MultiSelect", "default": "BTC,ETH,SOL,BNB,LINK"},
     )
-    sql: str = Field("SELECT 1", json_schema_extra={"ui:field": "Template", "type": "sql"})
-    json_template: str = Field("{}", json_schema_extra={"ui:field": "Template", "type": "json"})
-    yaml_template: str = Field("root:1", json_schema_extra={"ui:field": "Template", "type": "yaml"})
+    sql: str = Field(
+        """
+{% set infer_ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S') %}
+{% set users = get_users() %}
+
+WITH time_bounds AS (
+  SELECT
+    TIMESTAMP '{{ infer_ts }}' AS infer_ts,
+    TIMESTAMP '{{ infer_ts }}'
+      - INTERVAL '{{ warmup_bars + extra_bars }} hour' AS ts_warmup_start
+),
+
+ohlcv_binance_futures_in_range AS (
+  SELECT *
+  FROM public."ohlcv_binance-futures_1h" t
+  CROSS JOIN time_bounds b
+  WHERE t.quote_asset = '{{ quote_asset }}'
+    AND t.user in {{ users | in_clause }}
+    AND t.base_asset IN {{ base_assets | in_clause }}
+    AND t.open_time >= b.ts_warmup_start
+    AND t.open_time <= b.infer_ts
+)
+
+SELECT * FROM ohlcv_binance_futures_in_range;
+""",
+        json_schema_extra={"ui:field": "Template", "type": "sql"},
+    )
+    json_template: str = Field(
+        """
+{% extends "base" %}
+{% block content %}
+{
+  "name": {{obj.name|tojson}},
+  "my_object": {{obj.my_object|tojson}},
+  "quote_asset": {{ quote_asset | tojson }},
+  "extra_bars": {{ extra_bars }},
+  "base_assets": {{ base_assets | tojson }}
+}
+{% endblock %}
+""",
+        json_schema_extra={"ui:field": "Template", "type": "json"},
+    )
+    yaml_template: str = Field(
+        """
+quote_asset: {{ quote_asset }}
+extra_bars: {{ extra_bars }}
+base_assets:
+{% for base_asset in base_assets %}
+  - {{ base_asset }}
+{% endfor %}
+""",
+        json_schema_extra={"ui:field": "Template", "type": "yaml"},
+    )
 
     @field_validator("sql", mode="after")
     @classmethod
@@ -49,7 +99,14 @@ class MyClass:
 class Plugin:
 
     _env = Environment(
-        loader=BaseLoader(),
+        loader=DictLoader(
+            {
+                "base": """
+{% set obj = MyClass("ChatGPT") %}
+{% block content %}{% endblock %}
+"""
+            }
+        ),
         autoescape=False,
         trim_blocks=True,
         lstrip_blocks=True,
