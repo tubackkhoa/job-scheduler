@@ -36,6 +36,16 @@ class Config(BaseModel):
             raise ValueError(f"Error validating SQL: {str(e)}")
 
 
+class MyClass:
+    def __init__(self, name):
+        self.name = name  # Store some value in the instance
+
+    @property
+    def my_object(self):
+        # Returns a fixed dictionary, can use self.name if you want
+        return {"fixed": "object", "name": self.name}
+
+
 class Plugin:
 
     _env = Environment(
@@ -45,6 +55,7 @@ class Plugin:
         lstrip_blocks=True,
     )
     _env.globals["datetime"] = datetime
+    _env.globals["MyClass"] = MyClass
     _env.globals["get_users"] = lambda: ["tupt", "cuongnv"]
     _env.filters["in_clause"] = lambda values: (
         "()"
