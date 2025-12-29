@@ -169,9 +169,16 @@ class LogService:
         search_text: Optional[str] = None,
         offset: Optional[int] = None,
         limit: int = 1000,
+        sort: str = "desc",
     ) -> Dict:
         """
         Search logs for a job_id.
+        Args:
+            job_id: Job identifier
+            search_text: Text to search for (optional)
+            offset: Start from this offset (optional)
+            limit: Max results (default 1000)
+            sort: Sort order - "asc" (oldest first) or "desc" (newest first, default)
         Returns: {logs: List[Dict], total: int, filtered: int, current_offset: int}
         """
         lock = self._get_lock(job_id)
@@ -200,7 +207,6 @@ class LogService:
 
             total = len(all_entries)
 
-            # Filter by search text
             if search_text:
                 search_lower = search_text.lower()
                 all_entries = [
@@ -209,9 +215,15 @@ class LogService:
                     if search_lower in e["message"].lower() or search_lower in e["level"].lower()
                 ]
 
-            # Filter by offset (start from offset)
+           
+            reverse = sort == "desc"
+            all_entries.sort(key=lambda e: e["offset"], reverse=reverse)
+
             if offset is not None and offset > 0:
-                all_entries = [e for e in all_entries if e["offset"] >= offset]
+                if sort == "desc":
+                    all_entries = [e for e in all_entries if e["offset"] <= offset]
+                else:
+                    all_entries = [e for e in all_entries if e["offset"] >= offset]
 
             # Limit results
             result_entries = all_entries[:limit]

@@ -157,8 +157,8 @@ class PluginManager:
             msg=message,
         )
 
-        if self.log_handler:
-            self.log_handler.emit(log_event)
+        # if self.log_handler:
+        #     self.log_handler.emit(log_event)
         # TODO: other logic ....
 
     @staticmethod
