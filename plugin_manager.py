@@ -11,14 +11,6 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from jinja2 import Environment
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
-from apscheduler.events import (
-    JobExecutionEvent,
-    EVENT_JOB_EXECUTED,
-    EVENT_JOB_ERROR,
-    EVENT_JOB_SUBMITTED,
-    EVENT_JOB_ADDED,
-    EVENT_JOB_REMOVED,
-)
 from models import Job, Plugin
 
 PROJECT_NAME = "job-scheduler"
@@ -64,6 +56,7 @@ class PluginManager:
     #         return asyncio.run(plugin.run(config, logger))
     #     finally:
     #         lock.release()
+
     _active_job_cache: Dict[int, str] = {}
     _active_task_cache: Dict[int, asyncio.Task] = {}
     # static pluggy manager, so that all pluginmanager share the same plugins
@@ -89,15 +82,6 @@ class PluginManager:
         self.close_job_on_deactivate = close_job_on_deactivate
         # Pass any additional user-provided args
         self.scheduler = AsyncIOScheduler(**(scheduler_kwargs or {}))
-        self.scheduler.add_listener(
-            self.job_listener,
-            EVENT_JOB_ADDED
-            | EVENT_JOB_REMOVED
-            | EVENT_JOB_SUBMITTED
-            | EVENT_JOB_EXECUTED
-            | EVENT_JOB_ERROR,
-        )
-
         self.log_handler = log_handler
 
     # reload all jobs from database
@@ -129,37 +113,6 @@ class PluginManager:
     def stop(self):
         if self.scheduler.running:
             self.scheduler.shutdown()
-
-    def job_listener(self, event: JobExecutionEvent):
-        level = logging.INFO
-        message = ""
-        if event.code == EVENT_JOB_ADDED:
-            message = f"Job added to scheduler (jobstore: {event.jobstore})"
-        elif event.code == EVENT_JOB_REMOVED:
-            message = "Job removed from scheduler"
-        elif event.code == EVENT_JOB_SUBMITTED:
-            message = (
-                f"Job submitted to executor (scheduled: {getattr(event, 'scheduled_run_times')})"
-            )
-        elif event.code == EVENT_JOB_EXECUTED:
-            message = f"Job executed successfully (return value: {event.retval})"
-        elif event.code == EVENT_JOB_ERROR:
-            level = logging.ERROR
-            message = f"Job failed with exception: {event.exception}"
-
-        log_event = logging.LogRecord(
-            event.job_id,
-            level,
-            pathname="",
-            lineno=-1,
-            args=None,
-            exc_info=None,
-            msg=message,
-        )
-
-        if self.log_handler:
-            self.log_handler.emit(log_event)
-        # TODO: other logic ....
 
     @staticmethod
     def get_job_scheduler_id(job_id: int) -> str:
@@ -214,11 +167,17 @@ class PluginManager:
         # Ensure logger level is set (default to INFO if not set)
         if logger.level == logging.NOTSET:
             logger.setLevel(logging.INFO)
-        
+
         task = asyncio.create_task(plugin.run(config, logger))
         cls._active_task_cache[job_id] = task
-        return await task
-        # return asyncio.run(plugin.run(config, logger))
+        try:
+            retval = await task
+            logger.info(f"Job executed successfully (return value: {retval})")
+            return retval
+        except asyncio.CancelledError as e:
+            logger.warning(f"Job canceled (reason: {e})")
+        except Exception as e:
+            logger.error(f"Job failed with exception: {e}", exc_info=True)
 
     @classmethod
     def unload_plugin(cls, package: str):
@@ -249,11 +208,11 @@ class PluginManager:
         return plugin
 
     @classmethod
-    def stop_job(cls, job_id: int, force_close: bool):
-        task = cls._active_task_cache[job_id]
+    def cancel_job(cls, job_id: int, force_close: bool):
+        task = cls._active_task_cache.get(job_id)
         if task and force_close and not task.done():
             task.cancel(f"deactivate")
-        cls._active_task_cache.pop(job_id)
+        cls._active_task_cache.pop(job_id, None)
 
     def add_plugin(self, package: str, interval: int, description: Optional[str] = None) -> int:
         self.load_plugin(package)
@@ -306,12 +265,11 @@ class PluginManager:
         logger.propagate = False
         if logger.level == logging.NOTSET:
             logger.setLevel(logging.INFO)
-        
-       
+
         existing_handlers = logger.handlers[:]
         for handler in existing_handlers:
             logger.removeHandler(handler)
-        
+
         # Add the handler - this handler uses record.name (job_scheduler_id) to determine file
         if self.log_handler:
             if self.log_handler not in logger.handlers:
@@ -353,9 +311,9 @@ class PluginManager:
         job_scheduler_id = self.get_job_scheduler_id(job_id)
         if self.scheduler.get_job(job_scheduler_id) is not None:
             self.scheduler.remove_job(job_scheduler_id)
-            self._active_job_cache.pop(job_id)
+            self._active_job_cache.pop(job_id, None)
 
-            self.stop_job(job_id, self.close_job_on_deactivate)
+            self.cancel_job(job_id, self.close_job_on_deactivate)
             # remove all handlers for this logger to save memory
             logger = logging.getLogger(job_scheduler_id)
             logger.handlers.clear()
@@ -385,7 +343,7 @@ class PluginManager:
         # Pause the job
         job_scheduler_id = self.get_job_scheduler_id(job_id)
         self.scheduler.pause_job(job_scheduler_id)
-        self.stop_job(job_id, self.close_job_on_deactivate)
+        self.cancel_job(job_id, self.close_job_on_deactivate)
 
     def get_jobs_for_plugin_and_user(self, plugin_id: int, session_id: int):
         with Session(self.db_engine) as session:
@@ -437,7 +395,7 @@ class PluginManager:
                     self.scheduler.remove_job(job_scheduler_id)
                     self._active_job_cache.pop(job.id, None)
 
-                    self.stop_job(job.id, self.close_job_on_deactivate)
+                    self.cancel_job(job.id, self.close_job_on_deactivate)
                     # Remove logger handlers
                     logger = logging.getLogger(job_scheduler_id)
                     logger.handlers.clear()
