@@ -329,6 +329,7 @@ def search_logs(
     search: Optional[str] = None,
     offset: Optional[int] = None,
     limit: int = 1000,
+    sort: str = "desc",
 ):
     """
     Search logs for a job_id.
@@ -337,6 +338,7 @@ def search_logs(
     - search: text to search for (optional)
     - offset: start from this offset (optional)
     - limit: max results (default 1000)
+    - sort: sort order - "asc" (oldest first) or "desc" (newest first, default)
     """
     try:
         scheduler_job_id = PluginManager.get_job_scheduler_id(job_id)
@@ -345,6 +347,7 @@ def search_logs(
             search_text=search,
             offset=offset,
             limit=limit,
+            sort=sort,
         )
         return result
     except Exception as e:
