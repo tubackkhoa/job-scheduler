@@ -172,7 +172,7 @@ class PluginManager:
         cls._active_task_cache[job_id] = task
         try:
             retval = await task
-            logger.info(f"Job executed successfully (return value: {retval})")
+            # logger.info(f"Job executed successfully (return value: {retval})")
             return retval
         except asyncio.CancelledError as e:
             logger.warning(f"Job canceled (reason: {e})")
