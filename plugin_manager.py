@@ -58,7 +58,6 @@ class PluginManager:
     #         lock.release()
 
     _active_job_cache: Dict[int, str] = {}
-    _active_task_cache: Dict[int, asyncio.Task] = {}
     # static pluggy manager, so that all pluginmanager share the same plugins
     manager = pluggy.PluginManager(PROJECT_NAME)
     manager.add_hookspecs(PluginSpec)
@@ -68,7 +67,6 @@ class PluginManager:
         db_engine: Engine,
         module_paths: Optional[list[str]] = None,
         log_handler: Optional[logging.Handler] = None,
-        close_job_on_deactivate=True,
         scheduler_kwargs: Optional[dict] = None,
     ) -> None:
 
@@ -79,7 +77,6 @@ class PluginManager:
                     sys.path.insert(0, path)
 
         self.db_engine = db_engine
-        self.close_job_on_deactivate = close_job_on_deactivate
         # Pass any additional user-provided args
         self.scheduler = AsyncIOScheduler(**(scheduler_kwargs or {}))
         self.log_handler = log_handler
@@ -141,7 +138,7 @@ class PluginManager:
         return cls.manager.get_plugin(package)
 
     @classmethod
-    async def run_plugin_job(cls, package: str, job_id: int):
+    def run_plugin_job(cls, package: str, job_id: int):
         """
         Wrapper to run a plugin's 'run' method asynchronously,
         fetching config from the active job for the user/plugin.
@@ -167,15 +164,11 @@ class PluginManager:
         # Ensure logger level is set (default to INFO if not set)
         if logger.level == logging.NOTSET:
             logger.setLevel(logging.INFO)
-
-        task = asyncio.create_task(plugin.run(config, logger))
-        cls._active_task_cache[job_id] = task
+        
         try:
-            retval = await task
+            retval = asyncio.run(plugin.run(config, logger))
             # logger.info(f"Job executed successfully (return value: {retval})")
-            return retval
-        except asyncio.CancelledError as e:
-            logger.warning(f"Job canceled (reason: {e})")
+            return retval        
         except Exception as e:
             logger.error(f"Job failed with exception: {e}", exc_info=True)
 
@@ -207,12 +200,6 @@ class PluginManager:
 
         return plugin
 
-    @classmethod
-    def cancel_job(cls, job_id: int, force_close: bool):
-        task = cls._active_task_cache.get(job_id)
-        if task and force_close and not task.done():
-            task.cancel(f"deactivate")
-        cls._active_task_cache.pop(job_id, None)
 
     def add_plugin(self, package: str, interval: int, description: Optional[str] = None) -> int:
         self.load_plugin(package)
@@ -313,7 +300,6 @@ class PluginManager:
             self.scheduler.remove_job(job_scheduler_id)
             self._active_job_cache.pop(job_id, None)
 
-            self.cancel_job(job_id, self.close_job_on_deactivate)
             # remove all handlers for this logger to save memory
             logger = logging.getLogger(job_scheduler_id)
             logger.handlers.clear()
@@ -343,7 +329,6 @@ class PluginManager:
         # Pause the job
         job_scheduler_id = self.get_job_scheduler_id(job_id)
         self.scheduler.pause_job(job_scheduler_id)
-        self.cancel_job(job_id, self.close_job_on_deactivate)
 
     def get_jobs_for_plugin_and_user(self, plugin_id: int, session_id: int):
         with Session(self.db_engine) as session:
@@ -395,7 +380,6 @@ class PluginManager:
                     self.scheduler.remove_job(job_scheduler_id)
                     self._active_job_cache.pop(job.id, None)
 
-                    self.cancel_job(job.id, self.close_job_on_deactivate)
                     # Remove logger handlers
                     logger = logging.getLogger(job_scheduler_id)
                     logger.handlers.clear()
