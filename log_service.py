@@ -215,24 +215,30 @@ class LogService:
                     if search_lower in e["message"].lower() or search_lower in e["level"].lower()
                 ]
 
-           
+            filtered_count = len(all_entries)
             reverse = sort == "desc"
             all_entries.sort(key=lambda e: e["offset"], reverse=reverse)
-
             if offset is not None and offset > 0:
                 if sort == "desc":
                     all_entries = [e for e in all_entries if e["offset"] <= offset]
                 else:
                     all_entries = [e for e in all_entries if e["offset"] >= offset]
-
-            # Limit results
             result_entries = all_entries[:limit]
 
+            min_offset = result_entries[0]["offset"] if result_entries else None
+            max_offset = result_entries[-1]["offset"] if result_entries else None
+            
+            # Determine if there are more logs available for pagination
+            has_more = len(all_entries) > limit
+            
             return {
                 "logs": result_entries,
                 "total": total,
-                "filtered": len(all_entries),
-                "current_offset": result_entries[-1]["offset"] if result_entries else None,
+                "filtered": filtered_count,
+                "returned": len(result_entries),
+                "min_offset": min_offset,
+                "max_offset": max_offset,
+                "has_more": has_more,
             }
 
     def cleanup_old_logs(self):

@@ -333,11 +333,15 @@ def search_logs(
 ):
     """
     Search logs for a job_id.
+    
+    Default behavior: Returns the latest N logs (from latest-limit to latest).
+    This applies to both normal queries and search queries.
+    
     Query params:
     - job_id: job identifier (format: plugin_id/session_id/job_id, e.g., "5/1/10")
-    - search: text to search for (optional)
-    - offset: start from this offset (optional)
-    - limit: max results (default 1000)
+    - search: text to search for (optional). When provided, returns latest N matching logs.
+    - offset: pagination offset - get logs older than this offset (optional)
+    - limit: number of logs to return (default 1000). Always returns latest N logs.
     - sort: sort order - "asc" (oldest first) or "desc" (newest first, default)
     """
     try:
