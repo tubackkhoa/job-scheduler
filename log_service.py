@@ -241,6 +241,92 @@ class LogService:
                 "has_more": has_more,
             }
 
+    def search_logs_with_following(
+        self,
+        job_id: str,
+        keyword: str,
+        n_following: int = 25,
+        limit: int = 100,
+        sort: str = "desc",
+    ) -> Dict:
+        lock = self._get_lock(job_id)
+        with lock:
+            all_entries = []
+            global_offset = 1
+
+            # Read all log files in chronological order
+            rotated_files = self._get_rotated_files(job_id)
+            for rotated_file in reversed(rotated_files):
+                entries = self._read_log_file(rotated_file)
+                for entry in entries:
+                    entry["offset"] = global_offset
+                    global_offset += 1
+                all_entries.extend(entries)
+
+            # Read current log file (newest)
+            current_file = self._get_log_file(job_id)
+            if current_file.exists():
+                entries = self._read_log_file(current_file)
+                for entry in entries:
+                    entry["offset"] = global_offset
+                    global_offset += 1
+                all_entries.extend(entries)
+
+            keyword_lower = keyword.lower()
+            matched_groups = []
+            i = 0
+
+            # Find matched entries and group with following entries
+            while i < len(all_entries):
+                entry = all_entries[i]
+                message_lower = entry.get("message", "").lower()
+                level_lower = entry.get("level", "").lower()
+
+                # Check if this entry matches the keyword
+                if keyword_lower in message_lower or keyword_lower in level_lower:
+                    # Start a new group with the matched entry
+                    group = {
+                        "matched_entry": entry,
+                        "following_entries": [],
+                        "offset": entry["offset"],  # Use matched entry's offset for sorting
+                        "timestamp": entry.get("timestamp", ""),
+                    }
+
+                    # Add up to n_following entries that do NOT contain the keyword
+                    for j in range(1, n_following + 1):
+                        if i + j >= len(all_entries):
+                            break
+                        next_entry = all_entries[i + j]
+                        next_message_lower = next_entry.get("message", "").lower()
+                        next_level_lower = next_entry.get("level", "").lower()
+
+                        # Stop if next entry also matches keyword
+                        if keyword_lower in next_message_lower or keyword_lower in next_level_lower:
+                            break
+
+                        group["following_entries"].append(next_entry)
+
+                    matched_groups.append(group)
+                    # Skip over the matched entry and its following entries
+                    i += len(group["following_entries"]) + 1
+                else:
+                    i += 1
+
+            total_matches = len(matched_groups)
+
+            # Sort groups by offset (chronological order)
+            reverse = sort == "desc"
+            matched_groups.sort(key=lambda g: g["offset"], reverse=reverse)
+
+            # Limit results
+            result_groups = matched_groups[:limit]
+
+            return {
+                "groups": result_groups,
+                "total_matches": total_matches,
+                "returned": len(result_groups),
+            }
+
     def cleanup_old_logs(self):
         """Remove log files older than retention_days."""
         cutoff_date = datetime.now() - timedelta(days=self.retention_days)
