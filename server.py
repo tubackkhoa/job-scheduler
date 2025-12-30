@@ -357,6 +357,31 @@ def search_logs(
         raise HTTPException(status_code=500, detail=f"Failed to search logs: {str(e)}")
 
 
+@app.get("/api/logs/{job_id}/signals")
+def search_logs_with_following(
+    log_service: LogServiceState,
+    job_id: int,
+    keyword: str,
+    n_following: int = 25,
+    limit: int = 100,
+    sort: str = "desc",
+):
+    try:
+        scheduler_job_id = PluginManager.get_job_scheduler_id(job_id)
+        result = log_service.search_logs_with_following(
+            job_id=scheduler_job_id,
+            keyword=keyword,
+            n_following=n_following,
+            limit=limit,
+            sort=sort,
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to search logs with following: {str(e)}"
+        )
+
+
 # static site
 static_files = os.getenv("STATIC_FILES")
 if static_files:
