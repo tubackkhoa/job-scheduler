@@ -12,7 +12,7 @@ from fastapi import (
 from fastapi.concurrency import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 import logging
-
+from apscheduler.jobstores.redis import RedisJobStore
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine
 from create_data import create_data

@@ -12,9 +12,16 @@ from jinja2 import Environment
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 from models import Job, Plugin
+from apscheduler.jobstores.redis import RedisJobStore
+import os
+import redis
+import uuid
 
 PROJECT_NAME = "job-scheduler"
-
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = os.getenv("REDIS_PORT", "6379")
+REDIS_DB = os.getenv("REDIS_DB", "0")
+REDIS_URL = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
 hookspec = pluggy.HookspecMarker(PROJECT_NAME)
 
 scheduler_logger = logging.getLogger(PROJECT_NAME)
@@ -41,26 +48,25 @@ class PluginManager:
     Manages plugin loading/unloading, job scheduling, and execution
     """
 
-    # static cache of job configs, to remove access to database
-    # TODO: because schedule only make sure 1 job is added to queue, but can not verify job is done on a machine
-    # @classmethod
-    # def run_plugin_job(cls, job_id: int):
-    #     lock = cls.redis_client.lock(
-    #         f"lock:{PROJECT_NAME}:{job_id}",
-    #         timeout=plugin.interval * 2,
-    #         blocking=False,
-    #     )
-    #     if not lock.acquire():
-    #         return
-    #     try:
-    #         return asyncio.run(plugin.run(config, logger))
-    #     finally:
-    #         lock.release()
-
     _active_job_cache: Dict[int, str] = {}
     # static pluggy manager, so that all pluginmanager share the same plugins
     manager = pluggy.PluginManager(PROJECT_NAME)
     manager.add_hookspecs(PluginSpec)
+    redis_client = redis.Redis.from_url(
+        REDIS_URL,
+        decode_responses=True,  # strings instead of bytes
+        socket_keepalive=True,
+        health_check_interval=30,
+    )
+    jobstores = {
+        "default": RedisJobStore(
+            host=REDIS_HOST,
+            port=REDIS_PORT,
+            db=REDIS_DB,
+            jobs_key=f"{PROJECT_NAME}.jobs",
+            run_times_key=f"{PROJECT_NAME}.run_times",
+        )
+    }
 
     def __init__(
         self,
@@ -78,11 +84,18 @@ class PluginManager:
 
         self.db_engine = db_engine
         # Pass any additional user-provided args
-        self.scheduler = AsyncIOScheduler(**(scheduler_kwargs or {}))
+        self.scheduler = AsyncIOScheduler(
+            **(
+                scheduler_kwargs
+                or {
+                    "jobstores": PluginManager.jobstores,
+                }
+            )
+        )
         self.log_handler = log_handler
 
     # reload all jobs from database
-    def reload_all_jobs(self):
+    def reload_all_jobs(self, clear_lock=True):
         """
         Reload all jobs from the database into the scheduler.
         Useful for initial load or after a restart.
@@ -103,6 +116,8 @@ class PluginManager:
 
         for job in all_jobs:
             self.add_job_instance(job, look_up[job.plugin_id])
+            if clear_lock:
+                self.redis_client.delete(f"locks:{PROJECT_NAME}:{job.id}")
 
     def start(self):
         self.scheduler.start()
@@ -143,34 +158,54 @@ class PluginManager:
         Wrapper to run a plugin's 'run' method asynchronously,
         fetching config from the active job for the user/plugin.
         """
-        plugin = cls.get_plugin_instance(package)
 
-        if plugin is None:
-            return None
+        # 🔐 Distributed lock (shared Redis, isolated namespace)
+        lock_key = f"locks:{PROJECT_NAME}:{job_id}"
 
-        job_config = cls._active_job_cache.get(job_id)
+        lock = cls.redis_client.lock(
+            lock_key,
+            timeout=600,  # auto-release if worker dies or run more than 10 minutes
+            blocking=False,
+            thread_local=False,  # REQUIRED for multi-worker
+        )
 
-        if job_config is None:
-            # No active job means no config to run this plugin instance for this user
-            return None
-
-        config = plugin.config(json.loads(job_config))
-
-        job_scheduler_id = cls.get_job_scheduler_id(job_id)
-
-        logger = logging.getLogger(job_scheduler_id)
-        # prevent log propagation to root logger
-        logger.propagate = False
-        # Ensure logger level is set (default to INFO if not set)
-        if logger.level == logging.NOTSET:
-            logger.setLevel(logging.INFO)
-        
         try:
+            plugin = cls.get_plugin_instance(package)
+
+            if plugin is None:
+                return None
+
+            job_config = cls._active_job_cache.get(job_id)
+
+            if job_config is None:
+                # No active job means no config to run this plugin instance for this user
+                return None
+
+            config = plugin.config(json.loads(job_config))
+
+            job_scheduler_id = cls.get_job_scheduler_id(job_id)
+
+            logger = logging.getLogger(job_scheduler_id)
+            # prevent log propagation to root logger
+            logger.propagate = False
+            # Ensure logger level is set (default to INFO if not set)
+            if logger.level == logging.NOTSET:
+                logger.setLevel(logging.INFO)
+
+            if not lock.acquire():
+                print(f"Other process is running job {job_id}")
+                # Another worker is running this job
+                return None
+
             retval = asyncio.run(plugin.run(config, logger))
             # logger.info(f"Job executed successfully (return value: {retval})")
-            return retval        
+            return retval
         except Exception as e:
             logger.error(f"Job failed with exception: {e}", exc_info=True)
+        finally:
+            # 🔓 Release only if we still own the lock
+            if lock.owned():
+                lock.release()
 
     @classmethod
     def unload_plugin(cls, package: str):
@@ -199,7 +234,6 @@ class PluginManager:
                 raise RuntimeError(f"Failed to load plugin '{package}': {str(e)}") from e
 
         return plugin
-
 
     def add_plugin(self, package: str, interval: int, description: Optional[str] = None) -> int:
         self.load_plugin(package)
@@ -299,6 +333,7 @@ class PluginManager:
         if self.scheduler.get_job(job_scheduler_id) is not None:
             self.scheduler.remove_job(job_scheduler_id)
             self._active_job_cache.pop(job_id, None)
+            self.redis_client.delete(f"locks:{PROJECT_NAME}:{job_id}")
 
             # remove all handlers for this logger to save memory
             logger = logging.getLogger(job_scheduler_id)
@@ -329,6 +364,7 @@ class PluginManager:
         # Pause the job
         job_scheduler_id = self.get_job_scheduler_id(job_id)
         self.scheduler.pause_job(job_scheduler_id)
+        self.redis_client.delete(f"locks:{PROJECT_NAME}:{job_id}")
 
     def get_jobs_for_plugin_and_user(self, plugin_id: int, session_id: int):
         with Session(self.db_engine) as session:
@@ -379,6 +415,7 @@ class PluginManager:
                 if self.scheduler.get_job(job_scheduler_id) is not None:
                     self.scheduler.remove_job(job_scheduler_id)
                     self._active_job_cache.pop(job.id, None)
+                    self.redis_client.delete(f"locks:{PROJECT_NAME}:{job.id}")
 
                     # Remove logger handlers
                     logger = logging.getLogger(job_scheduler_id)

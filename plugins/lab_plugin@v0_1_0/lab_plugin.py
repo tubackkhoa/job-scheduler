@@ -4,6 +4,7 @@ Hardcoded configuration for Lab worker.
 """
 
 import logging
+from jinja2 import Environment
 import pluggy
 from pydantic import BaseModel, Field, field_validator
 
@@ -49,13 +50,16 @@ class LabConfig(BaseModel):
     def validate_timeframe(cls, v: str) -> str:
         # simple validation – can be extended with full Timeframe enum check
         if v not in ["1h", "4h", "1d"]:
-            raise ValueError(
-                "timeframe must be one of the supported values [1h, 4h, 1d]"
-            )
+            raise ValueError("timeframe must be one of the supported values [1h, 4h, 1d]")
         return v
 
 
 class LabPlugin:
+
+    @hookimpl
+    @classmethod
+    def env(cls) -> Environment:
+        return Environment()  # Return a basic Jinja2 environment
 
     @hookimpl
     @classmethod
