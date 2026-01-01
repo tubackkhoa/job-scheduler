@@ -4,3 +4,44 @@ data
 logs
 *.egg-info
 .env
+
+# Rust/Cargo specific
+/target/
+**/*.rs.bk
+
+# Cargo lockfile (usually keep it, but can ignore if a library)
+/Cargo.lock
+
+# Executables
+*.exe
+*.dll
+*.so
+*.dylib
+
+# VSCode settings
+.vscode/
+
+# JetBrains IDEs
+.idea/
+
+# Mac OS system files
+.DS_Store
+
+# Logs
+*.log
+
+# Python virtual env (if you use one alongside)
+venv/
+__pycache__/
+
+# Maturin / Python build artifacts
+*.pyo
+*.pyc
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Other editor swap files
+*~
+*.swp

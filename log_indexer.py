@@ -260,7 +260,19 @@ for log in logs:
 print("elapsed", elapsed, "s")
 
 start = time.time()
-matches = log_indexer.search_logs(job_id=19, query="Loaded model config from database", limit=1000)
+matches = log_indexer.search_logs(job_id=19, query="Loaded model config from database", limit=100)
+elapsed = time.time() - start
+for log in matches:
+    print(log)
+print("elapsed", elapsed, "s")
+
+
+# cd log_indexer_rs && maturin build --release && pip install ./target/wheels/log_indexer_rs-0.1.0-cp312-cp312-macosx_11_0_arm64.whl
+import log_indexer_rs
+
+log_indexer = log_indexer_rs.LogIndexer()
+start = time.time()
+logs = log_indexer.search_logs(job_id=19, query="Loaded model config from database", limit=100)
 elapsed = time.time() - start
 for log in matches:
     print(log)
