@@ -76,6 +76,35 @@ class LogIndexer:
         )
         self.db.commit()
 
+    def rotate_job_logs_by_count(
+        self,
+        job_id: str,
+        keep: int = 100_000,
+    ):
+        with self.db:
+            self.db.execute(
+                """
+                DELETE FROM logs
+                WHERE job_id = ?
+                AND id NOT IN (
+                    SELECT id
+                    FROM logs
+                    WHERE job_id = ?
+                    ORDER BY id DESC
+                    LIMIT ?
+                )
+                """,
+                (job_id, job_id, keep),
+            )
+
+            # keep FTS in sync
+            self.db.execute(
+                """
+                DELETE FROM logs_fts
+                WHERE rowid NOT IN (SELECT id FROM logs)
+                """
+            )
+
     # ------------------------------------------------------------
     # Insert log (indexed immediately)
     # ------------------------------------------------------------
@@ -210,6 +239,12 @@ log_indexer = LogIndexer("data/log_indexer.db")
 
 # log_indexer.import_log_files(
 #     filename="logs/job-scheduler.job.19.log",
+# )
+
+# # after importing logs for a job
+# log_indexer.rotate_job_logs_by_count(
+#     job_id="job-scheduler.job.19",
+#     keep=100_000,
 # )
 
 import time
