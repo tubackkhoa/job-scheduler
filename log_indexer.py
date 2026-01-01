@@ -36,10 +36,10 @@ def extract_job_id(filename: str) -> str:
 
 
 class LogIndexer:
-    def __init__(self, db_path="logs_index.db"):
+    def __init__(self, db_path="logs_index.db", rotate_size=100_000):
         db_path = Path(db_path)
         db_path.parent.mkdir(parents=True, exist_ok=True)
-
+        self.rotate_size = rotate_size
         self.db = sqlite3.connect(str(db_path))
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=NORMAL")
@@ -134,6 +134,13 @@ class LogIndexer:
                 """,
                 (cur.lastrowid, job_id, level, message),
             )
+        if cur.lastrowid:
+            # cheap trigger, no DB scan
+            if cur.lastrowid % int(self.rotate_size * 1.5) == 0:
+                self.rotate_job_logs_by_count(
+                    job_id=job_id,
+                    keep=self.rotate_size,
+                )
 
     # ------------------------------------------------------------
     # FAST FTS SEARCH
@@ -241,11 +248,6 @@ log_indexer = LogIndexer("data/log_indexer.db")
 #     filename="logs/job-scheduler.job.19.log",
 # )
 
-# # after importing logs for a job
-# log_indexer.rotate_job_logs_by_count(
-#     job_id="job-scheduler.job.19",
-#     keep=100_000,
-# )
 
 import time
 
