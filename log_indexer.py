@@ -3,11 +3,10 @@ import re
 import sqlite3
 from pathlib import Path
 from datetime import datetime
-from typing import Iterable, List, Dict, Optional
+from typing import Iterable, Optional
 
 
-# Match:
-# 2025-12-31 08:02:37 [INFO] message
+# Match log lines:
 LOG_LINE_RE = re.compile(
     r"""
     ^
@@ -19,6 +18,9 @@ LOG_LINE_RE = re.compile(
     re.VERBOSE,
 )
 
+# Extract numeric job_id from filename, e.g. job-scheduler.job.123 → 123
+JOB_ID_RE = re.compile(r"job-scheduler\.job\.(\d+)")
+
 
 def iter_log_lines(path: Path) -> Iterable[str]:
     opener = gzip.open if path.suffix == ".gz" else open
@@ -29,10 +31,11 @@ def iter_log_lines(path: Path) -> Iterable[str]:
                 yield line
 
 
-def extract_job_id(filename: str) -> str:
-    # job-scheduler.job.19.log
-    # job-scheduler.job.3.20251227_090304.log.gz
-    return filename.split(".log", 1)[0]
+def extract_job_id(filename: str) -> int:
+    m = JOB_ID_RE.search(filename)
+    if not m:
+        raise ValueError(f"Cannot extract job_id from filename: {filename}")
+    return int(m.group(1))
 
 
 class LogIndexer:
@@ -53,7 +56,7 @@ class LogIndexer:
             """
             CREATE TABLE IF NOT EXISTS logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                job_id TEXT NOT NULL,
+                job_id INTEGER NOT NULL,
                 timestamp TEXT NOT NULL,
                 level TEXT NOT NULL,
                 message TEXT NOT NULL
@@ -61,7 +64,7 @@ class LogIndexer:
 
             CREATE VIRTUAL TABLE IF NOT EXISTS logs_fts
             USING fts5(
-                job_id,
+                job_id UNINDEXED,
                 level,
                 message,
                 content='logs',
@@ -69,7 +72,6 @@ class LogIndexer:
                 tokenize='unicode61'
             );
 
-            -- ✅ per-job fast tailing
             CREATE INDEX IF NOT EXISTS idx_logs_job_id_id
             ON logs(job_id, id DESC);
             """
@@ -78,7 +80,7 @@ class LogIndexer:
 
     def rotate_job_logs_by_count(
         self,
-        job_id: str,
+        job_id: int,
         keep: int = 100_000,
     ):
         with self.db:
@@ -105,12 +107,9 @@ class LogIndexer:
                 """
             )
 
-    # ------------------------------------------------------------
-    # Insert log (indexed immediately)
-    # ------------------------------------------------------------
     def insert_log(
         self,
-        job_id: str,
+        job_id: int,
         level: str,
         message: str,
         timestamp: Optional[str] = None,
@@ -142,12 +141,9 @@ class LogIndexer:
                     keep=self.rotate_size,
                 )
 
-    # ------------------------------------------------------------
-    # FAST FTS SEARCH
-    # ------------------------------------------------------------
     def search_logs(
         self,
-        job_id: str,
+        job_id: int,
         query: str,
         limit: int = 1000,
     ):
@@ -204,10 +200,10 @@ class LogIndexer:
     def get_logs_after_id(
         self,
         last_id: int = 0,
-        job_id: str | None = None,
+        job_id: Optional[int] = None,
         limit: int = 1000,
     ):
-        if job_id:
+        if job_id is not None:
             rows = self.db.execute(
                 """
                 SELECT id, job_id, timestamp, level, message
@@ -253,7 +249,7 @@ import time
 
 start = time.time()
 logs = log_indexer.get_logs_after_id(
-    job_id="job-scheduler.job.19",
+    job_id=19,
 )
 elapsed = time.time() - start
 
@@ -264,9 +260,7 @@ for log in logs:
 print("elapsed", elapsed, "s")
 
 start = time.time()
-matches = log_indexer.search_logs(
-    job_id="job-scheduler.job.19", query="Loaded model config from database", limit=1000
-)
+matches = log_indexer.search_logs(job_id=19, query="Loaded model config from database", limit=1000)
 elapsed = time.time() - start
 for log in matches:
     print(log)
