@@ -1,4 +1,5 @@
 import logging
+from jinja2 import Environment
 import pluggy
 from pydantic import BaseModel
 
@@ -13,6 +14,11 @@ class Config(BaseModel):
 
 
 class Plugin:
+    
+    @hookimpl
+    @classmethod
+    def env(cls) -> Environment:
+        return Environment()  # Return a basic Jinja2 environment
 
     @hookimpl
     @classmethod

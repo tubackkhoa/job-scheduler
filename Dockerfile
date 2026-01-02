@@ -37,5 +37,8 @@ ENV DB_CONNECTION=${DB_CONNECTION}
 ENV LOG_DIR=${LOG_DIR}
 ENV LOG_MAX_SIZE=${LOG_MAX_SIZE}
 # Run database migrations and start the server
+
+RUN uv pip install mlflow==3.6.0 numpy==2.3.5 psutil==7.1.3 pyarrow==21.0.0 scikit-learn==1.7.2
+
 CMD ["sh", "-c", "uv run alembic upgrade head && uv run uvicorn server:app --host 0.0.0.0 --port 8000"]
 
