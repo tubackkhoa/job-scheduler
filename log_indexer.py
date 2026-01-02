@@ -78,6 +78,11 @@ class LogIndexer:
         )
         self.db.commit()
 
+    def rebuild_fts_index(self):
+        # Rebuild the FTS index if needed
+        self.db.execute("INSERT INTO logs_fts(logs_fts) VALUES('rebuild')")
+        self.db.commit()
+
     def rotate_job_logs_by_count(
         self,
         job_id: int,
@@ -98,14 +103,8 @@ class LogIndexer:
                 """,
                 (job_id, job_id, keep),
             )
-
-            # keep FTS in sync
-            self.db.execute(
-                """
-                DELETE FROM logs_fts
-                WHERE rowid NOT IN (SELECT id FROM logs)
-                """
-            )
+        # Rebuild the FTS index to keep it consistent after deletes
+        self.rebuild_fts_index()
 
     def insert_log(
         self,
@@ -133,13 +132,6 @@ class LogIndexer:
                 """,
                 (cur.lastrowid, job_id, level, message),
             )
-        if cur.lastrowid:
-            # cheap trigger, no DB scan
-            if cur.lastrowid % int(self.rotate_size * 1.5) == 0:
-                self.rotate_job_logs_by_count(
-                    job_id=job_id,
-                    keep=self.rotate_size,
-                )
 
     def search_logs(
         self,
@@ -333,26 +325,29 @@ class LogIndexer:
 
 log_indexer = LogIndexer("data/log_indexer.db")
 
-# log_indexer.import_log_files(
-#     filename="logs/job-scheduler.job.19.log",
-# )
+# Example usage:
+# log_indexer.import_log_files(filename="logs/job-scheduler.job.19.log")
+
+# log_indexer.insert_log(19, "INFO", "pham thanh tu is working")
 
 
 import time
 
-start = time.time()
-matches = log_indexer.search_logs_with_following(
-    job_id=19, query="Loaded model config from database", limit=100, following_lines=5
-)
-
 
 def print_log(log):
-    print(f"{log["timestamp"]} {log["message"]}")
+    print(f"{log['timestamp']} {log['message']}")
+
+
+start = time.time()
+matches = log_indexer.search_logs(
+    job_id=19,
+    query="pham thanh tu",
+    limit=100,
+)
 
 
 elapsed = time.time() - start
 for log in matches:
-    print_log(log["match"])
-    for sub_log in log["following"]:
-        print_log(sub_log)
+    print_log(log)
+
 print("elapsed", elapsed, "s")
