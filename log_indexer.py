@@ -1,4 +1,5 @@
 import gzip
+import logging
 import re
 import sqlite3
 from pathlib import Path
@@ -38,11 +39,11 @@ def extract_job_id(filename: str) -> int:
 
 
 class LogIndexer:
-    def __init__(self, db_path="logs_index.db", rotate_size=100_000):
+    def __init__(self, db_path="logs_index.db", keep_size=100_000):
         db_path = Path(db_path)
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.rotate_size = rotate_size
         self.db = sqlite3.connect(str(db_path), check_same_thread=False)
+        self.keep_size = keep_size
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=NORMAL")
         self.db.execute("PRAGMA temp_store=MEMORY")
@@ -383,6 +384,9 @@ class LogIndexer:
 
 # def print_log(log):
 #     print(f"{log['timestamp']} {log['message']}")
+
+
+
 
 
 # def print_following_log(log):
