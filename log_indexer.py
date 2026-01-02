@@ -147,21 +147,35 @@ class LogIndexer:
         query: str,
         limit: int = 1000,
     ):
+        # Phase 1: FTS lookup (rowids only, very fast)
+        rowids = [
+            r[0]
+            for r in self.db.execute(
+                """
+                SELECT rowid
+                FROM logs_fts
+                WHERE job_id = ?
+                AND logs_fts MATCH ?
+                ORDER BY rowid
+                LIMIT ?
+                """,
+                (job_id, query, limit),
+            )
+        ]
+
+        if not rowids:
+            return []
+
+        # Phase 2: fetch actual rows by PRIMARY KEY
+        placeholders = ",".join("?" * len(rowids))
         rows = self.db.execute(
-            """
-            SELECT
-                l.job_id,
-                l.timestamp,
-                l.level,
-                l.message
-            FROM logs_fts
-            JOIN logs l ON l.id = logs_fts.rowid
-            WHERE logs_fts.job_id = ?
-            AND logs_fts MATCH ?
-            ORDER BY l.id
-            LIMIT ?
+            f"""
+            SELECT job_id, timestamp, level, message
+            FROM logs
+            WHERE id IN ({placeholders})
+            ORDER BY id
             """,
-            (job_id, query, limit),
+            rowids,
         ).fetchall()
 
         return [
@@ -248,32 +262,20 @@ log_indexer = LogIndexer("data/log_indexer.db")
 import time
 
 start = time.time()
-logs = log_indexer.get_logs_after_id(
-    job_id=19,
-)
-elapsed = time.time() - start
-
-for log in logs:
-    print(f"{log['timestamp']} [{log['level']}] {log['message']}")
-    last_id = log["id"]
-
-print("elapsed", elapsed, "s")
-
-start = time.time()
 matches = log_indexer.search_logs(job_id=19, query="Loaded model config from database", limit=100)
 elapsed = time.time() - start
-for log in matches:
-    print(log)
+# for log in matches:
+#     print(log)
 print("elapsed", elapsed, "s")
 
 
 # cd log_indexer_rs && maturin build --release && pip install ./target/wheels/log_indexer_rs-0.1.0-cp312-cp312-macosx_11_0_arm64.whl
 import log_indexer_rs
 
-log_indexer = log_indexer_rs.LogIndexer()
+log_indexer = log_indexer_rs.LogIndexer("data/log_indexer.db")
 start = time.time()
 logs = log_indexer.search_logs(job_id=19, query="Loaded model config from database", limit=100)
 elapsed = time.time() - start
-for log in matches:
-    print(log)
+# for log in logs:
+#     print(log)
 print("elapsed", elapsed, "s")

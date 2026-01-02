@@ -155,31 +155,77 @@ impl LogIndexer {
         }
         Ok(())
     }
-
-    fn search_logs(&self, job_id: i64, query: String, limit: Option<usize>, py: Python) -> PyResult<PyObject> {
+    
+        
+    fn search_logs(
+        &self,
+        job_id: i64,
+        query: String,
+        limit: Option<usize>,
+        py: Python,
+    ) -> PyResult<PyObject> {
         let limit = limit.unwrap_or(1000);
 
+        // --------------------------------------------------
+        // Phase 1: FTS lookup (rowids only)
+        // --------------------------------------------------
         let mut stmt = self.db.prepare(
             "
-            SELECT l.job_id, l.timestamp, l.level, l.message
+            SELECT rowid
             FROM logs_fts
-            JOIN logs l ON l.id = logs_fts.rowid
-            WHERE logs_fts.job_id = ?1
+            WHERE job_id = ?1
             AND logs_fts MATCH ?2
-            ORDER BY l.id
+            ORDER BY rowid
             LIMIT ?3
             "
         ).unwrap();
 
-        let rows = stmt.query_map(params![job_id, query, limit as i64], |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-            ))
-        }).unwrap();
+        let rowids: Vec<i64> = stmt
+            .query_map(params![job_id, query, limit as i64], |row| {
+                row.get(0)
+            })
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
 
+        if rowids.is_empty() {
+            return Ok(PyList::empty(py).to_object(py));
+        }
+
+        // --------------------------------------------------
+        // Phase 2: fetch rows by PRIMARY KEY
+        // --------------------------------------------------
+        let placeholders = std::iter::repeat("?")
+            .take(rowids.len())
+            .collect::<Vec<_>>()
+            .join(",");
+
+        let sql = format!(
+            "
+            SELECT job_id, timestamp, level, message
+            FROM logs
+            WHERE id IN ({})
+            ORDER BY id
+            ",
+            placeholders
+        );
+
+        let mut stmt = self.db.prepare(&sql).unwrap();
+
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(rowids.iter()), |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            })
+            .unwrap();
+
+        // --------------------------------------------------
+        // Convert to Python list of dicts
+        // --------------------------------------------------
         let results = PyList::empty(py);
         for row in rows {
             let (job_id, timestamp, level, message) = row.unwrap();
@@ -193,6 +239,7 @@ impl LogIndexer {
 
         Ok(results.to_object(py))
     }
+
 
     fn import_log_files(&mut self, filename: String) -> PyResult<()> {
         let path = PathBuf::from(&filename);
