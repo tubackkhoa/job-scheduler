@@ -43,48 +43,6 @@ wheels = [
 ]
 
 [[package]]
-name = "alpha-miner-plugins"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "alembic", version = "1.16.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
-    { name = "alembic", version = "1.17.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
-    { name = "apscheduler" },
-    { name = "fastapi" },
-    { name = "pluggy" },
-    { name = "psycopg2" },
-    { name = "pydantic" },
-    { name = "sqlalchemy" },
-    { name = "uvicorn", version = "0.39.0", source = { registry = "https://pypi.org/simple" }, extra = ["standard"], marker = "python_full_version < '3.10'" },
-    { name = "uvicorn", version = "0.40.0", source = { registry = "https://pypi.org/simple" }, extra = ["standard"], marker = "python_full_version >= '3.10'" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "black", version = "25.11.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
-    { name = "black", version = "25.12.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
-    { name = "pytest", version = "8.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
-    { name = "pytest", version = "9.0.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "alembic", specifier = ">=1.16.5" },
-    { name = "apscheduler", specifier = ">=3.10" },
-    { name = "black", marker = "extra == 'dev'" },
-    { name = "fastapi", specifier = ">=0.100" },
-    { name = "pluggy", specifier = ">=1.0" },
-    { name = "psycopg2" },
-    { name = "pydantic", specifier = ">=2.0" },
-    { name = "pytest", marker = "extra == 'dev'" },
-    { name = "ruff", marker = "extra == 'dev'" },
-    { name = "sqlalchemy", specifier = "==2.0.45" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.20" },
-]
-provides-extras = ["dev"]
-
-[[package]]
 name = "annotated-doc"
 version = "0.0.4"
 source = { registry = "https://pypi.org/simple" }
@@ -513,6 +471,50 @@ sdist = { url = "https://files.pythonhosted.org/packages/72/34/14ca021ce8e5dfedc
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cb/b1/3846dd7f199d53cb17f49cba7e651e9ce294d8497c8c150530ed11865bb8/iniconfig-2.3.0-py3-none-any.whl", hash = "sha256:f631c04d2c48c52b84d0d0549c99ff3859c98df65b3101406327ecc7d53fbf12", size = 7484 },
 ]
+
+[[package]]
+name = "job-scheduler"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "alembic", version = "1.16.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
+    { name = "alembic", version = "1.17.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
+    { name = "apscheduler" },
+    { name = "fastapi" },
+    { name = "pluggy" },
+    { name = "psycopg2" },
+    { name = "pydantic" },
+    { name = "sqlalchemy" },
+    { name = "sqlglot" },
+    { name = "uvicorn", version = "0.39.0", source = { registry = "https://pypi.org/simple" }, extra = ["standard"], marker = "python_full_version < '3.10'" },
+    { name = "uvicorn", version = "0.40.0", source = { registry = "https://pypi.org/simple" }, extra = ["standard"], marker = "python_full_version >= '3.10'" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "black", version = "25.11.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
+    { name = "black", version = "25.12.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
+    { name = "pytest", version = "8.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
+    { name = "pytest", version = "9.0.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "alembic", specifier = ">=1.16.5" },
+    { name = "apscheduler", specifier = ">=3.10" },
+    { name = "black", marker = "extra == 'dev'" },
+    { name = "fastapi", specifier = ">=0.100" },
+    { name = "pluggy", specifier = ">=1.0" },
+    { name = "psycopg2" },
+    { name = "pydantic", specifier = ">=2.0" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "ruff", marker = "extra == 'dev'" },
+    { name = "sqlalchemy", specifier = "==2.0.45" },
+    { name = "sqlglot" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.20" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "mako"
@@ -1065,6 +1067,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/d2/ac/5cd0d14f7830981c06f468507237b0a8205691d626492b5551a67535eb30/sqlalchemy-2.0.45-cp39-cp39-win32.whl", hash = "sha256:c1c2091b1489435ff85728fafeb990f073e64f6f5e81d5cd53059773e8521eb6", size = 2115932 },
     { url = "https://files.pythonhosted.org/packages/b9/eb/76f6db8828c6e0cfac89820a07a40a2bab25e82e69827177b942a9bff42a/sqlalchemy-2.0.45-cp39-cp39-win_amd64.whl", hash = "sha256:56ead1f8dfb91a54a28cd1d072c74b3d635bcffbd25e50786533b822d4f2cde2", size = 2139570 },
     { url = "https://files.pythonhosted.org/packages/bf/e1/3ccb13c643399d22289c6a9786c1a91e3dcbb68bce4beb44926ac2c557bf/sqlalchemy-2.0.45-py3-none-any.whl", hash = "sha256:5225a288e4c8cc2308dbdd874edad6e7d0fd38eac1e9e5f23503425c8eee20d0", size = 1936672 },
+]
+
+[[package]]
+name = "sqlglot"
+version = "28.5.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/bf/8c/a4d24b6103305467506c1dea9c3ca8dc92773a91bae246c2517c256a0cf9/sqlglot-28.5.0.tar.gz", hash = "sha256:b3213b3e867dcc306074f1c90480aeee89a0e635cf0dfe70eb4a3af7b61972e6", size = 5652688 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ec/f7/6a7effd2526f64bcb0d2264c0dbebc7f8508add3f2c0748540d1448a24a3/sqlglot-28.5.0-py3-none-any.whl", hash = "sha256:5798bfdb6e9bc36c964e6c64d7222624d98b2631cc20f44628a82eba7cf7b4bf", size = 561086 },
 ]
 
 [[package]]

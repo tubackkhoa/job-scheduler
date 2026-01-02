@@ -112,13 +112,17 @@ class Plugin:
         trim_blocks=True,
         lstrip_blocks=True,
     )
-    _env.globals["datetime"] = datetime
-    _env.globals["MyClass"] = MyClass
-    _env.globals["get_users"] = lambda: ["tupt", "cuongnv"]
+
+    _env.globals.update(
+        {
+            "datetime": datetime,
+            "MyClass": MyClass,
+            "get_users": lambda: ["tupt", "cuongnv"],
+        }
+    )
+
     _env.filters["in_clause"] = lambda values: (
-        "()"
-        if not values
-        else "(" + ",".join('"' + str(v).replace('"', '\\"') + '"' for v in values) + ")"
+        "()" if not values else "(" + ",".join(repr(v) for v in values) + ")"
     )
 
     @hookimpl
