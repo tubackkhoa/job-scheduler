@@ -64,11 +64,13 @@ async def lifespan(app: FastAPI):
         db_engine = create_engine(db_connection)
 
     # Initialise log service and handler
+    use_log_indexer = os.getenv("USE_LOG_INDEXER", "false").lower() in ("true", "1", "yes")
     log_service = LogService(
         log_dir=os.getenv("LOG_DIR", "logs"),
         max_file_size=int(os.getenv("LOG_MAX_SIZE", 10 * 1024 * 1024)),
         max_files=int(os.getenv("LOG_MAX_FILES", 10)),
         retention_days=int(os.getenv("LOG_RETENTION_DAYS", 7)),
+        useIndexer=use_log_indexer,
     )
 
     loop = asyncio.get_running_loop()

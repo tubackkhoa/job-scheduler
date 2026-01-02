@@ -1,11 +1,12 @@
 import gzip
+import logging
 import re
 import sqlite3
 from pathlib import Path
 from datetime import datetime
 from typing import Iterable, Optional
 
-
+logger = logging.getLogger(__name__)
 # Match log lines:
 LOG_LINE_RE = re.compile(
     r"""
@@ -43,7 +44,7 @@ class LogIndexer:
         db_path = Path(db_path)
         db_path.parent.mkdir(parents=True, exist_ok=True)
         self.rotate_size = rotate_size
-        self.db = sqlite3.connect(str(db_path))
+        self.db = sqlite3.connect(str(db_path), check_same_thread=False)
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=NORMAL")
         self.db.execute("PRAGMA temp_store=MEMORY")
@@ -205,6 +206,7 @@ class LogIndexer:
                 (job_id, query, limit),
             )
         ]
+        
 
         if not match_ids:
             return []
@@ -323,32 +325,83 @@ class LogIndexer:
             for r in rows
         ]
 
+    def get_latest_logs(
+        self,
+        job_id: int,
+        limit: int = 1000,
+        order_desc: bool = True,
+    ):
+        """
+        Get N latest logs for a job_id.
+        Args:
+            job_id: Job identifier
+            limit: Number of latest logs to retrieve
+            order_desc: If True, return newest first (DESC), else oldest first (ASC)
+        Returns: List of log dictionaries
+        """
+        order_clause = "DESC" if order_desc else "ASC"
+        rows = self.db.execute(
+            f"""
+            SELECT id, job_id, timestamp, level, message
+            FROM logs
+            WHERE job_id = ?
+            ORDER BY id {order_clause}
+            LIMIT ?
+            """,
+            (job_id, limit),
+        ).fetchall()
 
-log_indexer = LogIndexer("data/log_indexer.db")
+        return [
+            {
+                "id": r[0],
+                "job_id": r[1],
+                "timestamp": r[2],
+                "level": r[3],
+                "message": r[4],
+            }
+            for r in rows
+        ]
+
+
+# log_indexer = LogIndexer("data/log_indexer.db")
 
 # Example usage:
-# log_indexer.import_log_files(filename="logs/job-scheduler.job.19.log")
+# log_indexer.import_log_files(filename="logs/job-scheduler.job.16.log")
 
 # log_indexer.insert_log(19, "INFO", "pham thanh tu is working")
 
 
-import time
+# import time
 
 
-def print_log(log):
-    print(f"{log['timestamp']} {log['message']}")
+# log_indexer = LogIndexer("data/log_indexer.db")
+
+# # Example usage:
+# log_indexer.import_log_files(filename="logs/job-scheduler.job.16.log")
 
 
-start = time.time()
-matches = log_indexer.search_logs(
-    job_id=19,
-    query="pham thanh tu",
-    limit=100,
-)
+# import time
 
 
-elapsed = time.time() - start
-for log in matches:
-    print_log(log)
+# def print_log(log):
+#     print(f"{log['timestamp']} {log['message']}")
 
-print("elapsed", elapsed, "s")
+
+# def print_following_log(log):
+#     print_log(log["match"])
+#     for sub_log in log["following"]:
+#         print_log(sub_log)
+
+
+# start = time.time()
+# matches = log_indexer.search_logs_with_following(
+#     job_id=16, query="Ranking completed", limit=2, following_lines=11
+# )
+
+
+
+# elapsed = time.time() - start
+# for log in matches:
+#     print_following_log(log)
+
+# print("elapsed", elapsed, "s")
