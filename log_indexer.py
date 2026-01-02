@@ -188,6 +188,85 @@ class LogIndexer:
             for r in rows
         ]
 
+    def search_logs_with_following(
+        self,
+        job_id: int,
+        query: str,
+        following_lines: int = 0,
+        limit: int = 1000,
+    ):
+        # --------------------------------------------------
+        # Phase 1: find matching rowids
+        # --------------------------------------------------
+        match_ids = [
+            r[0]
+            for r in self.db.execute(
+                """
+                SELECT rowid
+                FROM logs_fts
+                WHERE job_id = ?
+                AND logs_fts MATCH ?
+                ORDER BY rowid
+                LIMIT ?
+                """,
+                (job_id, query, limit),
+            )
+        ]
+
+        if not match_ids:
+            return []
+
+        min_id = match_ids[0]
+        max_id = match_ids[-1] + following_lines
+
+        # --------------------------------------------------
+        # Phase 2: single contiguous scan
+        # --------------------------------------------------
+        rows = self.db.execute(
+            """
+            SELECT id, job_id, timestamp, level, message
+            FROM logs
+            WHERE job_id = ?
+            AND id BETWEEN ? AND ?
+            ORDER BY id
+            """,
+            (job_id, min_id, max_id),
+        ).fetchall()
+
+        # Build id → log mapping
+        log_map = {
+            r[0]: {
+                "id": r[0],
+                "job_id": r[1],
+                "timestamp": r[2],
+                "level": r[3],
+                "message": r[4],
+            }
+            for r in rows
+        }
+
+        # --------------------------------------------------
+        # Phase 3: group per match
+        # --------------------------------------------------
+        groups = []
+        for match_id in match_ids:
+            if match_id not in log_map:
+                continue
+
+            group = {
+                "match": log_map[match_id],
+                "following": [],
+            }
+
+            for i in range(1, following_lines + 1):
+                next_id = match_id + i
+                if next_id in log_map:
+                    group["following"].append(log_map[next_id])
+
+            groups.append(group)
+
+        return groups
+
     def import_log_files(self, filename: str):
         path = Path(filename)
 
@@ -262,20 +341,18 @@ log_indexer = LogIndexer("data/log_indexer.db")
 import time
 
 start = time.time()
-matches = log_indexer.search_logs(job_id=19, query="Loaded model config from database", limit=100)
+matches = log_indexer.search_logs_with_following(
+    job_id=19, query="Loaded model config from database", limit=100, following_lines=5
+)
+
+
+def print_log(log):
+    print(f"{log["timestamp"]} {log["message"]}")
+
+
 elapsed = time.time() - start
-# for log in matches:
-#     print(log)
-print("elapsed", elapsed, "s")
-
-
-# cd log_indexer_rs && maturin build --release && pip install ./target/wheels/log_indexer_rs-0.1.0-cp312-cp312-macosx_11_0_arm64.whl
-import log_indexer_rs
-
-log_indexer = log_indexer_rs.LogIndexer("data/log_indexer.db")
-start = time.time()
-logs = log_indexer.search_logs(job_id=19, query="Loaded model config from database", limit=100)
-elapsed = time.time() - start
-# for log in logs:
-#     print(log)
+for log in matches:
+    print_log(log["match"])
+    for sub_log in log["following"]:
+        print_log(sub_log)
 print("elapsed", elapsed, "s")
