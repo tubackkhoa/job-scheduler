@@ -1,12 +1,10 @@
 import gzip
-import logging
 import re
 import sqlite3
 from pathlib import Path
 from datetime import datetime
 from typing import Iterable, Optional
 
-logger = logging.getLogger(__name__)
 # Match log lines:
 LOG_LINE_RE = re.compile(
     r"""
