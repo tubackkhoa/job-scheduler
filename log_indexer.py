@@ -39,10 +39,10 @@ def extract_job_id(filename: str) -> int:
 
 
 class LogIndexer:
-    def __init__(self, db_path="logs_index.db", rotate_size=100_000):
+    def __init__(self, db_path="logs_index.db", keep_size=100_000):
         db_path = Path(db_path)
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.rotate_size = rotate_size
+        self.keep_size = keep_size
         self.db = sqlite3.connect(str(db_path))
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=NORMAL")
@@ -86,7 +86,6 @@ class LogIndexer:
     def rotate_job_logs_by_count(
         self,
         job_id: int,
-        keep: int = 100_000,
     ):
         with self.db:
             self.db.execute(
@@ -101,7 +100,7 @@ class LogIndexer:
                     LIMIT ?
                 )
                 """,
-                (job_id, job_id, keep),
+                (job_id, job_id, self.keep_size),
             )
         # Rebuild the FTS index to keep it consistent after deletes
         self.rebuild_fts_index()
@@ -327,9 +326,7 @@ class LogIndexer:
 log_indexer = LogIndexer("data/log_indexer.db")
 
 # Example usage:
-# log_indexer.import_log_files(filename="logs/job-scheduler.job.19.log")
-
-# log_indexer.insert_log(19, "INFO", "pham thanh tu is working")
+# log_indexer.import_log_files(filename="logs/job-scheduler.job.16.log")
 
 
 import time
@@ -339,16 +336,20 @@ def print_log(log):
     print(f"{log['timestamp']} {log['message']}")
 
 
+def print_following_log(log):
+    print_log(log["match"])
+    for sub_log in log["following"]:
+        print_log(sub_log)
+
+
 start = time.time()
-matches = log_indexer.search_logs(
-    job_id=19,
-    query="pham thanh tu",
-    limit=100,
+matches = log_indexer.search_logs_with_following(
+    job_id=16, query="Ranking completed", limit=100, following_lines=5
 )
 
 
 elapsed = time.time() - start
 for log in matches:
-    print_log(log)
+    print_following_log(log)
 
 print("elapsed", elapsed, "s")
