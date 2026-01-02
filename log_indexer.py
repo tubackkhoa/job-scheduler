@@ -132,6 +132,7 @@ class LogIndexer:
                 """,
                 (cur.lastrowid, job_id, level, message),
             )
+            return cur.lastrowid
 
     def search_logs(
         self,
