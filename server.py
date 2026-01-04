@@ -383,6 +383,12 @@ def search_logs_with_following(
             status_code=500, detail=f"Failed to search logs with following: {str(e)}"
         )
 
+@app.post("/api/logs/{job_id}/clear")
+def clear_logs(log_service: LogServiceState, job_id: int):
+    result = log_service.clear_logs(job_id)
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result["error"])
+    return result
 
 # static site
 static_files = os.getenv("STATIC_FILES")

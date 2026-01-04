@@ -1,23 +1,24 @@
 {
-    "editor.formatOnSave": true,
-    "editor.defaultFormatter": "esbenp.prettier-vscode",
-    "prettier.singleQuote": true,
-    "prettier.trailingComma": "es5",
-    "prettier.tabWidth": 2,
-    "prettier.useTabs": false,
-    "prettier.semi": true,
-    "prettier.printWidth": 80,
-    "files.eol": "\n",
-    "javascript.format.enable": false,
-    "typescript.format.enable": false,
-    "python.analysis.typeCheckingMode": "basic",
-    "python.analysis.autoImportCompletions": true,
-    "python.analysis.useLibraryCodeForTypes": true,
-    "python.analysis.diagnosticSeverityOverrides": {
-        "reportMissingTypeStubs": "none",
-        "reportUnknownMemberType": "none",
-        "reportUnknownVariableType": "none",
-        "reportUnknownArgumentType": "none",
-        "reportGeneralTypeIssues": "warning"
-    }
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "prettier.singleQuote": true,
+  "prettier.trailingComma": "es5",
+  "prettier.tabWidth": 2,
+  "prettier.useTabs": false,
+  "prettier.semi": true,
+  "prettier.printWidth": 80,
+  "files.eol": "\n",
+  "javascript.format.enable": false,
+  "typescript.format.enable": false,
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.useLibraryCodeForTypes": true,
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportMissingTypeStubs": "none",
+    "reportUnknownMemberType": "none",
+    "reportUnknownVariableType": "none",
+    "reportUnknownArgumentType": "none",
+    "reportGeneralTypeIssues": "warning"
+  },
+  "python-envs.pythonProjects": []
 }

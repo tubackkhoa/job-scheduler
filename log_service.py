@@ -496,3 +496,28 @@ class LogService:
                 pass
 
         return deleted_count
+    
+    def clear_logs(self, job_id: int):
+        if self.useIndexer:
+            try:
+                self.log_indexer.rotate_job_logs_by_count(job_id, 0)
+            except Exception as e:
+                logger.error(f"Error in clear_logs useIndexer: {e}")
+                return {"success": False, "error": str(e)}
+            return {"success": True}
+        else:
+            try:
+            # Write to file (original mode)
+                lock = self._get_lock(job_id)
+                with lock:
+                    log_file = self._get_log_file(job_id)
+
+                    # Check if rotation needed
+                    if log_file.exists():
+                        # Clear the file by opening in write mode (truncates file)
+                            with open(log_file, "w", encoding="utf-8") as f:
+                                pass  # File is now empty
+            except Exception as e:
+                logger.error(f"Error in clear_logs via file mode: {e}")
+                return {"success": False, "error": str(e)}
+            return {"success": True}
