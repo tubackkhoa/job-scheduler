@@ -18,12 +18,16 @@ from sqlalchemy import create_engine
 from create_data import create_data
 from log_handler import JobLogHandler
 from log_service import LogService
-from models import Job, Plugin
+from models import Job, Plugin, SqlVersion
 from plugin_manager import PluginManager
 from ws_manager import WSConnectionManager
 import os
 import dotenv
 import uvloop
+from sqlalchemy.orm import Session
+from sqlalchemy import select, update
+from datetime import datetime
+
 
 dotenv.load_dotenv()
 # Configure logging to show INFO and above messages
@@ -391,6 +395,256 @@ def clear_logs(log_service: LogServiceState, job_id: int):
         raise HTTPException(status_code=500, detail=result["error"])
     return result
 
+
+@app.post("/api/sql-versions")
+def create_sql_version(plugin_manager: PluginManagerState, payload: dict = Body(...)):    
+    required_keys = {"name", "sql_query"}
+    if not required_keys.issubset(payload):
+        raise HTTPException(
+            status_code=400,
+            detail="Missing required fields: name, sql_query",
+        )
+    
+    try:
+        with Session(plugin_manager.db_engine) as session:
+            sql_version = SqlVersion(
+                name=payload["name"],
+                description=payload.get("description"),
+                sql_query=payload["sql_query"],
+                tags=payload.get("tags"),
+            )
+            session.add(sql_version)
+            session.commit()
+            session.refresh(sql_version)
+            
+            return {
+                "id": sql_version.id,
+                "name": sql_version.name,
+                "description": sql_version.description,
+                "sql_query": sql_version.sql_query,
+                "created_at": sql_version.created_at.isoformat(),
+                "updated_at": sql_version.updated_at.isoformat(),
+                "is_active": sql_version.is_active,
+                "tags": sql_version.tags,
+            }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create SQL version: {str(e)}",
+        )
+
+
+@app.get("/api/sql-versions")
+def get_sql_versions(
+    plugin_manager: PluginManagerState,
+    search: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+):    
+    try:
+        with Session(plugin_manager.db_engine) as session:
+            stmt = select(SqlVersion)
+            if search:
+                stmt = stmt.where(SqlVersion.name.ilike(f"%{search}%"))
+            
+            stmt = stmt.order_by(SqlVersion.created_at.desc()).limit(limit).offset(offset)
+            versions = session.execute(stmt).scalars().all()
+            
+            return {
+                "versions": [
+                    {
+                        "id": v.id,
+                        "name": v.name,
+                        "description": v.description,
+                        "sql_query": v.sql_query,
+                        "created_at": v.created_at.isoformat(),
+                        "updated_at": v.updated_at.isoformat(),
+                        "is_active": v.is_active,
+                        "tags": v.tags,
+                    }
+                    for v in versions
+                ],
+                "count": len(versions),
+                "search": search,
+                "limit": limit,
+                "offset": offset,
+            }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch SQL versions: {str(e)}",
+        )
+
+
+@app.get("/api/sql-versions/{version_id}")
+def get_sql_version(
+    plugin_manager: PluginManagerState,
+    version_id: int,
+):
+    try:
+        with Session(plugin_manager.db_engine) as session:
+            stmt = select(SqlVersion).where(
+                SqlVersion.id == version_id,
+            )
+            version = session.execute(stmt).scalar_one_or_none()
+            
+            if not version:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"SQL version {version_id} not found",
+                )
+            
+            return {
+                "id": version.id,
+                "name": version.name,
+                "description": version.description,
+                "sql_query": version.sql_query,
+                "created_at": version.created_at.isoformat(),
+                "updated_at": version.updated_at.isoformat(),
+                "is_active": version.is_active,
+                "tags": version.tags,
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch SQL version: {str(e)}",
+        )
+
+
+@app.put("/api/sql-versions/{version_id}")
+def update_sql_version(
+    plugin_manager: PluginManagerState,
+    version_id: int,
+    payload: dict = Body(...),
+):
+    """
+    Update an existing SQL version.
+    
+    Expected payload:
+    {
+      "name": "v1.1",  # Optional
+      "description": "Updated ranking",  # Optional
+      "sql_query": "SELECT ...",  # Optional
+      "tags": "{...}"  # Optional
+    }
+    """
+    try:
+        with Session(plugin_manager.db_engine) as session:
+            stmt = select(SqlVersion).where(SqlVersion.id == version_id)
+            version = session.execute(stmt).scalar_one_or_none()
+            
+            if not version:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"SQL version {version_id} not found",
+                )
+            
+            # Update fields if provided
+            if "name" in payload:
+                version.name = payload["name"]
+            if "description" in payload:
+                version.description = payload["description"]
+            if "sql_query" in payload:
+                version.sql_query = payload["sql_query"]
+            if "tags" in payload:
+                version.tags = payload["tags"]
+            
+            version.updated_at = datetime.now()
+            
+            session.commit()
+            session.refresh(version)
+            
+            return {
+                "id": version.id,
+                "name": version.name,
+                "description": version.description,
+                "sql_query": version.sql_query,
+                "created_at": version.created_at.isoformat(),
+                "updated_at": version.updated_at.isoformat(),
+                "is_active": version.is_active,
+                "tags": version.tags,
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update SQL version: {str(e)}",
+        )
+
+
+@app.delete("/api/sql-versions/{version_id}")
+def delete_sql_version(plugin_manager: PluginManagerState, version_id: int):
+    try:
+        with Session(plugin_manager.db_engine) as session:
+            stmt = select(SqlVersion).where(SqlVersion.id == version_id)
+            version = session.execute(stmt).scalar_one_or_none()
+            
+            if not version:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"SQL version {version_id} not found",
+                )
+            
+            session.delete(version)
+            session.commit()
+            
+            return {
+                "success": True,
+                "message": f"SQL version {version_id} deleted",
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete SQL version: {str(e)}",
+        )
+
+
+@app.post("/api/sql-versions/{version_id}/activate")
+def activate_sql_version(plugin_manager: PluginManagerState, version_id: int):
+    
+    try:
+        with Session(plugin_manager.db_engine) as session:
+            # Get the version to activate
+            stmt = select(SqlVersion).where(SqlVersion.id == version_id)
+            version = session.execute(stmt).scalar_one_or_none()
+            
+            if not version:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"SQL version {version_id} not found",
+                )
+            
+            session_id = version.session_id
+            
+            # Deactivate all versions for this session
+            update_stmt = (
+                update(SqlVersion)
+                .where(SqlVersion.session_id == session_id)
+                .values(is_active=False)
+            )
+            session.execute(update_stmt)
+            
+            # Activate the selected version
+            version.is_active = True
+            
+            session.commit()
+            
+            return {
+                "success": True,
+                "message": f"SQL version {version_id} activated",
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to activate SQL version: {str(e)}",
+        )
 # static site
 static_files = os.getenv("STATIC_FILES")
 if static_files:
