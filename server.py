@@ -385,7 +385,8 @@ def search_logs_with_following(
 
 @app.post("/api/logs/{job_id}/clear")
 def clear_logs(log_service: LogServiceState, job_id: int):
-    result = log_service.clear_logs(job_id)
+    scheduler_job_id = PluginManager.get_job_scheduler_id(job_id)
+    result = log_service.clear_logs(scheduler_job_id)
     if not result["success"]:
         raise HTTPException(status_code=500, detail=result["error"])
     return result

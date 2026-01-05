@@ -497,10 +497,11 @@ class LogService:
 
         return deleted_count
     
-    def clear_logs(self, job_id: int):
+    def clear_logs(self, job_id: str):
+        job_id_int = self._extract_job_id_int(job_id)
         if self.useIndexer:
             try:
-                self.log_indexer.rotate_job_logs_by_count(job_id, 0)
+                self.log_indexer.rotate_job_logs_by_count(job_id_int, 0)
             except Exception as e:
                 logger.error(f"Error in clear_logs useIndexer: {e}")
                 return {"success": False, "error": str(e)}
