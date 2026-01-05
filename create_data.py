@@ -16,21 +16,6 @@ PLUGIN_DATA = [
         "description": "Sample plugin version 0.2.0 with slower interval.",
     },
     {
-        "package": "plugins.lab_plugin@v0_1_0.LabPlugin",
-        "interval": 3,
-        "description": "Lab plugin for experimental features.",
-    },
-    {
-        "package": "plugins.stable_plugin@v0_1_0.StablePlugin",
-        "interval": 3,
-        "description": "Stable plugin for production-like environments.",
-    },
-    {
-        "package": "plugins.prod_plugin@v0_1_0.ProdPlugin",
-        "interval": 3,
-        "description": "Production plugin with standard interval.",
-    },
-    {
         "package": "alpha_miner.plugins.UatUserCustomConfigPlugin",
         "interval": 1,
         "description": "Mock user custom config plugin for testing.",

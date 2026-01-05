@@ -1,10 +1,10 @@
 import gzip
+import logging
 import re
 import sqlite3
 from pathlib import Path
 from datetime import datetime
 from typing import Iterable, Optional
-
 
 # Match log lines:
 LOG_LINE_RE = re.compile(
@@ -39,11 +39,11 @@ def extract_job_id(filename: str) -> int:
 
 
 class LogIndexer:
-    def __init__(self, db_path="logs_index.db", rotate_size=100_000):
+    def __init__(self, db_path="logs_index.db", keep_size=100_000):
         db_path = Path(db_path)
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.rotate_size = rotate_size
-        self.db = sqlite3.connect(str(db_path))
+        self.db = sqlite3.connect(str(db_path), check_same_thread=False)
+        self.keep_size = keep_size
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=NORMAL")
         self.db.execute("PRAGMA temp_store=MEMORY")
@@ -78,6 +78,11 @@ class LogIndexer:
         )
         self.db.commit()
 
+    def rebuild_fts_index(self):
+        # Rebuild the FTS index if needed
+        self.db.execute("INSERT INTO logs_fts(logs_fts) VALUES('rebuild')")
+        self.db.commit()
+
     def rotate_job_logs_by_count(
         self,
         job_id: int,
@@ -98,14 +103,8 @@ class LogIndexer:
                 """,
                 (job_id, job_id, keep),
             )
-
-            # keep FTS in sync
-            self.db.execute(
-                """
-                DELETE FROM logs_fts
-                WHERE rowid NOT IN (SELECT id FROM logs)
-                """
-            )
+        # Rebuild the FTS index to keep it consistent after deletes
+        self.rebuild_fts_index()
 
     def insert_log(
         self,
@@ -133,13 +132,7 @@ class LogIndexer:
                 """,
                 (cur.lastrowid, job_id, level, message),
             )
-        if cur.lastrowid:
-            # cheap trigger, no DB scan
-            if cur.lastrowid % int(self.rotate_size * 1.5) == 0:
-                self.rotate_job_logs_by_count(
-                    job_id=job_id,
-                    keep=self.rotate_size,
-                )
+            return cur.lastrowid
 
     def search_logs(
         self,
@@ -147,21 +140,35 @@ class LogIndexer:
         query: str,
         limit: int = 1000,
     ):
+        # Phase 1: FTS lookup (rowids only, very fast)
+        rowids = [
+            r[0]
+            for r in self.db.execute(
+                """
+                SELECT rowid
+                FROM logs_fts
+                WHERE job_id = ?
+                AND logs_fts MATCH ?
+                ORDER BY rowid
+                LIMIT ?
+                """,
+                (job_id, query, limit),
+            )
+        ]
+
+        if not rowids:
+            return []
+
+        # Phase 2: fetch actual rows by PRIMARY KEY
+        placeholders = ",".join("?" * len(rowids))
         rows = self.db.execute(
-            """
-            SELECT
-                l.job_id,
-                l.timestamp,
-                l.level,
-                l.message
-            FROM logs_fts
-            JOIN logs l ON l.id = logs_fts.rowid
-            WHERE logs_fts.job_id = ?
-            AND logs_fts MATCH ?
-            ORDER BY l.id
-            LIMIT ?
+            f"""
+            SELECT job_id, timestamp, level, message
+            FROM logs
+            WHERE id IN ({placeholders})
+            ORDER BY id
             """,
-            (job_id, query, limit),
+            rowids,
         ).fetchall()
 
         return [
@@ -173,6 +180,86 @@ class LogIndexer:
             }
             for r in rows
         ]
+
+    def search_logs_with_following(
+        self,
+        job_id: int,
+        query: str,
+        following_lines: int = 0,
+        limit: int = 1000,
+    ):
+        # --------------------------------------------------
+        # Phase 1: find matching rowids
+        # --------------------------------------------------
+        match_ids = [
+            r[0]
+            for r in self.db.execute(
+                """
+                SELECT rowid
+                FROM logs_fts
+                WHERE job_id = ?
+                AND logs_fts MATCH ?
+                ORDER BY rowid
+                LIMIT ?
+                """,
+                (job_id, query, limit),
+            )
+        ]
+        
+
+        if not match_ids:
+            return []
+
+        min_id = match_ids[0]
+        max_id = match_ids[-1] + following_lines
+
+        # --------------------------------------------------
+        # Phase 2: single contiguous scan
+        # --------------------------------------------------
+        rows = self.db.execute(
+            """
+            SELECT id, job_id, timestamp, level, message
+            FROM logs
+            WHERE job_id = ?
+            AND id BETWEEN ? AND ?
+            ORDER BY id
+            """,
+            (job_id, min_id, max_id),
+        ).fetchall()
+
+        # Build id → log mapping
+        log_map = {
+            r[0]: {
+                "id": r[0],
+                "job_id": r[1],
+                "timestamp": r[2],
+                "level": r[3],
+                "message": r[4],
+            }
+            for r in rows
+        }
+
+        # --------------------------------------------------
+        # Phase 3: group per match
+        # --------------------------------------------------
+        groups = []
+        for match_id in match_ids:
+            if match_id not in log_map:
+                continue
+
+            group = {
+                "match": log_map[match_id],
+                "following": [],
+            }
+
+            for i in range(1, following_lines + 1):
+                next_id = match_id + i
+                if next_id in log_map:
+                    group["following"].append(log_map[next_id])
+
+            groups.append(group)
+
+        return groups
 
     def import_log_files(self, filename: str):
         path = Path(filename)
@@ -237,43 +324,86 @@ class LogIndexer:
             for r in rows
         ]
 
+    def get_latest_logs(
+        self,
+        job_id: int,
+        limit: int = 1000,
+        order_desc: bool = True,
+    ):
+        """
+        Get N latest logs for a job_id.
+        Args:
+            job_id: Job identifier
+            limit: Number of latest logs to retrieve
+            order_desc: If True, return newest first (DESC), else oldest first (ASC)
+        Returns: List of log dictionaries
+        """
+        order_clause = "DESC" if order_desc else "ASC"
+        rows = self.db.execute(
+            f"""
+            SELECT id, job_id, timestamp, level, message
+            FROM logs
+            WHERE job_id = ?
+            ORDER BY id {order_clause}
+            LIMIT ?
+            """,
+            (job_id, limit),
+        ).fetchall()
 
-log_indexer = LogIndexer("data/log_indexer.db")
+        return [
+            {
+                "id": r[0],
+                "job_id": r[1],
+                "timestamp": r[2],
+                "level": r[3],
+                "message": r[4],
+            }
+            for r in rows
+        ]
 
-# log_indexer.import_log_files(
-#     filename="logs/job-scheduler.job.19.log",
+
+# log_indexer = LogIndexer("data/log_indexer.db")
+
+# Example usage:
+# log_indexer.import_log_files(filename="logs/job-scheduler.job.16.log")
+
+# log_indexer.insert_log(19, "INFO", "pham thanh tu is working")
+
+
+# import time
+
+
+# log_indexer = LogIndexer("data/log_indexer.db")
+
+# # Example usage:
+# log_indexer.import_log_files(filename="logs/job-scheduler.job.16.log")
+
+
+# import time
+
+
+# def print_log(log):
+#     print(f"{log['timestamp']} {log['message']}")
+
+
+
+
+
+# def print_following_log(log):
+#     print_log(log["match"])
+#     for sub_log in log["following"]:
+#         print_log(sub_log)
+
+
+# start = time.time()
+# matches = log_indexer.search_logs_with_following(
+#     job_id=16, query="Ranking completed", limit=2, following_lines=11
 # )
 
 
-import time
 
-start = time.time()
-logs = log_indexer.get_logs_after_id(
-    job_id=19,
-)
-elapsed = time.time() - start
+# elapsed = time.time() - start
+# for log in matches:
+#     print_following_log(log)
 
-for log in logs:
-    print(f"{log['timestamp']} [{log['level']}] {log['message']}")
-    last_id = log["id"]
-
-print("elapsed", elapsed, "s")
-
-start = time.time()
-matches = log_indexer.search_logs(job_id=19, query="Loaded model config from database", limit=100)
-elapsed = time.time() - start
-for log in matches:
-    print(log)
-print("elapsed", elapsed, "s")
-
-
-# cd log_indexer_rs && maturin build --release && pip install ./target/wheels/log_indexer_rs-0.1.0-cp312-cp312-macosx_11_0_arm64.whl
-import log_indexer_rs
-
-log_indexer = log_indexer_rs.LogIndexer()
-start = time.time()
-logs = log_indexer.search_logs(job_id=19, query="Loaded model config from database", limit=100)
-elapsed = time.time() - start
-for log in matches:
-    print(log)
-print("elapsed", elapsed, "s")
+# print("elapsed", elapsed, "s")

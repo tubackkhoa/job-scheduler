@@ -64,11 +64,13 @@ async def lifespan(app: FastAPI):
         db_engine = create_engine(db_connection)
 
     # Initialise log service and handler
+    use_log_indexer = os.getenv("USE_LOG_INDEXER", "false").lower() in ("true", "1", "yes")
     log_service = LogService(
         log_dir=os.getenv("LOG_DIR", "logs"),
         max_file_size=int(os.getenv("LOG_MAX_SIZE", 10 * 1024 * 1024)),
         max_files=int(os.getenv("LOG_MAX_FILES", 10)),
         retention_days=int(os.getenv("LOG_RETENTION_DAYS", 7)),
+        useIndexer=use_log_indexer,
     )
 
     loop = asyncio.get_running_loop()
@@ -381,6 +383,13 @@ def search_logs_with_following(
             status_code=500, detail=f"Failed to search logs with following: {str(e)}"
         )
 
+@app.post("/api/logs/{job_id}/clear")
+def clear_logs(log_service: LogServiceState, job_id: int):
+    scheduler_job_id = PluginManager.get_job_scheduler_id(job_id)
+    result = log_service.clear_logs(scheduler_job_id)
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result["error"])
+    return result
 
 # static site
 static_files = os.getenv("STATIC_FILES")

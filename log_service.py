@@ -3,6 +3,7 @@ Log Service - File-based logging with rotation, retention, and search.
 Inspired by pm2-logrotate: rotate by size/date, keep N files, auto-cleanup.
 """
 
+import logging
 import os
 import gzip
 import re
@@ -11,7 +12,9 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Tuple
 from threading import Lock
 import json
+logger = logging.getLogger(__name__)
 
+from log_indexer import LogIndexer, extract_job_id, JOB_ID_RE
 
 class LogService:
 
@@ -21,6 +24,7 @@ class LogService:
         max_file_size: int = 10 * 1024 * 1024,  # 10MB
         max_files: int = 10,  # Keep last 10 rotated files
         retention_days: int = 7,  # Keep logs for 7 days
+        useIndexer: bool = False,
     ):
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
@@ -29,6 +33,22 @@ class LogService:
         self.retention_days = retention_days
         self._locks: Dict[str, Lock] = {}
         self._lock = Lock()  # For locks dict
+        
+        self.useIndexer = useIndexer
+        if self.useIndexer:
+            self.log_indexer = LogIndexer(f"{log_dir}/log_indexer.db")
+    
+    def _extract_job_id_int(self, job_id: str) -> int:
+        """Extract numeric job_id from string format (e.g., 'job-scheduler.job.123' -> 123)."""
+        m = JOB_ID_RE.search(job_id)
+        if m:
+            return int(m.group(1))
+        # Fallback: try to extract any number from the string
+        numbers = re.findall(r'\d+', job_id)
+        if numbers:
+            return int(numbers[-1])  # Use last number found
+        # Last resort: use hash of string (not ideal but works)
+        return abs(hash(job_id)) % (10 ** 9)
 
     def _get_lock(self, job_id: str) -> Lock:
         """Get or create a lock for a job_id."""
@@ -83,17 +103,31 @@ class LogService:
             "message": message,
         }
 
-        lock = self._get_lock(job_id)
-        with lock:
-            log_file = self._get_log_file(job_id)
+        # Write to SQLite if useIndexer is enabled, otherwise write to file
+        if self.useIndexer:
+            try:
+                job_id_int = self._extract_job_id_int(job_id)
+                self.log_indexer.insert_log(
+                    job_id=job_id_int,
+                    level=level,
+                    message=message,
+                    timestamp=timestamp,
+                )
+            except Exception:
+                pass  # Don't fail on SQLite write errors
+        else:
+            # Write to file (original mode)
+            lock = self._get_lock(job_id)
+            with lock:
+                log_file = self._get_log_file(job_id)
 
-            # Check if rotation needed
-            if log_file.exists() and log_file.stat().st_size >= self.max_file_size:
-                self._rotate_log(job_id, log_file)
+                # Check if rotation needed
+                if log_file.exists() and log_file.stat().st_size >= self.max_file_size:
+                    self._rotate_log(job_id, log_file)
 
-            # Append log
-            with open(log_file, "a", encoding="utf-8") as f:
-                f.write(log_line)
+                # Append log
+                with open(log_file, "a", encoding="utf-8") as f:
+                    f.write(log_line)
 
     def _read_log_file(self, file_path: Path) -> List[Dict]:
         """Read log entries from a file (plain or gzipped), supporting multiline log messages."""
@@ -181,6 +215,66 @@ class LogService:
             sort: Sort order - "asc" (oldest first) or "desc" (newest first, default)
         Returns: {logs: List[Dict], total: int, filtered: int, current_offset: int}
         """
+        # Use SQLite if useIndexer is enabled
+        if self.useIndexer:
+            try:
+                job_id_int = self._extract_job_id_int(job_id)
+                
+                if search_text:
+                    # Use FTS search from log_indexer
+                    results = self.log_indexer.search_logs(
+                        job_id=job_id_int,
+                        query=search_text,
+                        limit=limit,
+                    )
+                else:
+                    # Get latest N logs (e.g., 500 latest messages)
+                    order_desc = sort == "desc"
+                    results = self.log_indexer.get_latest_logs(
+                        job_id=job_id_int,
+                        limit=limit,
+                        order_desc=order_desc,
+                    )
+                
+                # Convert to expected format
+                logs = []
+                for r in results:
+                    logs.append({
+                        "offset": r.get("id", 0),
+                        "timestamp": r.get("timestamp", ""),
+                        "level": r.get("level", "INFO"),
+                        "message": r.get("message", ""),
+                    })
+                
+                # Sort by offset
+                reverse = sort == "desc"
+                logs.sort(key=lambda e: e["offset"], reverse=reverse)
+                
+                # Apply offset filter if provided
+                if offset is not None and offset > 0:
+                    if sort == "desc":
+                        logs = [e for e in logs if e["offset"] <= offset]
+                    else:
+                        logs = [e for e in logs if e["offset"] >= offset]
+                
+                result_entries = logs[:limit]
+                min_offset = result_entries[0]["offset"] if result_entries else None
+                max_offset = result_entries[-1]["offset"] if result_entries else None
+                
+                return {
+                    "logs": result_entries,
+                    "total": len(logs),  # Approximate total
+                    "filtered": len(result_entries) if search_text else len(logs),
+                    "returned": len(result_entries),
+                    "min_offset": min_offset,
+                    "max_offset": max_offset,
+                    "has_more": len(logs) > limit,
+                }
+            except Exception as e:
+                # Fallback to file-based search on error
+                pass
+        
+        # File-based search (original implementation)
         lock = self._get_lock(job_id)
         with lock:
             all_entries = []
@@ -249,6 +343,66 @@ class LogService:
         limit: int = 100,
         sort: str = "desc",
     ) -> Dict:
+        # Use SQLite if useIndexer is enabled
+        print("useIndexer", self.useIndexer)
+        if self.useIndexer:
+            try:
+                job_id_int = self._extract_job_id_int(job_id)
+                
+                
+                # Use search_logs_with_following from log_indexer
+                groups = self.log_indexer.search_logs_with_following(
+                    job_id=job_id_int,
+                    query=keyword,
+                    following_lines=n_following,
+                    limit=limit,
+                )
+                
+                # Convert to expected format
+                result_groups = []
+                for group in groups:
+                    match = group.get("match", {})
+                    following = group.get("following", [])
+                    
+                    result_groups.append({
+                        "matched_entry": {
+                            "offset": match.get("id", 0),
+                            "timestamp": match.get("timestamp", ""),
+                            "level": match.get("level", "INFO"),
+                            "message": match.get("message", ""),
+                        },
+                        "following_entries": [
+                            {
+                                "offset": f.get("id", 0),
+                                "timestamp": f.get("timestamp", ""),
+                                "level": f.get("level", "INFO"),
+                                "message": f.get("message", ""),
+                            }
+                            for f in following
+                        ],
+                        "offset": match.get("id", 0),
+                        "timestamp": match.get("timestamp", ""),
+                    })
+                
+                # Sort by offset
+                reverse = sort == "desc"
+                result_groups.sort(key=lambda g: g["offset"], reverse=reverse)
+                
+                return {
+                    "groups": result_groups[:limit],
+                    "total_matches": len(result_groups),
+                    "returned": len(result_groups[:limit]),
+                }
+            except Exception as e:
+                print(f"Error in search_logs_with_following: {e}")
+                # Fallback to file-based search on error
+                return {
+                    "groups": [],
+                    "total_matches": 0,
+                    "returned": 0,
+                }
+        
+        # File-based search (original implementation)
         lock = self._get_lock(job_id)
         with lock:
             all_entries = []
@@ -342,3 +496,29 @@ class LogService:
                 pass
 
         return deleted_count
+    
+    def clear_logs(self, job_id: str):
+        job_id_int = self._extract_job_id_int(job_id)
+        if self.useIndexer:
+            try:
+                self.log_indexer.rotate_job_logs_by_count(job_id_int, 0)
+            except Exception as e:
+                logger.error(f"Error in clear_logs useIndexer: {e}")
+                return {"success": False, "error": str(e)}
+            return {"success": True}
+        else:
+            try:
+            # Write to file (original mode)
+                lock = self._get_lock(job_id)
+                with lock:
+                    log_file = self._get_log_file(job_id)
+
+                    # Check if rotation needed
+                    if log_file.exists():
+                        # Clear the file by opening in write mode (truncates file)
+                            with open(log_file, "w", encoding="utf-8") as f:
+                                pass  # File is now empty
+            except Exception as e:
+                logger.error(f"Error in clear_logs via file mode: {e}")
+                return {"success": False, "error": str(e)}
+            return {"success": True}
