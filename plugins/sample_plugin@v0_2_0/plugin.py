@@ -10,7 +10,10 @@ hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
 
 
 class Config(BaseModel):
-    symbols: str = ",".join(["BTC", "ETH", "SOL", "LINK"])
+    symbols: list[str] = Field(
+        default_factory=list,
+        json_schema_extra={"ui:field": "MultiSelect", "default": "BTC,ETH,SOL,BNB,LINK"},
+    )
     md: str = Field(
         """
 {% set data = {
@@ -67,6 +70,5 @@ class Plugin:
     async def run(cls, config: Config, logger: logging.Logger):
 
         logger.debug(f"running with config: {config}")
-        symbols = [s.strip() for s in config.symbols.split(",")]
-        signals = create_signals(symbols)
+        signals = create_signals(config.symbols)
         return signals
