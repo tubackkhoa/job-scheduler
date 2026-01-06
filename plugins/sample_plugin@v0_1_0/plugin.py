@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, ValidationInfo, field_validator
 from typing import List
 import sqlglot
 from datetime import datetime
-from jinja2 import DictLoader, Environment, BaseLoader
+from jinja2 import DictLoader, Environment
 
 
 PROJECT_NAME = "alpha-miner"
