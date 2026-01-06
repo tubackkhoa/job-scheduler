@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 from typing import Annotated, Optional
 from fastapi import (
     Depends,
@@ -14,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 
 from fastapi.staticfiles import StaticFiles
+from jinja2 import Environment
 from sqlalchemy import create_engine
 from create_data import create_data
 from log_handler import JobLogHandler
@@ -102,6 +104,23 @@ async def lifespan(app: FastAPI):
     # Immediate hard exit after 1 second for cleaning up
     await asyncio.sleep(1)
     os._exit(0)
+
+
+def describe_callable(obj):
+    """Extract documentation and signature for a callable or object."""
+
+    data = {"doc": inspect.getdoc(obj)}
+
+    if callable(obj):
+        data["type"] = "function"
+        try:
+            data["signature"] = str(inspect.signature(obj))
+        except (ValueError, TypeError):
+            data["signature"] = None
+    else:
+        data["type"] = "variable"
+
+    return data
 
 
 app = FastAPI(lifespan=lifespan)
@@ -238,11 +257,12 @@ def schema(plugin_manager: PluginManagerState, session_id: int, plugin_id: int):
                 "schema": plugin.schema(),
                 "configs": configs,
                 "env": {
-                    "globals": [
-                        f"{name}:{'function' if callable(env.globals[name]) else 'variable'}"
-                        for name in sorted(env.globals.keys())
-                    ],
-                    "filters": sorted(env.filters.keys()),
+                    "globals": {
+                        name: describe_callable(value) for name, value in env.globals.items()
+                    },
+                    "filters": {
+                        name: describe_callable(value) for name, value in env.filters.items()
+                    },
                     "tests": sorted(env.tests.keys()),
                     "tags": sorted(
                         set(
@@ -253,6 +273,7 @@ def schema(plugin_manager: PluginManagerState, session_id: int, plugin_id: int):
                     ),
                 },
             }
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load schema: {str(e)}")
 
@@ -387,6 +408,7 @@ def search_logs_with_following(
             status_code=500, detail=f"Failed to search logs with following: {str(e)}"
         )
 
+
 @app.post("/api/logs/{job_id}/clear")
 def clear_logs(log_service: LogServiceState, job_id: int):
     scheduler_job_id = PluginManager.get_job_scheduler_id(job_id)
@@ -397,14 +419,14 @@ def clear_logs(log_service: LogServiceState, job_id: int):
 
 
 @app.post("/api/sql-versions")
-def create_sql_version(plugin_manager: PluginManagerState, payload: dict = Body(...)):    
+def create_sql_version(plugin_manager: PluginManagerState, payload: dict = Body(...)):
     required_keys = {"name", "sql_query"}
     if not required_keys.issubset(payload):
         raise HTTPException(
             status_code=400,
             detail="Missing required fields: name, sql_query",
         )
-    
+
     try:
         with Session(plugin_manager.db_engine) as session:
             sql_version = SqlVersion(
@@ -416,7 +438,7 @@ def create_sql_version(plugin_manager: PluginManagerState, payload: dict = Body(
             session.add(sql_version)
             session.commit()
             session.refresh(sql_version)
-            
+
             return {
                 "id": sql_version.id,
                 "name": sql_version.name,
@@ -440,16 +462,16 @@ def get_sql_versions(
     search: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
-):    
+):
     try:
         with Session(plugin_manager.db_engine) as session:
             stmt = select(SqlVersion)
             if search:
                 stmt = stmt.where(SqlVersion.name.ilike(f"%{search}%"))
-            
+
             stmt = stmt.order_by(SqlVersion.created_at.desc()).limit(limit).offset(offset)
             versions = session.execute(stmt).scalars().all()
-            
+
             return {
                 "versions": [
                     {
@@ -487,13 +509,13 @@ def get_sql_version(
                 SqlVersion.id == version_id,
             )
             version = session.execute(stmt).scalar_one_or_none()
-            
+
             if not version:
                 raise HTTPException(
                     status_code=404,
                     detail=f"SQL version {version_id} not found",
                 )
-            
+
             return {
                 "id": version.id,
                 "name": version.name,
@@ -521,7 +543,7 @@ def update_sql_version(
 ):
     """
     Update an existing SQL version.
-    
+
     Expected payload:
     {
       "name": "v1.1",  # Optional
@@ -534,13 +556,13 @@ def update_sql_version(
         with Session(plugin_manager.db_engine) as session:
             stmt = select(SqlVersion).where(SqlVersion.id == version_id)
             version = session.execute(stmt).scalar_one_or_none()
-            
+
             if not version:
                 raise HTTPException(
                     status_code=404,
                     detail=f"SQL version {version_id} not found",
                 )
-            
+
             # Update fields if provided
             if "name" in payload:
                 version.name = payload["name"]
@@ -550,12 +572,12 @@ def update_sql_version(
                 version.sql_query = payload["sql_query"]
             if "tags" in payload:
                 version.tags = payload["tags"]
-            
+
             version.updated_at = datetime.now()
-            
+
             session.commit()
             session.refresh(version)
-            
+
             return {
                 "id": version.id,
                 "name": version.name,
@@ -581,16 +603,16 @@ def delete_sql_version(plugin_manager: PluginManagerState, version_id: int):
         with Session(plugin_manager.db_engine) as session:
             stmt = select(SqlVersion).where(SqlVersion.id == version_id)
             version = session.execute(stmt).scalar_one_or_none()
-            
+
             if not version:
                 raise HTTPException(
                     status_code=404,
                     detail=f"SQL version {version_id} not found",
                 )
-            
+
             session.delete(version)
             session.commit()
-            
+
             return {
                 "success": True,
                 "message": f"SQL version {version_id} deleted",
@@ -606,34 +628,32 @@ def delete_sql_version(plugin_manager: PluginManagerState, version_id: int):
 
 @app.post("/api/sql-versions/{version_id}/activate")
 def activate_sql_version(plugin_manager: PluginManagerState, version_id: int):
-    
+
     try:
         with Session(plugin_manager.db_engine) as session:
             # Get the version to activate
             stmt = select(SqlVersion).where(SqlVersion.id == version_id)
             version = session.execute(stmt).scalar_one_or_none()
-            
+
             if not version:
                 raise HTTPException(
                     status_code=404,
                     detail=f"SQL version {version_id} not found",
                 )
-            
-            session_id = version.session_id
-            
+
+            session_id = version.id
+
             # Deactivate all versions for this session
             update_stmt = (
-                update(SqlVersion)
-                .where(SqlVersion.session_id == session_id)
-                .values(is_active=False)
+                update(SqlVersion).where(SqlVersion.id == session_id).values(is_active=False)
             )
             session.execute(update_stmt)
-            
+
             # Activate the selected version
             version.is_active = True
-            
+
             session.commit()
-            
+
             return {
                 "success": True,
                 "message": f"SQL version {version_id} activated",
@@ -645,6 +665,8 @@ def activate_sql_version(plugin_manager: PluginManagerState, version_id: int):
             status_code=500,
             detail=f"Failed to activate SQL version: {str(e)}",
         )
+
+
 # static site
 static_files = os.getenv("STATIC_FILES")
 if static_files:
