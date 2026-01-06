@@ -109,16 +109,18 @@ async def lifespan(app: FastAPI):
 def describe_callable(obj):
     """Extract documentation and signature for a callable or object."""
 
-    data = {"doc": inspect.getdoc(obj)}
+    data = {}
 
     if callable(obj):
         data["type"] = "function"
+        data["doc"] = inspect.getdoc(obj)
         try:
             data["signature"] = str(inspect.signature(obj))
         except (ValueError, TypeError):
             data["signature"] = None
     else:
         data["type"] = "variable"
+        data["doc"] = str(obj)
 
     return data
 
