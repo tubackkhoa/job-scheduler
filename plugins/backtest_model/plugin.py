@@ -60,9 +60,10 @@ class Config(BaseModel):
 
 {% set data_df = create_signals(base_assets) %}
 {% set grouped = data_df.groupby("asset") %}
-{% set chart = generate_ohlcv_chart_data(data_df, "BNB") %}
 
-## OHLCV chart
+{% for asset_unique in data_df['asset'].unique() %}
+{% set chart = generate_ohlcv_chart_data(data_df, asset_unique) %}
+## OHLCV chart for {{ asset_unique }}  
 ```chart
 {
   type: "candlestick",
@@ -90,6 +91,7 @@ class Config(BaseModel):
   },
 }
 ```
+{% endfor %}
 
 {# -------------------------------------------------- #}
 {# 2. Run analytics                                   #}
