@@ -12,6 +12,9 @@ from sqlalchemy.engine import Engine
 from enum import Enum as BaseEnum
 from datetime import datetime, date
 
+import models
+import plugin_manager
+
 PROJECT_NAME = "job-scheduler"
 hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
 
@@ -187,6 +190,7 @@ def build_job_config(
 
 
 def create_job_in_db(
+    pm: plugin_manager.PluginManager,
     engine: Engine,
     plugin_id: int,
     session_id: int,
@@ -209,9 +213,6 @@ def create_job_in_db(
     config_json = json.dumps(config, default=json_serializer)
 
     try:
-        from plugin_manager import PluginManager
-
-        pm = PluginManager.get_instance()
         if pm:
             pm.add_job(session_id, plugin_id, config_json, description)
             logger.info(f"📝 Created job via PluginManager")
@@ -241,15 +242,14 @@ def create_job_in_db(
         return None
 
 
-def delete_jobs(engine: Engine, job_ids: List[int], logger: logging.Logger) -> bool:
+def delete_jobs(
+    pm: plugin_manager.PluginManager, engine: Engine, job_ids: List[int], logger: logging.Logger
+) -> bool:
     """Batch delete jobs using PluginManager or fallback to direct SQL."""
     if not job_ids:
         return True
 
     try:
-        from plugin_manager import PluginManager
-
-        pm = PluginManager.get_instance()
         if pm:
             pm.remove_jobs(job_ids)
             logger.info(f"🗑️  Deleted {len(job_ids)} jobs via PluginManager: {job_ids}")
@@ -271,10 +271,22 @@ def delete_jobs(engine: Engine, job_ids: List[int], logger: logging.Logger) -> b
 
 class Plugin:
 
+    _env = Environment()
+
+    @staticmethod
+    def attach_to_manager(plugin_manager: plugin_manager.PluginManager):
+        ml_plugin = models.Plugin(id=0, package="plugins.mlflow_plugin.Plugin", interval=3)
+        ml_config = Config()
+        ml_job = models.Job(plugin_id=ml_plugin.id, active=True, config=ml_config.model_dump_json())
+        plugin = plugin_manager.load_plugin(ml_plugin.package)
+        assert plugin
+        plugin.env().globals["plugin_manager"] = plugin_manager
+        plugin_manager.add_job_instance(ml_job, ml_plugin)
+
     @hookimpl
     @classmethod
     def env(cls) -> Environment:
-        return Environment()
+        return cls._env
 
     @hookimpl
     @classmethod
@@ -290,6 +302,8 @@ class Plugin:
     @classmethod
     async def run(cls, config: Config, logger: logging.Logger) -> Dict[str, Any]:
         """Sync jobs with active MLflow models."""
+
+        pm: plugin_manager.PluginManager = cls.env().globals["plugin_manager"]
 
         # Validate config
         if config.model_tag != ModelTag.production:
@@ -370,6 +384,7 @@ class Plugin:
                                 plugin_default_config,
                             )
                             job_id = create_job_in_db(
+                                pm,
                                 engine,
                                 plugin_id,
                                 1,
@@ -419,7 +434,7 @@ class Plugin:
 
         # Step 5: Batch delete stopped jobs
         if jobs_to_delete:
-            if not delete_jobs(engine, jobs_to_delete, logger):
+            if not delete_jobs(pm, engine, jobs_to_delete, logger):
                 errors.append({"action": "delete_jobs", "job_ids": jobs_to_delete})
 
         logger.info(
