@@ -48,7 +48,7 @@ class Config(BaseModel):
     fees: float = 0.001
     bootstrap_windows: List[int] = Field(
         default_factory=list,
-        json_schema_extra={"ui:field": "MultiSelect", "default": "10, 20, 30, 60"},
+        json_schema_extra={"ui:field": "MultiSelect", "default": [10, 20, 30, 60]},
     )
     report: str = Field(
         """
