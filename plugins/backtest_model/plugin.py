@@ -8,7 +8,8 @@ from .data import (
     compute_accumulated_pnl,
     compute_performance_kpis,
     create_signals_for_backtest,
-    generate_pnl_chart,
+    generate_pnl_chart_data,
+    generate_ohlcv_chart_data,
 )
 
 # --------------------------------------------------
@@ -59,9 +60,36 @@ class Config(BaseModel):
 
 {% set data_df = create_signals(base_assets) %}
 {% set grouped = data_df.groupby("asset") %}
+{% set chart = generate_ohlcv_chart_data(data_df, "BNB") %}
 
-## Data
-{{ data_df.head(10).to_markdown(index=False) }}
+## OHLCV chart
+```chart
+{
+  type: "candlestick",
+  data: {{ chart }},
+  options: {
+    parsing: false,
+    responsive: true,
+    scales: {
+      x: {
+        type: "time",
+        time: { unit: "day" },
+      },
+      price: {
+        position: "right",            
+        grid: { drawOnChartArea: false },
+      },
+      volume: {        
+        position: "left",        
+        grid: { drawOnChartArea: false },
+      },
+    },
+    plugins: {
+      legend: { display: true },
+    },
+  },
+}
+```
 
 {# -------------------------------------------------- #}
 {# 2. Run analytics                                   #}
@@ -92,12 +120,20 @@ class Config(BaseModel):
 ## Per asset
 {{ per_asset_analysis.to_markdown(index=False) }}
 
-{% set chart = generate_pnl_chart(accumulated_pnl) %}
+{% set chart = generate_pnl_chart_data(accumulated_pnl) %}
 
 ## PNL chart
 ```chart
-{{chart | tojson }}
+{
+  type: "line",
+  data: {{ chart }},
+  options: {
+      responsive: true,
+      plugins: {legend: {display: true}},
+  }
+}
 ```
+
 """,
         json_schema_extra={"ui:field": "Template", "type": "markdown"},
     )
@@ -116,7 +152,8 @@ class Plugin:
             "create_signals": create_signals_for_backtest,
             "compute_performance_kpis": compute_performance_kpis,
             "compute_accumulated_pnl": compute_accumulated_pnl,
-            "generate_pnl_chart": generate_pnl_chart,
+            "generate_pnl_chart_data": generate_pnl_chart_data,
+            "generate_ohlcv_chart_data": generate_ohlcv_chart_data,
         }
     )
 
