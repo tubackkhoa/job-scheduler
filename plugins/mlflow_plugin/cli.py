@@ -97,6 +97,19 @@ def activate_job(api_server: str, job_id: int, activation: bool) -> Dict[str, An
     return resp.json()
 
 
+def mlflow_sync(api_server: str, config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    POST /api/mlflow/sync - Trigger MLflow model sync
+    """
+    resp = httpx.post(
+        f"{api_server}/api/mlflow/sync",
+        json=config,
+        timeout=300.0
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
 def delete_job(api_server: str, job_id: int) -> Dict[str, Any]:
     """
     POST /delete/{job_id} - Delete a job
@@ -181,6 +194,54 @@ def action_start(args: argparse.Namespace) -> int:
         return 1
 
 
+def action_sync(args: argparse.Namespace) -> int:
+    """Sync action: Run full MLflow sync flow"""
+    print(f"🔄 Starting MLflow sync...")
+    print(f"   Model tag: {args.model_tag}")
+    print(f"   Plugin: {args.plugin_name}")
+    print()
+    
+    config = {
+        "plugin_name": args.plugin_name,
+        "model_tag": args.model_tag,
+        "webhook_url": args.webhook_api,
+        "webhook_api_key": args.webhook_api_key,
+        "webhook_test_key": args.webhook_test_key or "",
+        "session_id": args.session_id,
+    }
+    
+    try:
+        result = mlflow_sync(args.api_server, config)
+        
+        print(f"✅ Sync complete!")
+        print(f"   📊 Active models: {result['active_count']}")
+        print(f"   📊 Existing jobs: {result['existing_count']}")
+        print(f"   ✨ Created: {len(result['created'])} models")
+        print(f"   🛑 Stopped: {len(result['stopped'])} models")
+        
+        if result['created']:
+            print(f"\n   Created models:")
+            for identity in result['created']:
+                print(f"     • {identity}")
+        
+        if result['stopped']:
+            print(f"\n   Stopped models:")
+            for identity in result['stopped']:
+                print(f"     • {identity}")
+        
+        if result['errors']:
+            print(f"\n   ⚠️  Errors: {len(result['errors'])}")
+            for err in result['errors']:
+                print(f"     • {err}")
+            return 1
+        
+        return 0
+        
+    except httpx.HTTPStatusError as e:
+        print(f"❌ Sync failed: {e.response.status_code} - {e.response.text}")
+        return 1
+
+
 def action_stop(args: argparse.Namespace) -> int:
     """Stop action: Deactivate an existing job"""
     print(f"🔍 Finding plugin: {args.plugin_name}")
@@ -234,8 +295,8 @@ def main():
         "--action",
         type=str,
         required=True,
-        choices=["start", "stop"],
-        help="Action: 'start' to create/activate, 'stop' to deactivate"
+        choices=["start", "stop", "sync"],
+        help="Action: 'start' to create/activate, 'stop' to deactivate, 'sync' to run full flow"
     )
     
     parser.add_argument(
@@ -303,11 +364,11 @@ def main():
     
     args = parser.parse_args()
     
-    if args.action == "start":
+    if args.action in ["start", "sync"]:
         if not args.webhook_api:
-            parser.error("--webhook-api is required for 'start'")
+            parser.error(f"--webhook-api is required for '{args.action}'")
         if not args.webhook_api_key:
-            parser.error("--webhook-api-key is required for 'start'")
+            parser.error(f"--webhook-api-key is required for '{args.action}'")
     
     print(f"🎯 MLflow Job CLI - {args.action.upper()}")
     print(f"   API: {args.api_server}")
@@ -318,8 +379,10 @@ def main():
     try:
         if args.action == "start":
             exit_code = action_start(args)
-        else:
+        elif args.action == "stop":
             exit_code = action_stop(args)
+        else:  # sync
+            exit_code = action_sync(args)
         
         sys.exit(exit_code)
         
