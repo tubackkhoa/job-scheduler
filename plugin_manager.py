@@ -41,6 +41,9 @@ class PluginManager:
     Manages plugin loading/unloading, job scheduling, and execution
     """
 
+    # Singleton instance for global access
+    _instance: Optional["PluginManager"] = None
+
     # static cache of job configs, to remove access to database
     # TODO: because schedule only make sure 1 job is added to queue, but can not verify job is done on a machine
     # @classmethod
@@ -62,6 +65,11 @@ class PluginManager:
     manager = pluggy.PluginManager(PROJECT_NAME)
     manager.add_hookspecs(PluginSpec)
 
+    @classmethod
+    def get_instance(cls) -> Optional["PluginManager"]:
+        """Get the singleton PluginManager instance."""
+        return cls._instance
+
     def __init__(
         self,
         db_engine: Engine,
@@ -80,6 +88,9 @@ class PluginManager:
         # Pass any additional user-provided args
         self.scheduler = AsyncIOScheduler(**(scheduler_kwargs or {}))
         self.log_handler = log_handler
+        
+        # Set singleton instance
+        PluginManager._instance = self
 
     # reload all jobs from database
     def reload_all_jobs(self):
@@ -303,6 +314,17 @@ class PluginManager:
             # remove all handlers for this logger to save memory
             logger = logging.getLogger(job_scheduler_id)
             logger.handlers.clear()
+
+    def remove_jobs(self, job_ids: list[int]):
+        """Batch remove multiple jobs from database and scheduler."""
+        if not job_ids:
+            return
+        # Remove jobs from scheduler
+        for job_id in job_ids:
+            job_scheduler_id = self.get_job_scheduler_id(job_id)
+            if self.scheduler.get_job(job_scheduler_id) is not None:
+                self.scheduler.remove_job(job_scheduler_id)
+            self._active_job_cache.pop(job_id, None)
 
     def activate_job(self, job_id: int):
         with Session(self.db_engine) as session:

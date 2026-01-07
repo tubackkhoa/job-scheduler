@@ -1,3 +1,4 @@
+from typing import Any
 import duckdb
 import pandas as pd
 import numpy as np
@@ -19,15 +20,25 @@ TODAY_PRICE_MAP = {
     "LINK": 14.5,
 }
 
+con = duckdb.connect(database=":memory:")
+
+
+def register_table(table: str, data: list[Any]):
+    df = pd.DataFrame(data)
+    con.register(table, df)
+
+
+def execute_query(query: str):
+    result_df = con.execute(query).fetchdf()
+    return result_df
+
 
 def create_signals(symbols=["BTC", "ETH", "SOL", "LINK"]):
     # --------------------------------------------------
     # 1. Resolve today prices from fixed map
     # --------------------------------------------------
     today_prices = {
-        symbol: TODAY_PRICE_MAP[symbol]
-        for symbol in symbols
-        if symbol in TODAY_PRICE_MAP
+        symbol: TODAY_PRICE_MAP[symbol] for symbol in symbols if symbol in TODAY_PRICE_MAP
     }
 
     if not today_prices:
@@ -60,13 +71,11 @@ def create_signals(symbols=["BTC", "ETH", "SOL", "LINK"]):
                 }
             )
 
-    df = pd.DataFrame(rows)
-
     # --------------------------------------------------
     # 3. DuckDB (in-memory)
     # --------------------------------------------------
-    con = duckdb.connect(database=":memory:")
-    con.register("prices_df", df)
+
+    register_table("prices_df", rows)
 
     con.execute(
         """
@@ -123,6 +132,4 @@ def create_signals(symbols=["BTC", "ETH", "SOL", "LINK"]):
     # --------------------------------------------------
     # 5. Latest signal per symbol
     # --------------------------------------------------
-    return (
-        result.sort_values("timestamp").groupby("symbol").tail(1).reset_index(drop=True)
-    )
+    return result.sort_values("timestamp").groupby("symbol").tail(1).reset_index(drop=True)

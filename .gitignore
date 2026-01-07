@@ -45,3 +45,4 @@ build/
 # Other editor swap files
 *~
 *.swp
+docs/

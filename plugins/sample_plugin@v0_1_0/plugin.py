@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, ValidationInfo, field_validator
 from typing import List
 import sqlglot
 from datetime import datetime
-from jinja2 import DictLoader, Environment, BaseLoader
+from jinja2 import DictLoader, Environment
 
 
 PROJECT_NAME = "alpha-miner"
@@ -73,6 +73,53 @@ base_assets:
 {% endfor %}
 """,
         json_schema_extra={"ui:field": "Template", "type": "yaml"},
+    )
+
+    md_template: str = Field(
+        """
+{% set data = {
+  "labels": ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
+  "datasets": [
+    {
+      "label": "top_5",
+      "data": [500,300,-200,400,-100,600,700,-300,200,400,-150,500],
+      "borderColor": "blue",
+      "backgroundColor": "rgba(0,0,255,0.1)",
+      "tension": 0.3
+    },
+    {
+      "label": "top_10",
+      "data": [700,-400,350,600,-500,700,800,-200,400,300,-250,700],
+      "borderColor": "orange",
+      "backgroundColor": "rgba(255,165,0,0.1)",
+      "tension": 0.3
+    },
+    {
+      "label": "top_41",
+      "data": [1000,500,-700,900,-600,1100,1200,-400,800,700,-300,1000],
+      "borderColor": "purple",
+      "backgroundColor": "rgba(128,0,128,0.1)",
+      "tension": 0.3
+    }
+  ]
+} %}
+  
+```chart
+{
+  "type": "line",
+  "data": {{ data | tojson }},
+  "options": {
+    "responsive": true,
+    "plugins": {
+      "title": {
+        "display": true,
+        "text": "Chatbots PNL Comparison Over Months"
+      }
+    }
+  }
+}
+""",
+        json_schema_extra={"ui:field": "Template", "type": "markdown"},
     )
 
     @field_validator("sql", mode="after")
