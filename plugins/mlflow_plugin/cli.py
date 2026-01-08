@@ -7,45 +7,34 @@ from typing import Optional, Dict, Any, List
 import httpx
 
 
-def get_plugins(api_server: str) -> List[Dict[str, Any]]:
-    """GET /plugins - Get all plugins with their jobs"""
-    resp = httpx.get(f"{api_server}/plugins", timeout=30.0)
-    resp.raise_for_status()
-    return resp.json()
-
-
 def find_plugin_by_name(api_server: str, plugin_name: str) -> Optional[Dict[str, Any]]:
-    """Find a plugin by package name"""
-    plugins = get_plugins(api_server)
-    for plugin in plugins:
-        if plugin.get("package") == plugin_name:
-            return plugin
-    return None
+    """Find a plugin by package name using the optimized endpoint"""
+    try:
+        resp = httpx.get(f"{api_server}/plugin/by-name/{plugin_name}", timeout=30.0)
+        resp.raise_for_status()
+        return resp.json()
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            return None
+        raise
 
 
 def find_job_by_model_identify(
-    api_server: str, 
-    plugin_id: int, 
+    plugin: Dict[str, Any],
     model_identify: str,
     model_tag: Optional[str] = None
 ) -> Optional[Dict[str, Any]]:
     """Find a job by model_identity in its config"""
-    plugins = get_plugins(api_server)
-    
-    for plugin in plugins:
-        if plugin.get("id") != plugin_id:
+    for job in plugin.get("jobs", []):
+        config_str = job.get("config", "{}")
+        try:
+            config = json.loads(config_str) if isinstance(config_str, str) else config_str
+        except json.JSONDecodeError:
             continue
-            
-        for job in plugin.get("jobs", []):
-            config_str = job.get("config", "{}")
-            try:
-                config = json.loads(config_str) if isinstance(config_str, str) else config_str
-            except json.JSONDecodeError:
-                continue
-                
-            if config.get("model_identity") == model_identify:
-                if model_tag is None or config.get("model_tag") == model_tag:
-                    return job
+        
+        if config.get("model_identity") == model_identify:
+            if model_tag is None or config.get("model_tag") == model_tag:
+                return job
     
     return None
 
@@ -136,8 +125,7 @@ def action_start(args: argparse.Namespace) -> int:
     
     # Check if job already exists
     existing_job = find_job_by_model_identify(
-        args.api_server, 
-        plugin_id, 
+        plugin,
         args.model_identify,
         args.model_tag
     )
@@ -160,6 +148,52 @@ def action_start(args: argparse.Namespace) -> int:
     
     description = f"CLI-created job for {args.model_identify}"
     
+    # Call webhook to register/start model
+    print(f"📞 Calling webhook to register model: {args.model_identify}")
+    try:
+        headers = {
+            "test-system-api-key": args.webhook_test_key or "",
+            "Content-Type": "application/json",
+        }
+        
+        # Try to create model first
+        resp = httpx.post(
+            f"{args.webhook_api}/api/test-system/model",
+            headers=headers,
+            json={
+                "modelName": args.model_identify.split(":")[0],  # Extract model name from identity
+                "identity": args.model_identify,
+                "tag": args.model_tag,
+                "version": args.model_identify.split(":")[-1] if ":" in args.model_identify else "1",
+            },
+            timeout=30.0
+        )
+        
+        if resp.status_code in (200, 201):
+            print(f"✅ Model registered via webhook: {args.model_identify}")
+        elif "exist" in resp.text.lower() or resp.status_code == 409:
+            # Model already exists, try to start it
+            print(f"⚠️  Model already exists, calling start endpoint...")
+            start_resp = httpx.post(
+                f"{args.webhook_api}/api/test-system/model/start",
+                headers=headers,
+                json={"identity": args.model_identify},
+                timeout=30.0
+            )
+            
+            if start_resp.status_code in (200, 201):
+                print(f"✅ Model started via webhook: {args.model_identify}")
+            else:
+                print(f"⚠️  Failed to start model: {start_resp.status_code} - {start_resp.text[:200]}")
+                return 1
+        else:
+            print(f"⚠️  Webhook returned status {resp.status_code}: {resp.text[:200]}")
+            return 1
+            
+    except httpx.HTTPError as e:
+        print(f"❌ Webhook call failed: {e}")
+        return 1
+    
     print(f"📝 Creating job with config: {json.dumps(config, indent=2)}")
     
     try:
@@ -174,18 +208,20 @@ def action_start(args: argparse.Namespace) -> int:
         print(f"   Response: {json.dumps(result, indent=2)}")
         
         # Find the newly created job to activate it
-        new_job = find_job_by_model_identify(
-            args.api_server,
-            plugin_id,
-            args.model_identify,
-            args.model_tag
-        )
-        
-        if new_job:
-            job_id = new_job["id"]
-            print(f"🚀 Activating job ID: {job_id}")
-            activate_result = activate_job(args.api_server, job_id, True)
-            print(f"✅ Job activated: {activate_result}")
+        # Need to refresh plugin data to get the new job
+        plugin = find_plugin_by_name(args.api_server, args.plugin_name)
+        if plugin:
+            new_job = find_job_by_model_identify(
+                plugin,
+                args.model_identify,
+                args.model_tag
+            )
+            
+            if new_job:
+                job_id = new_job["id"]
+                print(f"🚀 Activating job ID: {job_id}")
+                activate_result = activate_job(args.api_server, job_id, True)
+                print(f"✅ Job activated: {activate_result}")
         
         return 0
         
@@ -256,8 +292,7 @@ def action_stop(args: argparse.Namespace) -> int:
     
     # Find job by model_identify
     job = find_job_by_model_identify(
-        args.api_server, 
-        plugin_id, 
+        plugin,
         args.model_identify,
         args.model_tag
     )
@@ -267,11 +302,56 @@ def action_stop(args: argparse.Namespace) -> int:
         return 1
     
     job_id = job["id"]
-    print(f"🛑 Stopping job ID: {job_id}")
     
+    # Parse job config to get webhook settings
+    config_str = job.get("config", "{}")
+    try:
+        config = json.loads(config_str) if isinstance(config_str, str) else config_str
+    except json.JSONDecodeError as e:
+        print(f"❌ Failed to parse job config: {e}")
+        return 1
+        
+    # Use webhook settings from CLI args if provided, otherwise fall back to job config
+    webhook_url = args.webhook_api or config.get("webhook_url")
+    webhook_test_key = args.webhook_test_key or config.get("webhook_test_key", "")
+    model_identity = args.model_identify
+    
+    if webhook_url:
+        print(f"� Calling webhook to stop model: {model_identity}")
+        try:
+            headers = {
+                "test-system-api-key": webhook_test_key,
+                "Content-Type": "application/json",
+            }
+            
+            resp = httpx.post(
+                f"{webhook_url}/api/test-system/model/stop",
+                headers=headers,
+                json={"identity": model_identity, "unlockCredential": True},
+                timeout=30.0
+            )
+            
+            if resp.status_code in (200, 201):
+                print(f"✅ Webhook stopped model: {model_identity}")
+            else:
+                print(f"⚠️  Webhook returned status {resp.status_code}: {resp.text[:200]}")
+                if not args.force:
+                    print(f"💡 Use --force to proceed anyway")
+                    return 1
+                    
+        except httpx.HTTPError as e:
+            print(f"⚠️  Webhook call failed: {e}")
+            if not args.force:
+                print(f"💡 Use --force to proceed anyway")
+                return 1
+    else:
+        print(f"⚠️  No webhook_url found in job config, skipping webhook call")
+    
+    # Now deactivate/delete the job
+    print(f"🛑 Deactivating job ID: {job_id}")
     try:
         result = activate_job(args.api_server, job_id, False)
-        print(f"✅ Job stopped: {result}")
+        print(f"✅ Job deactivated: {result}")
         
         if args.delete:
             print(f"🗑️  Deleting job ID: {job_id}")
@@ -281,7 +361,7 @@ def action_stop(args: argparse.Namespace) -> int:
         return 0
         
     except httpx.HTTPStatusError as e:
-        print(f"❌ Failed to stop job: {e.response.status_code} - {e.response.text}")
+        print(f"❌ Failed to deactivate job: {e.response.status_code} - {e.response.text}")
         return 1
 
 
@@ -360,6 +440,12 @@ def main():
         "--delete",
         action="store_true",
         help="Delete job after stopping (only for 'stop')"
+    )
+    
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force stop even if webhook call fails (only for 'stop')"
     )
     
     args = parser.parse_args()

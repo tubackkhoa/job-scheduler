@@ -28,7 +28,8 @@ import dotenv
 import uvloop
 from sqlalchemy.orm import Session
 from sqlalchemy import select, update
-from datetime import datetime
+from datetime import datetime, date
+from enum import Enum as BaseEnum
 
 
 dotenv.load_dotenv()
@@ -174,6 +175,45 @@ async def websocket_logs_endpoint(websocket: WebSocket, job_id: int):
 @app.get("/plugins")
 def plugins(plugin_manager: PluginManagerState):
     return plugin_manager.get_all_plugins()
+
+
+@app.get("/plugin/by-name/{plugin_name}")
+def get_plugin_by_name(plugin_manager: PluginManagerState, plugin_name: str):
+    """
+    Get a single plugin by package name with all its jobs.
+    Returns 404 if plugin not found.
+    """
+    with Session(plugin_manager.db_engine) as session:
+        stmt = select(Plugin).where(Plugin.package == plugin_name)
+        plugin = session.execute(stmt).scalar_one_or_none()
+        
+        if not plugin:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Plugin not found: {plugin_name}"
+            )
+        
+        # Get all jobs for this plugin
+        stmt_jobs = select(Job).where(Job.plugin_id == plugin.id)
+        jobs = session.execute(stmt_jobs).scalars().all()
+        
+        return {
+            "id": plugin.id,
+            "package": plugin.package,
+            "interval": plugin.interval,
+            "description": plugin.description,
+            "jobs": [
+                {
+                    "id": job.id,
+                    "session_id": job.session_id,
+                    "plugin_id": job.plugin_id,
+                    "config": job.config,
+                    "description": job.description,
+                    "active": job.active,
+                }
+                for job in jobs
+            ]
+        }
 
 
 @app.post("/plugins")
@@ -703,36 +743,35 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
         logger.info(f"✅ Found {len(active_models)} active models in MLflow")
         active_identities = {m["identity"] for m in active_models}
         
-        # Step 2: Get existing jobs from database via serialized plugin data
-        all_plugins_data = plugin_manager.get_all_plugins()
-        target_plugin_data = None
-        
-        # get_all_plugins returns serialized dict data
-        for p_data in all_plugins_data:
-            if isinstance(p_data, dict) and p_data.get("package") == plugin_name:
-                target_plugin_data = p_data
-                break
-        
-        if not target_plugin_data:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Plugin not found: {plugin_name}"
-            )
-        
-        plugin_id = target_plugin_data["id"]
-        
-        # Build map of existing jobs: {model_identity: job_id}
-        existing_jobs: Dict[str, int] = {}
-        for job_data in target_plugin_data.get("jobs", []):
-            try:
-                config = json.loads(job_data["config"]) if isinstance(job_data["config"], str) else job_data["config"]
-                identity = config.get("model_identity")
-                tag = config.get("model_tag")
-                
-                if tag == model_tag and identity:
-                    existing_jobs[identity] = job_data["id"]
-            except (json.JSONDecodeError, KeyError) as e:
-                logger.warning(f"⚠️  Failed to parse job {job_data.get('id')} config: {e}")
+        # Step 2: Get existing jobs from database by querying plugin directly
+        with Session(plugin_manager.db_engine) as session:
+            stmt = select(Plugin).where(Plugin.package == plugin_name)
+            target_plugin = session.execute(stmt).scalar_one_or_none()
+            
+            if not target_plugin:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Plugin not found: {plugin_name}"
+                )
+            
+            plugin_id = target_plugin.id
+            
+            # Get all jobs for this plugin
+            stmt_jobs = select(Job).where(Job.plugin_id == plugin_id)
+            jobs = session.execute(stmt_jobs).scalars().all()
+            
+            # Build map of existing jobs: {model_identity: job_id}
+            existing_jobs: Dict[str, int] = {}
+            for job in jobs:
+                try:
+                    config = json.loads(job.config) if isinstance(job.config, str) else job.config
+                    identity = config.get("model_identity")
+                    tag = config.get("model_tag")
+                    
+                    if tag == model_tag and identity:
+                        existing_jobs[identity] = job.id
+                except (json.JSONDecodeError, KeyError) as e:
+                    logger.warning(f"⚠️  Failed to parse job {job.id} config: {e}")
         
         existing_identities = set(existing_jobs.keys())
         logger.info(f"📊 Found {len(existing_jobs)} existing jobs with tag '{model_tag}'")
@@ -796,6 +835,7 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
                             "version": str(model["version"]),
                         },
                     )
+                    
                     if resp.status_code in (200, 201):
                         logger.info(f"✅ Registered model via webhook: {identity}")
                         
@@ -810,15 +850,73 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
                             "webhook_api_key": webhook_api_key,
                         })
                         
+                        # Custom JSON serializer for non-serializable objects
+                        def json_serializer(obj):
+                            if isinstance(obj, (datetime, date)):
+                                return obj.isoformat()
+                            if isinstance(obj, BaseEnum):
+                                return obj.value
+                            if hasattr(obj, "__dict__"):
+                                return str(obj)
+                            return str(obj)
+                        
                         # Create job via PluginManager
                         plugin_manager.add_job(
                             session_id,
                             plugin_id,
-                            json.dumps(job_config),
+                            json.dumps(job_config, default=json_serializer),
                             f"Auto-created for {identity}"
                         )
                         logger.info(f"📝 Created job for {identity}")
                         created.append(identity)
+                    
+                    elif "exist" in resp.text.lower() or resp.status_code == 409:
+                        # Model already exists, try to start it
+                        logger.info(f"⚠️  Model already exists, calling start endpoint: {identity}")
+                        start_resp = await client.post(
+                            f"{webhook_url}/api/test-system/model/start",
+                            headers=headers,
+                            json={"identity": identity},
+                        )
+                        
+                        if start_resp.status_code in (200, 201):
+                            logger.info(f"✅ Started existing model via webhook: {identity}")
+                            
+                            # Build job config
+                            job_config = plugin_default_config.copy()
+                            job_config.update({
+                                "model_type": model["model_name"],
+                                "model_identity": identity,
+                                "model_tag": model_tag,
+                                "model_uri": model.get("model_uri", ""),
+                                "webhook_url": webhook_url,
+                                "webhook_api_key": webhook_api_key,
+                            })
+                            
+                            # Custom JSON serializer for non-serializable objects
+                            def json_serializer(obj):
+                                if isinstance(obj, (datetime, date)):
+                                    return obj.isoformat()
+                                if isinstance(obj, BaseEnum):
+                                    return obj.value
+                                if hasattr(obj, "__dict__"):
+                                    return str(obj)
+                                return str(obj)
+                            
+                            # Create job via PluginManager
+                            plugin_manager.add_job(
+                                session_id,
+                                plugin_id,
+                                json.dumps(job_config, default=json_serializer),
+                                f"Auto-created for {identity}"
+                            )
+                            logger.info(f"📝 Created job for {identity}")
+                            created.append(identity)
+                        else:
+                            error = f"HTTP {start_resp.status_code}: {start_resp.text[:200]}"
+                            logger.warning(f"⚠️  Failed to start {identity}: {error}")
+                            errors.append({"identity": identity, "action": "start", "error": error})
+                    
                     else:
                         error = f"HTTP {resp.status_code}: {resp.text[:200]}"
                         logger.warning(f"⚠️  Failed to register {identity}: {error}")
