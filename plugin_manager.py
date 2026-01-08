@@ -3,6 +3,7 @@ from ctypes import ArgumentError
 import importlib
 import json
 import logging
+import subprocess
 import sys
 from typing import Any, Dict, Optional
 import pluggy
@@ -13,7 +14,6 @@ from jinja2 import Environment
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session
 from models import Job, Plugin
-from pip._internal.cli.main import main as pip_main
 import zipfile
 import tarfile
 import glob
@@ -239,6 +239,9 @@ class PluginManager:
         os.makedirs(target_dir, exist_ok=True)
 
         args = [
+            sys.executable,
+            "-m",
+            "pip",
             "download",
             requirement,
             "--dest",
@@ -250,12 +253,12 @@ class PluginManager:
 
         scheduler_logger.info(f"Downloading into {target_dir} ...")
 
-        result = pip_main(args)
+        result = subprocess.run(args, capture_output=True, text=True)
 
-        if result == 0:
+        if result.returncode == 0:
             return extract_package_files(target_dir)
 
-        scheduler_logger.error("Download failed")
+        scheduler_logger.error(f"Download failed: {result.stderr}")
         return False
 
     @staticmethod
