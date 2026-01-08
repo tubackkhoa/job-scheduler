@@ -6,16 +6,6 @@ from plugin_manager import PluginSpec
 
 PLUGIN_DATA = [
     {
-        "package": "plugins.sample_plugin@v0_1_0.Plugin",
-        "interval": 1,
-        "description": "Sample plugin version 0.1.0 running frequently.",
-    },
-    {
-        "package": "plugins.sample_plugin@v0_2_0.Plugin",
-        "interval": 3,
-        "description": "Sample plugin version 0.2.0 with slower interval.",
-    },
-    {
         "package": "alpha_miner.plugins.UatUserCustomConfigPlugin",
         "interval": 1,
         "description": "Mock user custom config plugin for testing.",
