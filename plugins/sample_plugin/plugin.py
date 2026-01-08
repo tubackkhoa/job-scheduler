@@ -107,7 +107,7 @@ base_assets:
 ```chart
 {
   "type": "line",
-  "data": {{ data | tojson }},
+  "data": {{ data }},
   "options": {
     "responsive": true,
     "plugins": {

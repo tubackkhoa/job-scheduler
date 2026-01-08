@@ -1,7 +1,9 @@
 import asyncio
+from ctypes import ArgumentError
 import importlib
 import json
 import logging
+import subprocess
 import sys
 from typing import Any, Dict, Optional
 import pluggy
@@ -9,9 +11,14 @@ from pydantic import BaseModel
 from apscheduler.util import undefined
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from jinja2 import Environment
-from sqlalchemy import Engine
+from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session
 from models import Job, Plugin
+import zipfile
+import tarfile
+import glob
+import shutil
+import os
 
 PROJECT_NAME = "job-scheduler"
 
@@ -19,6 +26,107 @@ hookspec = pluggy.HookspecMarker(PROJECT_NAME)
 
 scheduler_logger = logging.getLogger(PROJECT_NAME)
 scheduler_logger.addHandler(logging.StreamHandler())
+
+
+def extract_package_files(target_dir: str) -> bool:
+    # ------------------------------------------------------------
+    # 1️⃣ Find archive
+    # ------------------------------------------------------------
+    archives = (
+        glob.glob(os.path.join(target_dir, "*.whl"))
+        or glob.glob(os.path.join(target_dir, "*.tar.gz"))
+        or glob.glob(os.path.join(target_dir, "*.zip"))
+    )
+
+    if not archives:
+        scheduler_logger.info("No archive found to extract.")
+        return False
+
+    archive_path = archives[0]
+    scheduler_logger.info(f"Extracting archive: {archive_path}")
+
+    # ------------------------------------------------------------
+    # 2️⃣ Extract (KEEP target_dir = name@version)
+    # ------------------------------------------------------------
+    if archive_path.endswith((".whl", ".zip")):
+        with zipfile.ZipFile(archive_path) as zf:
+            zf.extractall(target_dir)
+    else:
+        with tarfile.open(archive_path, "r:gz") as tf:
+            tf.extractall(target_dir)
+
+    os.remove(archive_path)
+
+    # ------------------------------------------------------------
+    # 3️⃣ Remove *.dist-info
+    # ------------------------------------------------------------
+    for dist_info in glob.glob(os.path.join(target_dir, "*.dist-info")):
+        shutil.rmtree(dist_info, ignore_errors=True)
+
+    # ------------------------------------------------------------
+    # 4️⃣ Flatten archive-created single root folder
+    # ------------------------------------------------------------
+    entries = [
+        e
+        for e in os.listdir(target_dir)
+        if e not in ("__pycache__", "src") and not e.endswith(".dist-info")
+    ]
+
+    if len(entries) == 1:
+        inner = os.path.join(target_dir, entries[0])
+        if os.path.isdir(inner):
+            scheduler_logger.info(f"Flattening archive folder: {inner}")
+            for item in os.listdir(inner):
+                shutil.move(
+                    os.path.join(inner, item),
+                    os.path.join(target_dir, item),
+                )
+            os.rmdir(inner)
+
+    # ------------------------------------------------------------
+    # 5️⃣ Handle src/ layout (pip-style)
+    # ------------------------------------------------------------
+    src_dir = os.path.join(target_dir, "src")
+    if os.path.isdir(src_dir):
+        scheduler_logger.info(f"Detected src layout in {target_dir}")
+        for item in os.listdir(src_dir):
+            shutil.move(
+                os.path.join(src_dir, item),
+                os.path.join(target_dir, item),
+            )
+        shutil.rmtree(src_dir)
+
+    # ------------------------------------------------------------
+    # 6️⃣ Hoist single Python package directory
+    # ------------------------------------------------------------
+    subdirs = [
+        d
+        for d in os.listdir(target_dir)
+        if os.path.isdir(os.path.join(target_dir, d)) and d not in ("__pycache__",)
+    ]
+
+    if len(subdirs) == 1:
+        pkg_dir = os.path.join(target_dir, subdirs[0])
+
+        # Heuristic: looks like a Python package
+        if os.path.exists(os.path.join(pkg_dir, "__init__.py")):
+            scheduler_logger.info(f"Hoisting package {pkg_dir} → {target_dir}")
+
+            for item in os.listdir(pkg_dir):
+                dst = os.path.join(target_dir, item)
+                src = os.path.join(pkg_dir, item)
+
+                if os.path.exists(dst):
+                    shutil.rmtree(dst) if os.path.isdir(dst) else os.remove(dst)
+
+                shutil.move(src, dst)
+
+            os.rmdir(pkg_dir)
+
+    scheduler_logger.info(
+        f"Extraction complete (version preserved at {os.path.basename(target_dir)})"
+    )
+    return True
 
 
 class PluginSpec:
@@ -41,9 +149,6 @@ class PluginManager:
     Manages plugin loading/unloading, job scheduling, and execution
     """
 
-    # Singleton instance for global access
-    _instance: Optional["PluginManager"] = None
-
     # static cache of job configs, to remove access to database
     # TODO: because schedule only make sure 1 job is added to queue, but can not verify job is done on a machine
     # @classmethod
@@ -65,15 +170,11 @@ class PluginManager:
     manager = pluggy.PluginManager(PROJECT_NAME)
     manager.add_hookspecs(PluginSpec)
 
-    @classmethod
-    def get_instance(cls) -> Optional["PluginManager"]:
-        """Get the singleton PluginManager instance."""
-        return cls._instance
-
     def __init__(
         self,
-        db_engine: Engine,
+        db_engine: Engine | str,
         module_paths: Optional[list[str]] = None,
+        plugin_path="plugins",
         log_handler: Optional[logging.Handler] = None,
         scheduler_kwargs: Optional[dict] = None,
     ) -> None:
@@ -83,14 +184,11 @@ class PluginManager:
             for path in module_paths:
                 if path and path not in sys.path:
                     sys.path.insert(0, path)
-
-        self.db_engine = db_engine
+        self.plugin_path = plugin_path
+        self.db_engine = create_engine(db_engine) if isinstance(db_engine, str) else db_engine
         # Pass any additional user-provided args
         self.scheduler = AsyncIOScheduler(**(scheduler_kwargs or {}))
         self.log_handler = log_handler
-        
-        # Set singleton instance
-        PluginManager._instance = self
 
     # reload all jobs from database
     def reload_all_jobs(self):
@@ -121,6 +219,47 @@ class PluginManager:
     def stop(self):
         if self.scheduler.running:
             self.scheduler.shutdown()
+
+    def download_package(self, name: str, version: str) -> bool:
+        if not version:
+            raise ArgumentError("Please provide a version")
+
+        # Detect VCS requirement directly from version
+        is_vcs = version.startswith(("git+", "github+"))
+
+        if is_vcs:
+            requirement = version
+            ref = version.rsplit("@", 1)[-1]
+            target_dir = f"{self.plugin_path}/{name}@{ref}"
+        else:
+            version_underscore = version.replace(".", "_")
+            target_dir = f"{self.plugin_path}/{name}@{version_underscore}"
+            requirement = f"{name}=={version}"
+
+        os.makedirs(target_dir, exist_ok=True)
+
+        args = [
+            sys.executable,
+            "-m",
+            "pip",
+            "download",
+            requirement,
+            "--dest",
+            target_dir,
+            "--no-deps",
+            "--no-input",  # disable prompts
+            "--exists-action=w",  # w = wipe existing files
+        ]
+
+        scheduler_logger.info(f"Downloading into {target_dir} ...")
+
+        result = subprocess.run(args, capture_output=True, text=True)
+
+        if result.returncode == 0:
+            return extract_package_files(target_dir)
+
+        scheduler_logger.error(f"Download failed: {result.stderr}")
+        return False
 
     @staticmethod
     def get_job_scheduler_id(job_id: int) -> str:
@@ -175,11 +314,11 @@ class PluginManager:
         # Ensure logger level is set (default to INFO if not set)
         if logger.level == logging.NOTSET:
             logger.setLevel(logging.INFO)
-        
+
         try:
             retval = asyncio.run(plugin.run(config, logger))
             # logger.info(f"Job executed successfully (return value: {retval})")
-            return retval        
+            return retval
         except Exception as e:
             logger.error(f"Job failed with exception: {e}", exc_info=True)
 
@@ -191,6 +330,7 @@ class PluginManager:
 
     @classmethod
     def load_plugin(cls, package: str, override: bool = False):
+
         module_path, _, class_name = package.rpartition(".")
 
         if override:
@@ -210,7 +350,6 @@ class PluginManager:
                 raise RuntimeError(f"Failed to load plugin '{package}': {str(e)}") from e
 
         return plugin
-
 
     def add_plugin(self, package: str, interval: int, description: Optional[str] = None) -> int:
         self.load_plugin(package)

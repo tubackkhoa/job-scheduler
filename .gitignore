@@ -46,3 +46,6 @@ build/
 *~
 *.swp
 docs/
+
+# ignore plugins that are downloaded
+plugins/*@*

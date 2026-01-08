@@ -28,7 +28,8 @@ import dotenv
 import uvloop
 from sqlalchemy.orm import Session
 from sqlalchemy import select, update
-from datetime import datetime
+from datetime import datetime, date
+from enum import Enum as BaseEnum
 
 
 dotenv.load_dotenv()
@@ -176,6 +177,45 @@ def plugins(plugin_manager: PluginManagerState):
     return plugin_manager.get_all_plugins()
 
 
+@app.get("/plugin/by-name/{plugin_name}")
+def get_plugin_by_name(plugin_manager: PluginManagerState, plugin_name: str):
+    """
+    Get a single plugin by package name with all its jobs.
+    Returns 404 if plugin not found.
+    """
+    with Session(plugin_manager.db_engine) as session:
+        stmt = select(Plugin).where(Plugin.package == plugin_name)
+        plugin = session.execute(stmt).scalar_one_or_none()
+        
+        if not plugin:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Plugin not found: {plugin_name}"
+            )
+        
+        # Get all jobs for this plugin
+        stmt_jobs = select(Job).where(Job.plugin_id == plugin.id)
+        jobs = session.execute(stmt_jobs).scalars().all()
+        
+        return {
+            "id": plugin.id,
+            "package": plugin.package,
+            "interval": plugin.interval,
+            "description": plugin.description,
+            "jobs": [
+                {
+                    "id": job.id,
+                    "session_id": job.session_id,
+                    "plugin_id": job.plugin_id,
+                    "config": job.config,
+                    "description": job.description,
+                    "active": job.active,
+                }
+                for job in jobs
+            ]
+        }
+
+
 @app.post("/plugins")
 def create_plugin(plugin_manager: PluginManagerState, payload: dict = Body(...)):
     """
@@ -302,6 +342,16 @@ def reload_plugin(plugin_manager: PluginManagerState, package: str):
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to reload plugin: {str(e)}")
+
+
+@app.post("/download/{name}")
+def download_module(plugin_manager: PluginManagerState, name: str, payload: dict = Body(...)):
+    try:
+        version_or_vsi = payload["version"]
+        success = plugin_manager.download_package(name, version_or_vsi)
+        return {"success": success}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to download module: {str(e)}")
 
 
 @app.delete("/plugins/{plugin_id}")
@@ -667,6 +717,280 @@ def activate_sql_version(plugin_manager: PluginManagerState, version_id: int):
             status_code=500,
             detail=f"Failed to activate SQL version: {str(e)}",
         )
+
+
+@app.post("/api/mlflow/sync")
+async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(...)):
+    import httpx
+    import json
+    import logging
+    from typing import Dict, Any, List
+
+    # Validate required fields
+    required_fields = {"plugin_name", "model_tag", "webhook_url", "webhook_api_key"}
+    if not required_fields.issubset(payload):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing required fields: {required_fields - set(payload.keys())}",
+        )
+
+    plugin_name = payload["plugin_name"]
+    model_tag = payload["model_tag"]
+    webhook_url = payload["webhook_url"]
+    webhook_api_key = payload["webhook_api_key"]
+    webhook_test_key = payload.get("webhook_test_key", "")
+    session_id = payload.get("session_id", 1)
+
+    # Setup logger
+    logger = logging.getLogger(f"mlflow_sync.{model_tag}")
+    logger.info(f"🔍 Starting MLflow sync for model_tag: '{model_tag}'")
+
+    try:
+        # Step 1: Fetch active models from MLflow
+        from plugins.mlflow_plugin.utils import get_models_with_backtest_watching
+
+        active_models = get_models_with_backtest_watching()
+        logger.info(f"✅ Found {len(active_models)} active models in MLflow")
+        active_identities = {m["identity"] for m in active_models}
+        
+        # Step 2: Get existing jobs from database by querying plugin directly
+        with Session(plugin_manager.db_engine) as session:
+            stmt = select(Plugin).where(Plugin.package == plugin_name)
+            target_plugin = session.execute(stmt).scalar_one_or_none()
+            
+            if not target_plugin:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Plugin not found: {plugin_name}"
+                )
+            
+            plugin_id = target_plugin.id
+            
+            # Get all jobs for this plugin
+            stmt_jobs = select(Job).where(Job.plugin_id == plugin_id)
+            jobs = session.execute(stmt_jobs).scalars().all()
+            
+            # Build map of existing jobs: {model_identity: job_id}
+            existing_jobs: Dict[str, int] = {}
+            for job in jobs:
+                try:
+                    config = json.loads(job.config) if isinstance(job.config, str) else job.config
+                    identity = config.get("model_identity")
+                    tag = config.get("model_tag")
+                    
+                    if tag == model_tag and identity:
+                        existing_jobs[identity] = job.id
+                except (json.JSONDecodeError, KeyError) as e:
+                    logger.warning(f"⚠️  Failed to parse job {job.id} config: {e}")
+        
+        existing_identities = set(existing_jobs.keys())
+        logger.info(f"📊 Found {len(existing_jobs)} existing jobs with tag '{model_tag}'")
+
+        # Step 3: Determine sync plan
+        to_create = active_identities - existing_identities
+        to_stop = existing_identities - active_identities
+        logger.info(f"🔄 Sync plan: {len(to_create)} to create, {len(to_stop)} to stop")
+
+        # Step 4: Get plugin default config
+        try:
+            import importlib
+
+            parts = plugin_name.rsplit(".", 1)
+            module_path = parts[0] if len(parts) == 2 else plugin_name
+            class_name = parts[1] if len(parts) == 2 else "Plugin"
+
+            module = importlib.import_module(module_path)
+            plugin_class = getattr(module, class_name, None)
+
+            if plugin_class and hasattr(plugin_class, "config"):
+                default_config_obj = plugin_class.config()
+                if hasattr(default_config_obj, "model_dump"):
+                    plugin_default_config = default_config_obj.model_dump()
+                elif hasattr(default_config_obj, "dict"):
+                    plugin_default_config = default_config_obj.dict()
+                else:
+                    plugin_default_config = dict(default_config_obj)
+            else:
+                plugin_default_config = {}
+        except Exception as e:
+            logger.warning(f"⚠️  Failed to load plugin default config: {e}")
+            plugin_default_config = {}
+
+        # Step 5: Execute sync
+        created = []
+        stopped = []
+        errors = []
+        jobs_to_delete = []
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            headers = {
+                "test-system-api-key": webhook_test_key,
+                "Content-Type": "application/json",
+            }
+
+            # Create new models
+            for model in active_models:
+                identity = model["identity"]
+                if identity not in to_create:
+                    continue
+
+                try:
+                    # Call webhook to register model
+                    resp = await client.post(
+                        f"{webhook_url}/api/test-system/model",
+                        headers=headers,
+                        json={
+                            "modelName": model["model_name"],
+                            "identity": identity,
+                            "tag": model_tag,
+                            "version": str(model["version"]),
+                        },
+                    )
+                    
+                    if resp.status_code in (200, 201):
+                        logger.info(f"✅ Registered model via webhook: {identity}")
+
+                        # Build job config
+                        job_config = plugin_default_config.copy()
+                        job_config.update({
+                            "model_type": model["model_name"],
+                            "model_identity": identity,
+                            "model_tag": model_tag,
+                            "model_uri": model.get("model_uri", ""),
+                            "webhook_url": webhook_url,
+                            "webhook_api_key": webhook_api_key,
+                        })
+                        
+                        # Custom JSON serializer for non-serializable objects
+                        def json_serializer(obj):
+                            if isinstance(obj, (datetime, date)):
+                                return obj.isoformat()
+                            if isinstance(obj, BaseEnum):
+                                return obj.value
+                            if hasattr(obj, "__dict__"):
+                                return str(obj)
+                            return str(obj)
+                        
+                        # Create job via PluginManager
+                        plugin_manager.add_job(
+                            session_id,
+                            plugin_id,
+                            json.dumps(job_config, default=json_serializer),
+                            f"Auto-created for {identity}"
+                        )
+                        logger.info(f"📝 Created job for {identity}")
+                        created.append(identity)
+                    
+                    elif "exist" in resp.text.lower() or resp.status_code == 409:
+                        # Model already exists, try to start it
+                        logger.info(f"⚠️  Model already exists, calling start endpoint: {identity}")
+                        start_resp = await client.post(
+                            f"{webhook_url}/api/test-system/model/start",
+                            headers=headers,
+                            json={"identity": identity},
+                        )
+                        
+                        if start_resp.status_code in (200, 201):
+                            logger.info(f"✅ Started existing model via webhook: {identity}")
+                            
+                            # Build job config
+                            job_config = plugin_default_config.copy()
+                            job_config.update({
+                                "model_type": model["model_name"],
+                                "model_identity": identity,
+                                "model_tag": model_tag,
+                                "model_uri": model.get("model_uri", ""),
+                                "webhook_url": webhook_url,
+                                "webhook_api_key": webhook_api_key,
+                            })
+                            
+                            # Custom JSON serializer for non-serializable objects
+                            def json_serializer(obj):
+                                if isinstance(obj, (datetime, date)):
+                                    return obj.isoformat()
+                                if isinstance(obj, BaseEnum):
+                                    return obj.value
+                                if hasattr(obj, "__dict__"):
+                                    return str(obj)
+                                return str(obj)
+                            
+                            # Create job via PluginManager
+                            plugin_manager.add_job(
+                                session_id,
+                                plugin_id,
+                                json.dumps(job_config, default=json_serializer),
+                                f"Auto-created for {identity}"
+                            )
+                            logger.info(f"📝 Created job for {identity}")
+                            created.append(identity)
+                        else:
+                            error = f"HTTP {start_resp.status_code}: {start_resp.text[:200]}"
+                            logger.warning(f"⚠️  Failed to start {identity}: {error}")
+                            errors.append({"identity": identity, "action": "start", "error": error})
+                    
+                    else:
+                        error = f"HTTP {resp.status_code}: {resp.text[:200]}"
+                        logger.warning(f"⚠️  Failed to register {identity}: {error}")
+                        errors.append({"identity": identity, "action": "create", "error": error})
+
+                except Exception as e:
+                    logger.error(f"❌ Error creating {identity}: {e}")
+                    errors.append({"identity": identity, "action": "create", "error": str(e)})
+
+            # Stop inactive models
+            for model_identity in to_stop:
+                job_id = existing_jobs.get(model_identity)
+
+                try:
+                    resp = await client.post(
+                        f"{webhook_url}/api/test-system/model/stop",
+                        headers=headers,
+                        json={"identity": model_identity, "unlockCredential": True},
+                    )
+
+                    if resp.status_code in (200, 201):
+                        logger.info(f"🛑 Stopped model via webhook: {model_identity}")
+                        stopped.append(model_identity)
+                        if job_id:
+                            jobs_to_delete.append(job_id)
+                    else:
+                        error = f"HTTP {resp.status_code}: {resp.text[:200]}"
+                        logger.warning(f"⚠️  Failed to stop {model_identity}: {error}")
+                        errors.append(
+                            {"identity": model_identity, "action": "stop", "error": error}
+                        )
+
+                except Exception as e:
+                    logger.error(f"❌ Error stopping {model_identity}: {e}")
+                    errors.append({"identity": model_identity, "action": "stop", "error": str(e)})
+
+        # Step 6: Delete stopped jobs
+        for job_id in jobs_to_delete:
+            try:
+                plugin_manager.remove_job(job_id)
+                logger.info(f"🗑️  Deleted job {job_id}")
+            except Exception as e:
+                logger.error(f"❌ Failed to delete job {job_id}: {e}")
+                errors.append({"action": "delete_job", "job_id": job_id, "error": str(e)})
+
+        logger.info(
+            f"✨ Sync complete: {len(created)} created, {len(stopped)} stopped, "
+            f"{len(errors)} errors"
+        )
+
+        return {
+            "created": created,
+            "stopped": stopped,
+            "errors": errors,
+            "active_count": len(active_identities),
+            "existing_count": len(existing_identities),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ MLflow sync failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"MLflow sync failed: {str(e)}")
 
 
 # static site
