@@ -550,6 +550,45 @@ def get_sql_versions(
         )
 
 
+@app.get("/api/sql-versions/latest")
+def get_latest_sql_version(plugin_manager: PluginManagerState):
+    """
+    Get the latest SQL version sorted by updated_at DESC.
+    Returns 404 if no SQL version exists.
+    
+    Note: This route must be defined BEFORE /api/sql-versions/{version_id}
+    to prevent FastAPI from trying to parse 'latest' as an integer.
+    """
+    try:
+        with Session(plugin_manager.db_engine) as session:
+            stmt = select(SqlVersion).order_by(SqlVersion.updated_at.desc()).limit(1)
+            version = session.execute(stmt).scalar_one_or_none()
+
+            if not version:
+                raise HTTPException(
+                    status_code=404,
+                    detail="No SQL version found",
+                )
+
+            return {
+                "id": version.id,
+                "name": version.name,
+                "description": version.description,
+                "sql_query": version.sql_query,
+                "created_at": version.created_at.isoformat(),
+                "updated_at": version.updated_at.isoformat(),
+                "is_active": version.is_active,
+                "tags": version.tags,
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch latest SQL version: {str(e)}",
+        )
+
+
 @app.get("/api/sql-versions/{version_id}")
 def get_sql_version(
     plugin_manager: PluginManagerState,
@@ -792,29 +831,61 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
         to_stop = existing_identities - active_identities
         logger.info(f"🔄 Sync plan: {len(to_create)} to create, {len(to_stop)} to stop")
 
-        # Step 4: Get plugin default config
+        # Step 4: Get base config - try SQL version first, fallback to plugin default
         try:
-            import importlib
-
-            parts = plugin_name.rsplit(".", 1)
-            module_path = parts[0] if len(parts) == 2 else plugin_name
-            class_name = parts[1] if len(parts) == 2 else "Plugin"
-
-            module = importlib.import_module(module_path)
-            plugin_class = getattr(module, class_name, None)
-
-            if plugin_class and hasattr(plugin_class, "config"):
-                default_config_obj = plugin_class.config()
-                if hasattr(default_config_obj, "model_dump"):
-                    plugin_default_config = default_config_obj.model_dump()
-                elif hasattr(default_config_obj, "dict"):
-                    plugin_default_config = default_config_obj.dict()
+            # Try to fetch latest SQL version
+            sql_query_from_version = None  # Store SQL query separately
+            with Session(plugin_manager.db_engine) as session:
+                stmt = select(SqlVersion).order_by(SqlVersion.updated_at.desc()).limit(1)
+                sql_version = session.execute(stmt).scalar_one_or_none()
+                
+                if sql_version:
+                    logger.info(f"📋 Using SQL version config: {sql_version.name}")
+                    sql_query_from_version = sql_version.sql_query  # Store the SQL query
+                    
+                    # Parse SQL version tags as base config
+                    if sql_version.tags:
+                        try:
+                            plugin_default_config = json.loads(sql_version.tags) if isinstance(sql_version.tags, str) else sql_version.tags
+                            logger.info(f"✅ Loaded config from SQL version tags")
+                        except json.JSONDecodeError as e:
+                            logger.warning(f"⚠️  Failed to parse SQL version tags: {e}, falling back to plugin default")
+                            plugin_default_config = None
+                    else:
+                        plugin_default_config = {}  # Empty dict if no tags, but we still have SQL query
+                    
+                    # Add SQL query to config if we have it
+                    if plugin_default_config is not None and sql_query_from_version:
+                        plugin_default_config["sql"] = sql_query_from_version
                 else:
-                    plugin_default_config = dict(default_config_obj)
-            else:
-                plugin_default_config = {}
+                    logger.info(f"⚠️  No SQL version found, using plugin default config")
+                    plugin_default_config = None
+            
+            # Fallback to plugin default config if SQL version config not available
+            if plugin_default_config is None:
+                import importlib
+
+                parts = plugin_name.rsplit(".", 1)
+                module_path = parts[0] if len(parts) == 2 else plugin_name
+                class_name = parts[1] if len(parts) == 2 else "Plugin"
+
+                module = importlib.import_module(module_path)
+                plugin_class = getattr(module, class_name, None)
+
+                if plugin_class and hasattr(plugin_class, "config"):
+                    default_config_obj = plugin_class.config()
+                    if hasattr(default_config_obj, "model_dump"):
+                        plugin_default_config = default_config_obj.model_dump()
+                    elif hasattr(default_config_obj, "dict"):
+                        plugin_default_config = default_config_obj.dict()
+                    else:
+                        plugin_default_config = dict(default_config_obj)
+                    logger.info(f"✅ Loaded plugin default config")
+                else:
+                    plugin_default_config = {}
+                    logger.warning(f"⚠️  No plugin config method found")
         except Exception as e:
-            logger.warning(f"⚠️  Failed to load plugin default config: {e}")
+            logger.warning(f"⚠️  Failed to load config: {e}")
             plugin_default_config = {}
 
         # Step 5: Execute sync
