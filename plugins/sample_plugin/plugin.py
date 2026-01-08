@@ -6,6 +6,7 @@ from typing import List
 import sqlglot
 from datetime import datetime
 from jinja2 import DictLoader, Environment
+from .data import JSON_TPL, SQL_TPL, YAML_TPL, MD_TPL, countries
 
 
 PROJECT_NAME = "alpha-miner"
@@ -21,104 +22,39 @@ class Config(BaseModel):
         default_factory=list,
         json_schema_extra={"ui:field": "MultiSelect", "default": "BTC,ETH,SOL,BNB,LINK"},
     )
+    country: str = Field(
+        "USA",
+        json_schema_extra={
+            "ui:widget": "select",
+            "enum": list(countries.keys()),
+            "ui:options": {"size": 6},
+        },
+    )
+    city: List[str] = Field(
+        default_factory=list,
+        json_schema_extra={
+            "ui:field": "MultiSelect",
+            "default": list(countries["USA"]),
+            "ui:options": {"size": 6},
+            "ui:expr": """
+            { default: JSON.parse(await render("{{ get_cities_by_country(country) }}")) }
+        """,
+        },
+    )
     sql: str = Field(
-        """
-{% set infer_ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S') %}
-{% set users = get_users() %}
-
-WITH time_bounds AS (
-  SELECT
-    TIMESTAMP '{{ infer_ts }}' AS infer_ts,
-    TIMESTAMP '{{ infer_ts }}'
-      - INTERVAL '{{ warmup_bars + extra_bars }} hour' AS ts_warmup_start
-),
-
-ohlcv_binance_futures_in_range AS (
-  SELECT *
-  FROM public."ohlcv_binance-futures_1h" t
-  CROSS JOIN time_bounds b
-  WHERE t.quote_asset = '{{ quote_asset }}'
-    AND t.user in {{ users | in_clause }}
-    AND t.base_asset IN {{ base_assets | in_clause }}
-    AND t.open_time >= b.ts_warmup_start
-    AND t.open_time <= b.infer_ts
-)
-
-SELECT * FROM ohlcv_binance_futures_in_range;
-""",
+        SQL_TPL,
         json_schema_extra={"ui:field": "Template", "type": "sql"},
     )
     json_template: str = Field(
-        """
-{% extends "base" %}
-{% block content %}
-{
-  "name": {{obj.name|tojson}},
-  "my_object": {{obj.my_object|tojson}},
-  "quote_asset": {{ quote_asset | tojson }},
-  "extra_bars": {{ extra_bars }},
-  "base_assets": {{ base_assets | tojson }}
-}
-{% endblock %}
-""",
+        JSON_TPL,
         json_schema_extra={"ui:field": "Template", "type": "json"},
     )
     yaml_template: str = Field(
-        """
-quote_asset: {{ quote_asset }}
-extra_bars: {{ extra_bars }}
-base_assets:
-{% for base_asset in base_assets %}
-  - {{ base_asset }}
-{% endfor %}
-""",
+        YAML_TPL,
         json_schema_extra={"ui:field": "Template", "type": "yaml"},
     )
-
     md_template: str = Field(
-        """
-{% set data = {
-  "labels": ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
-  "datasets": [
-    {
-      "label": "top_5",
-      "data": [500,300,-200,400,-100,600,700,-300,200,400,-150,500],
-      "borderColor": "blue",
-      "backgroundColor": "rgba(0,0,255,0.1)",
-      "tension": 0.3
-    },
-    {
-      "label": "top_10",
-      "data": [700,-400,350,600,-500,700,800,-200,400,300,-250,700],
-      "borderColor": "orange",
-      "backgroundColor": "rgba(255,165,0,0.1)",
-      "tension": 0.3
-    },
-    {
-      "label": "top_41",
-      "data": [1000,500,-700,900,-600,1100,1200,-400,800,700,-300,1000],
-      "borderColor": "purple",
-      "backgroundColor": "rgba(128,0,128,0.1)",
-      "tension": 0.3
-    }
-  ]
-} %}
-  
-```chart
-{
-  "type": "line",
-  "data": {{ data }},
-  "options": {
-    "responsive": true,
-    "plugins": {
-      "title": {
-        "display": true,
-        "text": "Chatbots PNL Comparison Over Months"
-      }
-    }
-  }
-}
-""",
+        MD_TPL,
         json_schema_extra={"ui:field": "Template", "type": "markdown"},
     )
 
@@ -147,14 +83,7 @@ class MyClass:
 class Plugin:
 
     _env = Environment(
-        loader=DictLoader(
-            {
-                "base": """
-{% set obj = MyClass("ChatGPT") %}
-{% block content %}{% endblock %}
-"""
-            }
-        ),
+        loader=DictLoader({"base": "{% block content %}{% endblock %}"}),
         autoescape=False,
         trim_blocks=True,
         lstrip_blocks=True,
@@ -165,6 +94,7 @@ class Plugin:
             "datetime": datetime,
             "MyClass": MyClass,
             "get_users": lambda: ["tupt", "cuongnv"],
+            "get_cities_by_country": lambda country_name: countries.get(country_name, []),
         }
     )
 
