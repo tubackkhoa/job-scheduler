@@ -740,6 +740,7 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
     webhook_api_key = payload["webhook_api_key"]
     webhook_test_key = payload.get("webhook_test_key", "")
     session_id = payload.get("session_id", 1)
+    model_type = payload.get("model_type", "mlflow_custom")
 
     # Setup logger
     logger = logging.getLogger(f"mlflow_sync.{model_tag}")
@@ -853,12 +854,13 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
                         # Build job config
                         job_config = plugin_default_config.copy()
                         job_config.update({
-                            "model_type": model["model_name"],
+                            "model_type": model.get("model_name") or model_type,
                             "model_identity": identity,
                             "model_tag": model_tag,
                             "model_uri": model.get("model_uri", ""),
                             "webhook_url": webhook_url,
                             "webhook_api_key": webhook_api_key,
+                            "enable_use_default_config": False,
                         })
                         
                         # Custom JSON serializer for non-serializable objects
@@ -896,12 +898,13 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
                             # Build job config
                             job_config = plugin_default_config.copy()
                             job_config.update({
-                                "model_type": model["model_name"],
+                                "model_type": model.get("model_name") or model_type,
                                 "model_identity": identity,
                                 "model_tag": model_tag,
                                 "model_uri": model.get("model_uri", ""),
                                 "webhook_url": webhook_url,
                                 "webhook_api_key": webhook_api_key,
+                                "enable_use_default_config": False,
                             })
                             
                             # Custom JSON serializer for non-serializable objects

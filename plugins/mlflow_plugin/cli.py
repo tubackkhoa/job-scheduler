@@ -140,10 +140,12 @@ def action_start(args: argparse.Namespace) -> int:
     # Build config - these fields will be validated by target plugin's config()
     config = {
         "model_tag": args.model_tag,
+        "model_type": args.model_type,
         "model_identity": args.model_identify,
         "webhook_url": args.webhook_api,
         "webhook_api_key": args.webhook_api_key,
         "webhook_test_key": args.webhook_test_key or "",
+        "enable_use_default_config": False,
     }
     
     description = f"CLI-created job for {args.model_identify}"
@@ -244,6 +246,8 @@ def action_sync(args: argparse.Namespace) -> int:
         "webhook_api_key": args.webhook_api_key,
         "webhook_test_key": args.webhook_test_key or "",
         "session_id": args.session_id,
+        "model_type": args.model_type,
+        "enable_use_default_config": False,
     }
     
     try:
@@ -378,6 +382,14 @@ def main():
         choices=["start", "stop", "sync"],
         help="Action: 'start' to create/activate, 'stop' to deactivate, 'sync' to run full flow"
     )
+
+    parser.add_argument(
+        "--model-type",
+        type=str,
+        required=False,
+        default="mlflow_custom",
+        help="Model type: 'mlflow_custom'"
+    )
     
     parser.add_argument(
         "--api-server",
@@ -404,7 +416,6 @@ def main():
         "--model-tag",
         type=str,
         default="uat",
-        choices=["staging", "production", "uat"],
         help="Model tag (default: uat)"
     )
     
