@@ -304,6 +304,15 @@ def reload_plugin(plugin_manager: PluginManagerState, package: str):
         raise HTTPException(status_code=500, detail=f"Failed to reload plugin: {str(e)}")
 
 
+@app.post("/download/{name}/{version}")
+def download_module(plugin_manager: PluginManagerState, name: str, version: str):
+    try:
+        success = plugin_manager.download_package(name, version)
+        return {"success": success}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to download module: {str(e)}")
+
+
 @app.delete("/plugins/{plugin_id}")
 def delete_plugin(plugin_manager: PluginManagerState, plugin_id: int):
     """

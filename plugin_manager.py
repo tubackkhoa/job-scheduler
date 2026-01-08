@@ -1,4 +1,5 @@
 import asyncio
+from ctypes import ArgumentError
 import importlib
 import json
 import logging
@@ -9,9 +10,15 @@ from pydantic import BaseModel
 from apscheduler.util import undefined
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from jinja2 import Environment
-from sqlalchemy import Engine
+from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session
 from models import Job, Plugin
+from pip._internal.cli.main import main as pip_main
+import zipfile
+import tarfile
+import glob
+import shutil
+import os
 
 PROJECT_NAME = "job-scheduler"
 
@@ -19,6 +26,59 @@ hookspec = pluggy.HookspecMarker(PROJECT_NAME)
 
 scheduler_logger = logging.getLogger(PROJECT_NAME)
 scheduler_logger.addHandler(logging.StreamHandler())
+
+
+def extract_package_files(target_dir: str) -> bool:
+    # Find supported archives (prefer wheel over tar.gz)
+    archives = glob.glob(os.path.join(target_dir, "*.whl")) or glob.glob(
+        os.path.join(target_dir, "*.tar.gz")
+    )
+
+    if not archives:
+        scheduler_logger.info("No archive found to extract.")
+        return False
+
+    archive_path = archives[0]
+    scheduler_logger.info(f"Extracting archive: {archive_path}")
+
+    # Extract archive
+    if archive_path.endswith(".whl"):
+        with zipfile.ZipFile(archive_path) as zf:
+            zf.extractall(target_dir)
+    else:  # .tar.gz
+        with tarfile.open(archive_path, "r:gz") as tf:
+            tf.extractall(target_dir)
+
+    os.remove(archive_path)
+
+    # Remove *.dist-info directories
+    for dist_info in glob.glob(os.path.join(target_dir, "*.dist-info")):
+        scheduler_logger.info(f"Removing dist-info folder: {dist_info}")
+        shutil.rmtree(dist_info, ignore_errors=True)
+
+    # Get non-junk entries
+    entries = [
+        e for e in os.listdir(target_dir) if e != "__pycache__" and not e.endswith(".dist-info")
+    ]
+
+    # Flatten single nested directory
+    if len(entries) == 1:
+        nested_dir = os.path.join(target_dir, entries[0])
+        if os.path.isdir(nested_dir):
+            scheduler_logger.info(f"Flattening directory: {nested_dir} → {target_dir}")
+            for name in os.listdir(nested_dir):
+                src = os.path.join(nested_dir, name)
+                dst = os.path.join(target_dir, name)
+
+                if os.path.exists(dst):
+                    shutil.rmtree(dst) if os.path.isdir(dst) else os.remove(dst)
+
+                shutil.move(src, dst)
+
+            os.rmdir(nested_dir)
+
+    scheduler_logger.info("Extraction and cleanup complete.")
+    return True
 
 
 class PluginSpec:
@@ -64,8 +124,9 @@ class PluginManager:
 
     def __init__(
         self,
-        db_engine: Engine,
+        db_engine: Engine | str,
         module_paths: Optional[list[str]] = None,
+        plugin_path="plugins",
         log_handler: Optional[logging.Handler] = None,
         scheduler_kwargs: Optional[dict] = None,
     ) -> None:
@@ -75,8 +136,8 @@ class PluginManager:
             for path in module_paths:
                 if path and path not in sys.path:
                     sys.path.insert(0, path)
-
-        self.db_engine = db_engine
+        self.plugin_path = plugin_path
+        self.db_engine = create_engine(db_engine) if isinstance(db_engine, str) else db_engine
         # Pass any additional user-provided args
         self.scheduler = AsyncIOScheduler(**(scheduler_kwargs or {}))
         self.log_handler = log_handler
@@ -110,6 +171,33 @@ class PluginManager:
     def stop(self):
         if self.scheduler.running:
             self.scheduler.shutdown()
+
+    def download_package(self, name: str, version: str) -> bool:
+        if not version:
+            raise ArgumentError(f"Please provide package with a version, e.g. 1.2.3")
+        version_underscore = version.replace(".", "_")
+        target_dir = f"{self.plugin_path}/{name}@{version_underscore}"
+        os.makedirs(target_dir, exist_ok=True)
+
+        # Construct the download arguments exactly like the pip CLI
+        args = [
+            "download",  # pip command to download
+            f"{name}=={version}",
+            "--dest",
+            target_dir,
+            "--no-deps",  # Optional: just the main package, no dependencies
+        ]
+
+        scheduler_logger.info(f"Downloading {name}=={version} into {target_dir} ...")
+        # Call pip's internal main function with the args
+        result = pip_main(args)
+
+        if result == 0:
+            return extract_package_files(target_dir)
+        else:
+            scheduler_logger.info(f"Download failed with exit code {result}")
+
+        return False
 
     @staticmethod
     def get_job_scheduler_id(job_id: int) -> str:
