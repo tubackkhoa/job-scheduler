@@ -34,7 +34,6 @@ class Config(BaseModel):
         default_factory=list,
         json_schema_extra={
             "ui:field": "MultiSelect",
-            "default": list(countries["USA"]),
             "ui:options": {"size": 6},
             "ui:expr": """
             { default: JSON.parse(await render("{{ get_cities_by_country(country) }}")) }
