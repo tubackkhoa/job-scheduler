@@ -344,6 +344,16 @@ def reload_plugin(plugin_manager: PluginManagerState, package: str):
         raise HTTPException(status_code=500, detail=f"Failed to reload plugin: {str(e)}")
 
 
+@app.post("/download/{name}")
+def download_module(plugin_manager: PluginManagerState, name: str, payload: dict = Body(...)):
+    try:
+        version_or_vsi = payload["version"]
+        success = plugin_manager.download_package(name, version_or_vsi)
+        return {"success": success}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to download module: {str(e)}")
+
+
 @app.delete("/plugins/{plugin_id}")
 def delete_plugin(plugin_manager: PluginManagerState, plugin_id: int):
     """
@@ -715,30 +725,30 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
     import json
     import logging
     from typing import Dict, Any, List
-    
+
     # Validate required fields
     required_fields = {"plugin_name", "model_tag", "webhook_url", "webhook_api_key"}
     if not required_fields.issubset(payload):
         raise HTTPException(
             status_code=400,
-            detail=f"Missing required fields: {required_fields - set(payload.keys())}"
+            detail=f"Missing required fields: {required_fields - set(payload.keys())}",
         )
-    
+
     plugin_name = payload["plugin_name"]
     model_tag = payload["model_tag"]
     webhook_url = payload["webhook_url"]
     webhook_api_key = payload["webhook_api_key"]
     webhook_test_key = payload.get("webhook_test_key", "")
     session_id = payload.get("session_id", 1)
-    
+
     # Setup logger
     logger = logging.getLogger(f"mlflow_sync.{model_tag}")
     logger.info(f"🔍 Starting MLflow sync for model_tag: '{model_tag}'")
-    
+
     try:
         # Step 1: Fetch active models from MLflow
         from plugins.mlflow_plugin.utils import get_models_with_backtest_watching
-        
+
         active_models = get_models_with_backtest_watching()
         logger.info(f"✅ Found {len(active_models)} active models in MLflow")
         active_identities = {m["identity"] for m in active_models}
@@ -775,22 +785,23 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
         
         existing_identities = set(existing_jobs.keys())
         logger.info(f"📊 Found {len(existing_jobs)} existing jobs with tag '{model_tag}'")
-        
+
         # Step 3: Determine sync plan
         to_create = active_identities - existing_identities
         to_stop = existing_identities - active_identities
         logger.info(f"🔄 Sync plan: {len(to_create)} to create, {len(to_stop)} to stop")
-        
+
         # Step 4: Get plugin default config
         try:
             import importlib
+
             parts = plugin_name.rsplit(".", 1)
             module_path = parts[0] if len(parts) == 2 else plugin_name
             class_name = parts[1] if len(parts) == 2 else "Plugin"
-            
+
             module = importlib.import_module(module_path)
             plugin_class = getattr(module, class_name, None)
-            
+
             if plugin_class and hasattr(plugin_class, "config"):
                 default_config_obj = plugin_class.config()
                 if hasattr(default_config_obj, "model_dump"):
@@ -804,25 +815,25 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
         except Exception as e:
             logger.warning(f"⚠️  Failed to load plugin default config: {e}")
             plugin_default_config = {}
-        
+
         # Step 5: Execute sync
         created = []
         stopped = []
         errors = []
         jobs_to_delete = []
-        
+
         async with httpx.AsyncClient(timeout=60.0) as client:
             headers = {
                 "test-system-api-key": webhook_test_key,
                 "Content-Type": "application/json",
             }
-            
+
             # Create new models
             for model in active_models:
                 identity = model["identity"]
                 if identity not in to_create:
                     continue
-                
+
                 try:
                     # Call webhook to register model
                     resp = await client.post(
@@ -838,7 +849,7 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
                     
                     if resp.status_code in (200, 201):
                         logger.info(f"✅ Registered model via webhook: {identity}")
-                        
+
                         # Build job config
                         job_config = plugin_default_config.copy()
                         job_config.update({
@@ -921,22 +932,22 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
                         error = f"HTTP {resp.status_code}: {resp.text[:200]}"
                         logger.warning(f"⚠️  Failed to register {identity}: {error}")
                         errors.append({"identity": identity, "action": "create", "error": error})
-                
+
                 except Exception as e:
                     logger.error(f"❌ Error creating {identity}: {e}")
                     errors.append({"identity": identity, "action": "create", "error": str(e)})
-            
+
             # Stop inactive models
             for model_identity in to_stop:
                 job_id = existing_jobs.get(model_identity)
-                
+
                 try:
                     resp = await client.post(
                         f"{webhook_url}/api/test-system/model/stop",
                         headers=headers,
                         json={"identity": model_identity, "unlockCredential": True},
                     )
-                    
+
                     if resp.status_code in (200, 201):
                         logger.info(f"🛑 Stopped model via webhook: {model_identity}")
                         stopped.append(model_identity)
@@ -945,12 +956,14 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
                     else:
                         error = f"HTTP {resp.status_code}: {resp.text[:200]}"
                         logger.warning(f"⚠️  Failed to stop {model_identity}: {error}")
-                        errors.append({"identity": model_identity, "action": "stop", "error": error})
-                
+                        errors.append(
+                            {"identity": model_identity, "action": "stop", "error": error}
+                        )
+
                 except Exception as e:
                     logger.error(f"❌ Error stopping {model_identity}: {e}")
                     errors.append({"identity": model_identity, "action": "stop", "error": str(e)})
-        
+
         # Step 6: Delete stopped jobs
         for job_id in jobs_to_delete:
             try:
@@ -959,12 +972,12 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
             except Exception as e:
                 logger.error(f"❌ Failed to delete job {job_id}: {e}")
                 errors.append({"action": "delete_job", "job_id": job_id, "error": str(e)})
-        
+
         logger.info(
             f"✨ Sync complete: {len(created)} created, {len(stopped)} stopped, "
             f"{len(errors)} errors"
         )
-        
+
         return {
             "created": created,
             "stopped": stopped,
@@ -972,15 +985,12 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
             "active_count": len(active_identities),
             "existing_count": len(existing_identities),
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"❌ MLflow sync failed: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"MLflow sync failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"MLflow sync failed: {str(e)}")
 
 
 # static site
