@@ -549,16 +549,3 @@ class PluginManager:
             # Delete plugin from database
             session.delete(plugin)
             session.commit()
-
-
-import dotenv
-
-dotenv.load_dotenv()
-
-plugin_manager = PluginManager("sqlite:///:memory:?check_same_thread=false")
-
-plugin = plugin_manager.load_plugin(
-    "plugins.alpha_miner@lab.alpha_miner.plugins.UatUserCustomConfigPlugin"
-)
-assert plugin
-print(plugin.schema())
