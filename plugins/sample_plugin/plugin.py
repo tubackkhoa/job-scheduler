@@ -36,7 +36,7 @@ class Config(BaseModel):
             "ui:field": "MultiSelect",
             "ui:options": {"size": 6},
             "ui:expr": """
-            { default: JSON.parse(await render("{{ get_cities_by_country(country) }}")) }
+            { default: JSON.parse(await j`{{ get_cities_by_country(country) }}`) }
         """,
         },
     )
