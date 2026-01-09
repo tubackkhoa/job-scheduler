@@ -39,6 +39,21 @@ def find_job_by_model_identify(
     return None
 
 
+def get_latest_sql_version(api_server: str) -> Optional[Dict[str, Any]]:
+    """Fetch the latest SQL version from the API"""
+    try:
+        resp = httpx.get(f"{api_server}/api/sql-versions/latest", timeout=30.0)
+        resp.raise_for_status()
+        return resp.json()
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            return None
+        raise
+    except Exception:
+        return None
+
+
+
 def create_job(
     api_server: str,
     plugin_id: int,
@@ -137,14 +152,40 @@ def action_start(args: argparse.Namespace) -> int:
         print(f"✅ Job activated: {result}")
         return 0
     
-    # Build config - these fields will be validated by target plugin's config()
-    config = {
+    # Fetch latest SQL version config
+    print(f"🔍 Fetching latest SQL version config...")
+    sql_version = get_latest_sql_version(args.api_server)
+    
+    # Build base config from SQL version or empty dict
+    if sql_version:
+        # Start with tags as base config
+        if sql_version.get("tags"):
+            try:
+                base_config = json.loads(sql_version["tags"]) if isinstance(sql_version["tags"], str) else sql_version["tags"]
+            except json.JSONDecodeError as e:
+                print(f"⚠️  Failed to parse SQL version tags: {e}")
+                base_config = {}
+        else:
+            base_config = {}
+        
+        # Add SQL query to config
+        base_config["sql"] = sql_version.get("sql_query", "")
+        print(f"✅ Using SQL version config: {sql_version['name']}")
+    else:
+        print(f"⚠️  No SQL version found, using CLI parameters only")
+        base_config = {}
+    
+    # Build config - merge base config with CLI parameters (CLI params override)
+    config = base_config.copy()
+    config.update({
         "model_tag": args.model_tag,
+        "model_type": args.model_type,
         "model_identity": args.model_identify,
         "webhook_url": args.webhook_api,
         "webhook_api_key": args.webhook_api_key,
         "webhook_test_key": args.webhook_test_key or "",
-    }
+        "enable_use_default_config": False,
+    })
     
     description = f"CLI-created job for {args.model_identify}"
     
@@ -206,22 +247,7 @@ def action_start(args: argparse.Namespace) -> int:
         )
         print(f"✅ Job created successfully!")
         print(f"   Response: {json.dumps(result, indent=2)}")
-        
-        # Find the newly created job to activate it
-        # Need to refresh plugin data to get the new job
-        plugin = find_plugin_by_name(args.api_server, args.plugin_name)
-        if plugin:
-            new_job = find_job_by_model_identify(
-                plugin,
-                args.model_identify,
-                args.model_tag
-            )
-            
-            if new_job:
-                job_id = new_job["id"]
-                print(f"🚀 Activating job ID: {job_id}")
-                activate_result = activate_job(args.api_server, job_id, True)
-                print(f"✅ Job activated: {activate_result}")
+        print(f"   ℹ️  Job is created but NOT activated. Use the activation API to activate it.")
         
         return 0
         
@@ -244,6 +270,8 @@ def action_sync(args: argparse.Namespace) -> int:
         "webhook_api_key": args.webhook_api_key,
         "webhook_test_key": args.webhook_test_key or "",
         "session_id": args.session_id,
+        "model_type": args.model_type,
+        "enable_use_default_config": False,
     }
     
     try:
@@ -378,6 +406,14 @@ def main():
         choices=["start", "stop", "sync"],
         help="Action: 'start' to create/activate, 'stop' to deactivate, 'sync' to run full flow"
     )
+
+    parser.add_argument(
+        "--model-type",
+        type=str,
+        required=False,
+        default="mlflow_custom",
+        help="Model type: 'mlflow_custom'"
+    )
     
     parser.add_argument(
         "--api-server",
@@ -404,7 +440,6 @@ def main():
         "--model-tag",
         type=str,
         default="uat",
-        choices=["staging", "production", "uat"],
         help="Model tag (default: uat)"
     )
     
