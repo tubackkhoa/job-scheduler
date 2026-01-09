@@ -492,7 +492,7 @@ def get_models_with_backtest_watching(
                 tags = mv.tags or {}
 
                 # Chỉ cần tồn tại key "backtest_watching"
-                if "local_test" not in tags:
+                if "backtest_watching" not in tags:
                     continue
 
                 results.append({
