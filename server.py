@@ -15,7 +15,6 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 
 from fastapi.staticfiles import StaticFiles
-from jinja2 import Environment
 from sqlalchemy import create_engine
 from create_data import create_data
 from log_handler import JobLogHandler
@@ -186,17 +185,14 @@ def get_plugin_by_name(plugin_manager: PluginManagerState, plugin_name: str):
     with Session(plugin_manager.db_engine) as session:
         stmt = select(Plugin).where(Plugin.package == plugin_name)
         plugin = session.execute(stmt).scalar_one_or_none()
-        
+
         if not plugin:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Plugin not found: {plugin_name}"
-            )
-        
+            raise HTTPException(status_code=404, detail=f"Plugin not found: {plugin_name}")
+
         # Get all jobs for this plugin
         stmt_jobs = select(Job).where(Job.plugin_id == plugin.id)
         jobs = session.execute(stmt_jobs).scalars().all()
-        
+
         return {
             "id": plugin.id,
             "package": plugin.package,
@@ -212,7 +208,7 @@ def get_plugin_by_name(plugin_manager: PluginManagerState, plugin_name: str):
                     "active": job.active,
                 }
                 for job in jobs
-            ]
+            ],
         }
 
 
@@ -228,7 +224,6 @@ def create_plugin(plugin_manager: PluginManagerState, payload: dict = Body(...))
       "description": "Sample plugin"
     }
     """
-    from sqlalchemy.orm import Session
 
     required_keys = {"package", "interval"}
     if not required_keys.issubset(payload):
@@ -555,7 +550,7 @@ def get_latest_sql_version(plugin_manager: PluginManagerState):
     """
     Get the latest SQL version sorted by updated_at DESC.
     Returns 404 if no SQL version exists.
-    
+
     Note: This route must be defined BEFORE /api/sql-versions/{version_id}
     to prevent FastAPI from trying to parse 'latest' as an integer.
     """
@@ -792,24 +787,21 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
         active_models = get_models_with_backtest_watching()
         logger.info(f"✅ Found {len(active_models)} active models in MLflow")
         active_identities = {m["identity"] for m in active_models}
-        
+
         # Step 2: Get existing jobs from database by querying plugin directly
         with Session(plugin_manager.db_engine) as session:
             stmt = select(Plugin).where(Plugin.package == plugin_name)
             target_plugin = session.execute(stmt).scalar_one_or_none()
-            
+
             if not target_plugin:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Plugin not found: {plugin_name}"
-                )
-            
+                raise HTTPException(status_code=404, detail=f"Plugin not found: {plugin_name}")
+
             plugin_id = target_plugin.id
-            
+
             # Get all jobs for this plugin
             stmt_jobs = select(Job).where(Job.plugin_id == plugin_id)
             jobs = session.execute(stmt_jobs).scalars().all()
-            
+
             # Build map of existing jobs: {model_identity: job_id}
             existing_jobs: Dict[str, int] = {}
             for job in jobs:
@@ -817,12 +809,12 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
                     config = json.loads(job.config) if isinstance(job.config, str) else job.config
                     identity = config.get("model_identity")
                     tag = config.get("model_tag")
-                    
+
                     if tag == model_tag and identity:
                         existing_jobs[identity] = job.id
                 except (json.JSONDecodeError, KeyError) as e:
                     logger.warning(f"⚠️  Failed to parse job {job.id} config: {e}")
-        
+
         existing_identities = set(existing_jobs.keys())
         logger.info(f"📊 Found {len(existing_jobs)} existing jobs with tag '{model_tag}'")
 
@@ -838,29 +830,37 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
             with Session(plugin_manager.db_engine) as session:
                 stmt = select(SqlVersion).order_by(SqlVersion.updated_at.desc()).limit(1)
                 sql_version = session.execute(stmt).scalar_one_or_none()
-                
+
                 if sql_version:
                     logger.info(f"📋 Using SQL version config: {sql_version.name}")
                     sql_query_from_version = sql_version.sql_query  # Store the SQL query
-                    
+
                     # Parse SQL version tags as base config
                     if sql_version.tags:
                         try:
-                            plugin_default_config = json.loads(sql_version.tags) if isinstance(sql_version.tags, str) else sql_version.tags
+                            plugin_default_config = (
+                                json.loads(sql_version.tags)
+                                if isinstance(sql_version.tags, str)
+                                else sql_version.tags
+                            )
                             logger.info(f"✅ Loaded config from SQL version tags")
                         except json.JSONDecodeError as e:
-                            logger.warning(f"⚠️  Failed to parse SQL version tags: {e}, falling back to plugin default")
+                            logger.warning(
+                                f"⚠️  Failed to parse SQL version tags: {e}, falling back to plugin default"
+                            )
                             plugin_default_config = None
                     else:
-                        plugin_default_config = {}  # Empty dict if no tags, but we still have SQL query
-                    
+                        plugin_default_config = (
+                            {}
+                        )  # Empty dict if no tags, but we still have SQL query
+
                     # Add SQL query to config if we have it
                     if plugin_default_config is not None and sql_query_from_version:
                         plugin_default_config["sql"] = sql_query_from_version
                 else:
                     logger.info(f"⚠️  No SQL version found, using plugin default config")
                     plugin_default_config = None
-            
+
             # Fallback to plugin default config if SQL version config not available
             if plugin_default_config is None:
                 import importlib
@@ -918,22 +918,24 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
                             "version": str(model["version"]),
                         },
                     )
-                    
+
                     if resp.status_code in (200, 201):
                         logger.info(f"✅ Registered model via webhook: {identity}")
 
                         # Build job config
                         job_config = plugin_default_config.copy()
-                        job_config.update({
-                            "model_type": model.get("model_name") or model_type,
-                            "model_identity": identity,
-                            "model_tag": model_tag,
-                            "model_uri": model.get("model_uri", ""),
-                            "webhook_url": webhook_url,
-                            "webhook_api_key": webhook_api_key,
-                            "enable_use_default_config": False,
-                        })
-                        
+                        job_config.update(
+                            {
+                                "model_type": model.get("model_name") or model_type,
+                                "model_identity": identity,
+                                "model_tag": model_tag,
+                                "model_uri": model.get("model_uri", ""),
+                                "webhook_url": webhook_url,
+                                "webhook_api_key": webhook_api_key,
+                                "enable_use_default_config": False,
+                            }
+                        )
+
                         # Custom JSON serializer for non-serializable objects
                         def json_serializer(obj):
                             if isinstance(obj, (datetime, date)):
@@ -943,17 +945,17 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
                             if hasattr(obj, "__dict__"):
                                 return str(obj)
                             return str(obj)
-                        
+
                         # Create job via PluginManager
                         plugin_manager.add_job(
                             session_id,
                             plugin_id,
                             json.dumps(job_config, default=json_serializer),
-                            f"Auto-created for {identity}"
+                            f"Auto-created for {identity}",
                         )
                         logger.info(f"📝 Created job for {identity}")
                         created.append(identity)
-                    
+
                     elif "exist" in resp.text.lower() or resp.status_code == 409:
                         # Model already exists, try to start it
                         logger.info(f"⚠️  Model already exists, calling start endpoint: {identity}")
@@ -962,22 +964,24 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
                             headers=headers,
                             json={"identity": identity},
                         )
-                        
+
                         if start_resp.status_code in (200, 201):
                             logger.info(f"✅ Started existing model via webhook: {identity}")
-                            
+
                             # Build job config
                             job_config = plugin_default_config.copy()
-                            job_config.update({
-                                "model_type": model.get("model_name") or model_type,
-                                "model_identity": identity,
-                                "model_tag": model_tag,
-                                "model_uri": model.get("model_uri", ""),
-                                "webhook_url": webhook_url,
-                                "webhook_api_key": webhook_api_key,
-                                "enable_use_default_config": False,
-                            })
-                            
+                            job_config.update(
+                                {
+                                    "model_type": model.get("model_name") or model_type,
+                                    "model_identity": identity,
+                                    "model_tag": model_tag,
+                                    "model_uri": model.get("model_uri", ""),
+                                    "webhook_url": webhook_url,
+                                    "webhook_api_key": webhook_api_key,
+                                    "enable_use_default_config": False,
+                                }
+                            )
+
                             # Custom JSON serializer for non-serializable objects
                             def json_serializer(obj):
                                 if isinstance(obj, (datetime, date)):
@@ -987,13 +991,13 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
                                 if hasattr(obj, "__dict__"):
                                     return str(obj)
                                 return str(obj)
-                            
+
                             # Create job via PluginManager
                             plugin_manager.add_job(
                                 session_id,
                                 plugin_id,
                                 json.dumps(job_config, default=json_serializer),
-                                f"Auto-created for {identity}"
+                                f"Auto-created for {identity}",
                             )
                             logger.info(f"📝 Created job for {identity}")
                             created.append(identity)
@@ -1001,7 +1005,7 @@ async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(.
                             error = f"HTTP {start_resp.status_code}: {start_resp.text[:200]}"
                             logger.warning(f"⚠️  Failed to start {identity}: {error}")
                             errors.append({"identity": identity, "action": "start", "error": error})
-                    
+
                     else:
                         error = f"HTTP {resp.status_code}: {resp.text[:200]}"
                         logger.warning(f"⚠️  Failed to register {identity}: {error}")

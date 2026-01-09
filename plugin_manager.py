@@ -352,7 +352,8 @@ class PluginManager:
         return plugin
 
     def add_plugin(self, package: str, interval: int, description: Optional[str] = None) -> int:
-        self.load_plugin(package)
+        # load plugin override module to make sure new code if sharing the same module
+        self.load_plugin(package, True)
         # Insert into DB
         with Session(self.db_engine) as session:
             plugin_row = Plugin(
