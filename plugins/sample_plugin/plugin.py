@@ -35,9 +35,12 @@ class Config(BaseModel):
         json_schema_extra={
             "ui:field": "MultiSelect",
             "ui:options": {"size": 6},
-            "ui:expr": """
+            "ui:expr": [
+                """
             { default: JSON.parse(await j`{{ get_cities_by_country(country) }}`) }
         """,
+                ["country"],  # dependency paths, can be many, eg : ["abc"], ["abc", "def"]
+            ],
         },
     )
     sql: str = Field(
