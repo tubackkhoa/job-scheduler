@@ -137,7 +137,7 @@ class Plugin:
 
     @hookimpl
     @classmethod
-    async def install(cls) -> bool:
+    def install(cls) -> bool:
         return sync_database()
 
     @hookimpl
