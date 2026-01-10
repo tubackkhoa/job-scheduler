@@ -43,6 +43,10 @@ class Config(BaseModel):
             ],
         },
     )
+    js_template: str = Field(
+        "",
+        json_schema_extra={"ui:field": "Template", "type": "js"},
+    )
     sql: str = Field(
         SQL_TPL,
         json_schema_extra={"ui:field": "Template", "type": "sql"},
