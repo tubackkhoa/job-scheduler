@@ -20,12 +20,12 @@ class Base(DeclarativeBase):
 
 
 class SqlVersion(Base):
-    __tablename__ = "sql_versions"
+    __tablename__ = "value_versions"
 
-    id: Mapped[int] = mapped_column(Integer, Sequence("sql_versions_id_seq"), primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, Sequence("value_versions_id_seq"), primary_key=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
-    sql_query: Mapped[str] = mapped_column(Text, nullable=False)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP")
     )
@@ -40,7 +40,7 @@ class SqlVersion(Base):
             "id": self.id,
             "name": self.name,
             "description": self.description,
-            "sql_query": self.sql_query,
+            "value": self.value,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "is_active": self.is_active,
@@ -53,18 +53,18 @@ assert db_connection
 db_engine = create_engine(db_connection)
 
 
-def create_sql_version(payload: dict):
+def create_value_version(payload: dict):
     #  validate at model declaration
     with Session(db_engine) as session:
-        sql_version = SqlVersion(**payload)
-        session.add(sql_version)
+        value_version = SqlVersion(**payload)
+        session.add(value_version)
         session.commit()
-        session.refresh(sql_version)
+        session.refresh(value_version)
 
-        return sql_version.to_dict()
+        return value_version.to_dict()
 
 
-def get_sql_versions(
+def get_value_versions(
     search: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
@@ -86,14 +86,7 @@ def get_sql_versions(
         }
 
 
-def get_latest_sql_version():
-    """
-    Get the latest SQL version sorted by updated_at DESC.
-    Returns 404 if no SQL version exists.
-
-    Note: This route must be defined BEFORE /api/sql-versions/{version_id}
-    to prevent FastAPI from trying to parse 'latest' as an integer.
-    """
+def get_latest_value_version():
     with Session(db_engine) as session:
         stmt = select(SqlVersion).order_by(SqlVersion.updated_at.desc()).limit(1)
         version = session.execute(stmt).scalar_one_or_none()
@@ -106,7 +99,7 @@ def get_latest_sql_version():
         return version.to_dict()
 
 
-def get_sql_version(
+def get_value_version(
     version_id: int,
 ):
 
@@ -124,21 +117,10 @@ def get_sql_version(
         return version.to_dict()
 
 
-def update_sql_version(
+def update_value_version(
     version_id: int,
     payload: dict,
 ):
-    """
-    Update an existing SQL version.
-
-    Expected payload:
-    {
-      "name": "v1.1",  # Optional
-      "description": "Updated ranking",  # Optional
-      "sql_query": "SELECT ...",  # Optional
-      "tags": "{...}"  # Optional
-    }
-    """
 
     with Session(db_engine) as session:
         stmt = select(SqlVersion).where(SqlVersion.id == version_id)
@@ -162,7 +144,7 @@ def update_sql_version(
         return version.to_dict()
 
 
-def delete_sql_version(version_id: int):
+def delete_value_version(version_id: int):
     with Session(db_engine) as session:
         stmt = select(SqlVersion).where(SqlVersion.id == version_id)
         version = session.execute(stmt).scalar_one_or_none()
@@ -181,7 +163,7 @@ def delete_sql_version(version_id: int):
         }
 
 
-def activate_sql_version(version_id: int):
+def activate_value_version(version_id: int):
 
     with Session(db_engine) as session:
         # Get the version to activate

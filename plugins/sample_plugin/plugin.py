@@ -9,10 +9,10 @@ from jinja2 import DictLoader, Environment
 
 from .models import (
     sync_database,
-    create_sql_version,
-    get_sql_version,
-    get_sql_versions,
-    update_sql_version,
+    create_value_version,
+    get_value_version,
+    get_value_versions,
+    update_value_version,
 )
 from .data import JSON_TPL, SQL_TPL, YAML_TPL, MD_TPL, countries
 
@@ -62,10 +62,10 @@ class Config(BaseModel):
             "ui:field": "Version",
             "binding": ["sql"],
             "model:expr": {
-                "list": "j`{{ get_sql_versions('${search}', ${limit}, ${offset}) | tojson }}`",
-                "detail": "j`{{ get_sql_version(${id}) | tojson }}`",
-                "create": "j`{{ create_sql_version(${payload}) | tojson }}`",
-                "update": "j`{{ update_sql_version(${id}, ${payload}) | tojson }}`",
+                "list": "j`{{ get_value_versions('${search}', ${limit}, ${offset}) | tojson }}`",
+                "detail": "j`{{ get_value_version(${id}) | tojson }}`",
+                "create": "j`{{ create_value_version(${payload}) | tojson }}`",
+                "update": "j`{{ update_value_version(${id}, ${payload}) | tojson }}`",
             },
             "ui:options": {"size": 12},
         },
@@ -124,10 +124,10 @@ class Plugin:
             "MyClass": MyClass,
             "get_users": lambda: ["tupt", "cuongnv"],
             "get_cities_by_country": lambda country_name: countries.get(country_name, []),
-            "get_sql_versions": get_sql_versions,
-            "get_sql_version": get_sql_version,
-            "update_sql_version": update_sql_version,
-            "create_sql_version": create_sql_version,
+            "get_value_versions": get_value_versions,
+            "get_value_version": get_value_version,
+            "update_value_version": update_value_version,
+            "create_value_version": create_value_version,
         }
     )
 
