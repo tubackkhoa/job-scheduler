@@ -208,3 +208,8 @@ def activate_sql_version(version_id: int):
             "success": True,
             "message": f"SQL version {version_id} activated",
         }
+
+
+def sync_database():
+    Base.metadata.create_all(db_engine)
+    return True

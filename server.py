@@ -20,7 +20,7 @@ from create_data import create_data
 from log_handler import JobLogHandler
 from log_service import LogService
 from models import Job, Plugin, SqlVersion
-from plugin_manager import PluginManager
+from plugin_manager import PluginManager, PluginSpec
 from ws_manager import WSConnectionManager
 import os
 import dotenv
@@ -347,6 +347,26 @@ def download_module(plugin_manager: PluginManagerState, name: str, payload: dict
         return {"success": success}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to download module: {str(e)}")
+
+
+@app.put("/install/{package}")
+def install_module(plugin_manager: PluginManagerState, package: str):
+    try:
+        plugin = plugin_manager.get_plugin_instance(package)
+        assert plugin
+        return {"success": plugin.install()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to install plugin: {str(e)}")
+
+
+@app.put("/uninstall/{package}")
+def uninstall_module(plugin_manager: PluginManagerState, package: str):
+    try:
+        plugin = plugin_manager.get_plugin_instance(package)
+        assert plugin
+        return {"success": plugin.uninstall()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to uninstall plugin: {str(e)}")
 
 
 @app.delete("/plugins/{plugin_id}")

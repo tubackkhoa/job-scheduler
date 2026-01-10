@@ -7,7 +7,13 @@ import sqlglot
 from datetime import datetime
 from jinja2 import DictLoader, Environment
 
-from .models import create_sql_version, get_sql_version, get_sql_versions, update_sql_version
+from .models import (
+    sync_database,
+    create_sql_version,
+    get_sql_version,
+    get_sql_versions,
+    update_sql_version,
+)
 from .data import JSON_TPL, SQL_TPL, YAML_TPL, MD_TPL, countries
 
 
@@ -128,6 +134,11 @@ class Plugin:
     _env.filters["in_clause"] = lambda values: (
         "()" if not values else "(" + ",".join(repr(v) for v in values) + ")"
     )
+
+    @hookimpl
+    @classmethod
+    async def install(cls) -> bool:
+        return sync_database()
 
     @hookimpl
     @classmethod
