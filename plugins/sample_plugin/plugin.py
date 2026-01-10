@@ -47,6 +47,11 @@ class Config(BaseModel):
         "",
         json_schema_extra={"ui:field": "Template", "type": "js"},
     )
+    sql_id: int = Field(
+        0,
+        title="Search / Select SQL Version",
+        json_schema_extra={"ui:field": "Version", "binding": ["sql"], "ui:options": {"size": 12}},
+    )
     sql: str = Field(
         SQL_TPL,
         json_schema_extra={"ui:field": "Template", "type": "sql"},

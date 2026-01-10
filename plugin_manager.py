@@ -143,6 +143,12 @@ class PluginSpec:
     @hookspec
     async def run(cls, config: BaseModel, logger: logging.Logger) -> Any: ...
 
+    @hookspec
+    async def install(cls) -> bool: ...
+
+    @hookspec
+    async def uninstall(cls) -> bool: ...
+
 
 class PluginManager:
     """
