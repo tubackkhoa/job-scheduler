@@ -62,7 +62,7 @@ class Config(BaseModel):
             "ui:field": "Version",
             "binding": ["sql"],
             "model:expr": {
-                "list": "j`{{ get_value_versions('${search}', ${limit}, ${offset}) | tojson }}`",
+                "list": "j`{{ get_value_versions('${field_id}', '${search}', ${limit}, ${offset}) | tojson }}`",
                 "detail": "j`{{ get_value_version(${id}) | tojson }}`",
                 "create": "j`{{ create_value_version(${payload}) | tojson }}`",
                 "update": "j`{{ update_value_version(${id}, ${payload}) | tojson }}`",
