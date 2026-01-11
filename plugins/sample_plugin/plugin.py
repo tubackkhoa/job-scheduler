@@ -7,7 +7,7 @@ import sqlglot
 from datetime import datetime
 from jinja2 import DictLoader, Environment
 
-from .schema import schema_form
+from .schema import ui_schema
 
 from .models import (
     sync_database,
@@ -42,7 +42,7 @@ class Config(BaseModel):
     )
     city: List[str] = Field(
         default_factory=list,
-        json_schema_extra=schema_form(
+        json_schema_extra=ui_schema(
             {
                 "ui:field": "MultiSelect",
                 "ui:options": {"size": 6},
@@ -62,10 +62,10 @@ class Config(BaseModel):
     sql_id: int = Field(
         0,
         title="Search / Select SQL Version",
-        json_schema_extra=schema_form(
+        json_schema_extra=ui_schema(
             {
                 "ui:field": "Version",
-                "binding": ["sql"],
+                "model:binding": ["sql"],
                 "model:expr": {
                     "list": "j`{{ get_value_versions('${field_id}', '${search}', ${limit}, ${offset}) | tojson }}`",
                     "detail": "j`{{ get_value_version(${id}) | tojson }}`",
