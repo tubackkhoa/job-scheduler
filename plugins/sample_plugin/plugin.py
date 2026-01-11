@@ -7,7 +7,7 @@ import sqlglot
 from datetime import datetime
 from jinja2 import DictLoader, Environment
 
-from .schema import ui_schema
+from plugins import ui_schema
 
 from .models import (
     sync_database,
@@ -30,15 +30,17 @@ class Config(BaseModel):
     quote_asset: str = "USDT"
     base_assets: List[str] = Field(
         default_factory=list,
-        json_schema_extra={"ui:field": "MultiSelect", "default": "BTC,ETH,SOL,BNB,LINK"},
+        json_schema_extra=ui_schema({"ui:field": "MultiSelect", "default": "BTC,ETH,SOL,BNB,LINK"}),
     )
     country: str = Field(
         "USA",
-        json_schema_extra={
-            "ui:widget": "select",
-            "enum": list(countries.keys()),
-            "ui:options": {"size": 6},
-        },
+        json_schema_extra=ui_schema(
+            {
+                "ui:widget": "select",
+                "enum": list(countries.keys()),
+                "ui:options": {"size": 6},
+            }
+        ),
     )
     city: List[str] = Field(
         default_factory=list,
@@ -57,7 +59,7 @@ class Config(BaseModel):
     )
     js_template: str = Field(
         "",
-        json_schema_extra={"ui:field": "Template", "type": "js"},
+        json_schema_extra=ui_schema({"ui:field": "Template", "type": "js"}),
     )
     sql_id: int = Field(
         0,
@@ -78,19 +80,19 @@ class Config(BaseModel):
     )
     sql: str = Field(
         SQL_TPL,
-        json_schema_extra={"ui:field": "Template", "type": "sql"},
+        json_schema_extra=ui_schema({"ui:field": "Template", "type": "sql"}),
     )
     json_template: str = Field(
         JSON_TPL,
-        json_schema_extra={"ui:field": "Template", "type": "json"},
+        json_schema_extra=ui_schema({"ui:field": "Template", "type": "json"}),
     )
     yaml_template: str = Field(
         YAML_TPL,
-        json_schema_extra={"ui:field": "Template", "type": "yaml"},
+        json_schema_extra=ui_schema({"ui:field": "Template", "type": "yaml"}),
     )
     md_template: str = Field(
         MD_TPL,
-        json_schema_extra={"ui:field": "Template", "type": "markdown"},
+        json_schema_extra=ui_schema({"ui:field": "Template", "type": "markdown"}),
     )
 
     @field_validator("sql", mode="after")
