@@ -7,6 +7,8 @@ import sqlglot
 from datetime import datetime
 from jinja2 import DictLoader, Environment
 
+from .schema import schema_form
+
 from .models import (
     sync_database,
     create_value_version,
@@ -40,16 +42,18 @@ class Config(BaseModel):
     )
     city: List[str] = Field(
         default_factory=list,
-        json_schema_extra={
-            "ui:field": "MultiSelect",
-            "ui:options": {"size": 6},
-            "ui:expr": [
-                """
+        json_schema_extra=schema_form(
+            {
+                "ui:field": "MultiSelect",
+                "ui:options": {"size": 6},
+                "ui:expr": (
+                    """
             { default: j`{{ get_cities_by_country(country) }}` }
         """,
-                ["country"],  # dependency paths, can be many, eg : ["abc"], ["abc", "def"]
-            ],
-        },
+                    ["country"],  # dependency paths, can be many, eg : ["abc"], ["abc", "def"]
+                ),
+            }
+        ),
     )
     js_template: str = Field(
         "",
@@ -58,17 +62,19 @@ class Config(BaseModel):
     sql_id: int = Field(
         0,
         title="Search / Select SQL Version",
-        json_schema_extra={
-            "ui:field": "Version",
-            "binding": ["sql"],
-            "model:expr": {
-                "list": "j`{{ get_value_versions('${field_id}', '${search}', ${limit}, ${offset}) | tojson }}`",
-                "detail": "j`{{ get_value_version(${id}) | tojson }}`",
-                "create": "j`{{ create_value_version(${payload}) | tojson }}`",
-                "update": "j`{{ update_value_version(${id}, ${payload}) | tojson }}`",
-            },
-            "ui:options": {"size": 12},
-        },
+        json_schema_extra=schema_form(
+            {
+                "ui:field": "Version",
+                "binding": ["sql"],
+                "model:expr": {
+                    "list": "j`{{ get_value_versions('${field_id}', '${search}', ${limit}, ${offset}) | tojson }}`",
+                    "detail": "j`{{ get_value_version(${id}) | tojson }}`",
+                    "create": "j`{{ create_value_version(${payload}) | tojson }}`",
+                    "update": "j`{{ update_value_version(${id}, ${payload}) | tojson }}`",
+                },
+                "ui:options": {"size": 12},
+            }
+        ),
     )
     sql: str = Field(
         SQL_TPL,
