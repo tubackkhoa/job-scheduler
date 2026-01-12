@@ -179,5 +179,4 @@ class Plugin:
             logger.info(f"Running step {i}")
             await asyncio.sleep(0.5)
         logger.info(config.model_dump())
-
         return True
