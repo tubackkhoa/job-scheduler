@@ -250,25 +250,35 @@ class PluginManager:
 
         os.makedirs(target_dir, exist_ok=True)
 
-        args = [
-            sys.executable,
-            "-m",
-            "pip",
-            "download",
-            requirement,
-            "--dest",
-            target_dir,
-            "--no-deps",
-            "--no-input",  # disable prompts
-            "--exists-action=w",  # w = wipe existing files
-        ]
+        if is_vcs:
+            # For git URLs, use install --target (works with private repos)
+            args = [
+                "uv",
+                "pip",
+                "install",
+                requirement,
+                "--target",
+                target_dir,
+                "--no-deps",
+            ]
+        else:
+            # For regular packages, use download
+            args = [
+                "uv",
+                "pip",
+                "download",
+                requirement,
+                "--dest",
+                target_dir,
+                "--no-deps",
+            ]
 
         scheduler_logger.info(f"Downloading into {target_dir} ...")
 
         result = subprocess.run(args, capture_output=True, text=True)
 
         if result.returncode == 0:
-            return extract_package_files(target_dir)
+            return extract_package_files(target_dir) if not is_vcs else True
 
         scheduler_logger.error(f"Download failed: {result.stderr}")
         return False

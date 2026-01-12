@@ -1,3 +1,5 @@
+from models import ValueVersion
+from sqlalchemy.engine.base import Engine
 import asyncio
 from functools import partial
 import inspect
@@ -23,10 +25,11 @@ from log_service import LogService
 from models import (
     Job,
     Plugin,
+    ValueVersion,
     create_value_version,
     get_value_version,
     get_value_versions,
-    update_value_version,
+    update_value_version
 )
 from plugin_manager import PluginManager
 from ws_manager import WSConnectionManager
@@ -40,9 +43,44 @@ dotenv.load_dotenv()
 # Configure logging to show INFO and above messages
 logging.basicConfig(level=logging.DEBUG, handlers=[logging.NullHandler()])
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+import json
 
 manager = WSConnectionManager()
 
+def apply_value_version_all_jobs(db_engine: Engine, version_id: int, session_id: Optional[int] = None):
+    with Session(db_engine) as session:
+        version = session.get(ValueVersion, version_id)
+        if not version:
+            raise Exception(f"ValueVersion {version_id} not found")
+
+        parts = version.field_id.split('.', 1)
+        if len(parts) != 2:
+            raise Exception(f"Invalid field_id format: {version.field_id}, expected 'plugin_id.field_name'")
+
+        plugin_id_str, field_name = parts
+        plugin_id = int(plugin_id_str)
+        if session_id:
+            jobs = session.query(Job).filter(Job.plugin_id == plugin_id, Job.session_id == session_id).all()
+        else:
+            jobs = session.query(Job).filter(Job.plugin_id == plugin_id).all()
+        updated_count = 0
+
+        for job in jobs:
+            config = json.loads(job.config) if job.config else {}
+            config[field_name] = int(version_id)
+            job.config = json.dumps(config)
+            PluginManager._active_job_cache[job.id] = job.config
+            updated_count += 1
+
+        session.commit()
+
+        return {
+            "success": True,
+            "updated_jobs": updated_count,
+            "plugin_id": plugin_id,
+            "field_name": field_name,
+            "version_id": version_id,
+        }
 
 # define state transform for app
 def get_plugin_manager(request: Request) -> PluginManager:
@@ -102,6 +140,7 @@ async def lifespan(app: FastAPI):
                 get_value_version,
                 get_value_versions,
                 update_value_version,
+                apply_value_version_all_jobs
             ]
         }
     )

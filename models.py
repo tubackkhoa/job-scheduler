@@ -14,7 +14,6 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped, Session
 from datetime import datetime
 
-
 class Base(DeclarativeBase):
     pass
 
@@ -177,3 +176,4 @@ def delete_value_version(db_engine: Engine, version_id: int):
             "success": True,
             "message": f"SQL version {version_id} deleted",
         }
+

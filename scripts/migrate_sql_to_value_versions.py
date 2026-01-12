@@ -20,8 +20,8 @@ dotenv.load_dotenv()
 PLUGIN_ID = 1
 FIELD_ID = f"{PLUGIN_ID}.sql_id"
 
-STAGING_SQL_NAME = "u5 - v2.6.1 - Cheat flip with voting (test)"
-PRODUCTION_SQL_NAME = "u5 v2.5.16 - Liquidation zone with strict gates & less long bias"
+STAGING_SQL_NAME = "u5 - v2.6.5 Cheat flip fix gated_flag for workers"
+PRODUCTION_SQL_NAME = "u5 v2.5.19 - Liquidation zone, adding micro-trend confirmation"
 
 
 def main():
