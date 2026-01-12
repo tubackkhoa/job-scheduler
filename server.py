@@ -262,6 +262,7 @@ def template(plugin_manager: PluginManagerState, package: str, payload: dict = B
             get_value_version=plugin_manager.get_value_version,
             update_value_version=plugin_manager.update_value_version,
             create_value_version=plugin_manager.create_value_version,
+            apply_value_version_all_jobs=plugin_manager.apply_value_version_all_jobs,
             **payload["params"],
         )
         return {"result": result}

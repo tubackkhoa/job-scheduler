@@ -661,3 +661,41 @@ class PluginManager:
                 "success": True,
                 "message": f"SQL version {version_id} deleted",
             }
+
+    def apply_value_version_all_jobs(self, version_id: int, session_id: Optional[int] = None):
+        with Session(self.db_engine) as session:
+            version = session.get(ValueVersion, version_id)
+            if not version:
+                raise Exception(f"ValueVersion {version_id} not found")
+
+            parts = version.field_id.split('.', 1)
+            if len(parts) != 2:
+                raise Exception(f"Invalid field_id format: {version.field_id}, expected 'plugin_id.field_name'")
+
+            plugin_id_str, field_name = parts
+            plugin_id = int(plugin_id_str)
+            if session_id:
+                jobs = session.query(Job).filter(Job.plugin_id == plugin_id, Job.session_id == session_id).all()
+            else:
+                jobs = session.query(Job).filter(Job.plugin_id == plugin_id).all()
+            updated_count = 0
+
+            for job in jobs:
+                config = json.loads(job.config) if job.config else {}
+                config[field_name] = int(version_id)
+                job.config = json.dumps(config)
+                self._active_job_cache[job.id] = job.config
+                updated_count += 1
+
+            session.commit()
+
+            return {
+                "success": True,
+                "updated_jobs": updated_count,
+                "plugin_id": plugin_id,
+                "field_name": field_name,
+                "version_id": version_id,
+            }
+
+
+            
