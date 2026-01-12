@@ -16,9 +16,7 @@ class TestPluginManager(unittest.TestCase):
             PluginManager.manager.unregister(plugin, name)
         # Use an in-memory SQLite for tests
         self.db_url = "sqlite:///:memory:"
-        self.pm = PluginManager(
-            self.db_url, module_paths=["tests.plugins"], plugin_path="test_plugins"
-        )
+        self.pm = PluginManager(self.db_url, module_paths=["tests.plugins"], plugin_path="plugins")
 
     @patch("plugin_manager.glob.glob")
     @patch("plugin_manager.zipfile.ZipFile")
