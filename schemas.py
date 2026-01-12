@@ -3,9 +3,9 @@ from pydantic import BaseModel, Field, PositiveInt
 
 
 class ConfigPayload(BaseModel):
-    plugin_id: int = Field(..., alias="pluginId")
-    session_id: int = Field(..., alias="sessionId")
-    config: Optional[dict] = None  # Use correct type if known
+    plugin_id: Optional[int] = Field(None, alias="pluginId")
+    session_id: Optional[int] = Field(None, alias="sessionId")
+    config: Optional[Dict[str, Any]] = None  # Use correct type if known
     description: Optional[str] = None
 
     class Config:

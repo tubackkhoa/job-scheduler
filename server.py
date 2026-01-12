@@ -386,7 +386,15 @@ def update_config(
 ):
     try:
         if job_id == 0:
+            # Validate required fields for new job creation
+            if payload.plugin_id is None:
+                raise HTTPException(status_code=400, detail="pluginId is required when job_id is 0")
+            if payload.session_id is None:
+                raise HTTPException(
+                    status_code=400, detail="sessionId is required when job_id is 0"
+                )
             plugin_id = payload.plugin_id
+            session_id = payload.session_id
         else:
             job_item = dao.get_job(job_id)
             if not job_item:
@@ -402,7 +410,7 @@ def update_config(
         config = plugin.config(payload.config)
         if job_id == 0:
             plugin_manager.add_job(
-                payload.session_id,
+                session_id,
                 plugin_id,
                 config.model_dump_json(),
                 payload.description,
@@ -411,6 +419,9 @@ def update_config(
             dao.update_job(job_id, config.model_dump_json(), payload.description)
 
         return config
+    except HTTPException:
+        # Re-raise HTTP exceptions for FastAPI to handle properly
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update config: {str(e)}")
 
