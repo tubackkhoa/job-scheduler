@@ -14,7 +14,13 @@ class ConfigPayload(BaseModel):
 
 
 class DownloadPayload(BaseModel):
-    version: str = Field("", description="git+https://github.com/...")
+    version: str = Field(
+        ...,
+        examples=[
+            "git+https://github.com/user/repo@branch",
+            "1.2.3",
+        ],
+    )
 
     class Config:
         extra = "forbid"
@@ -30,8 +36,10 @@ class PluginCreatePayload(BaseModel):
 
 
 class TemplatePayload(BaseModel):
-    template: str = Field("", description="Template string to render")
-    params: Dict[str, Any] = Field(..., description="Parameters for the template")
+    template: str = Field(
+        ...,
+    )
+    params: Dict[str, Any]
 
     class Config:
         extra = "forbid"
