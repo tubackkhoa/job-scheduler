@@ -79,9 +79,116 @@ class DAO:
     def __init__(self, db_engine: Engine):
         self.db_engine = db_engine
 
-    # ---------- create ----------
+    def add_plugin(self, package: str, interval: int, description: Optional[str] = None):
+        # Insert into DB
+        with Session(self.db_engine) as session:
+            plugin_row = Plugin(
+                package=package,
+                interval=interval,
+                description=description,
+            )
 
-    def create(self, payload: dict) -> dict:
+            session.add(plugin_row)
+            session.flush()  # get ID
+            plugin_id = plugin_row.id
+            session.commit()
+            return plugin_id
+
+    def get_plugin(self, plugin_id: int) -> Optional[Plugin]:
+        with Session(self.db_engine) as session:
+            plugin = session.get(Plugin, plugin_id)
+            return plugin
+
+    def add_job(
+        self,
+        session_id: int,
+        plugin_id: int,
+        config: str,
+        description: Optional[str] = None,
+    ):
+        with Session(self.db_engine) as session:
+            job = Job(
+                session_id=session_id,
+                plugin_id=plugin_id,
+                config=config,
+                active=False,
+                description=description,
+            )
+            session.add(job)
+            session.commit()
+            return job
+
+    def update_job(self, id: int, config: str, description: Optional[str] = None):
+        with Session(self.db_engine) as session:
+            job = session.get(Job, id)
+            if job:
+                job.config = config
+                if description:
+                    job.description = description
+                self.job_config_cache[job.id] = job.config
+                session.commit()
+
+    def remove_job(self, job_id: int):
+        with Session(self.db_engine) as session:
+            job = session.get(Job, job_id)
+            if not job:
+                return
+            session.delete(job)
+            session.commit()
+            DAO.job_config_cache.pop(job_id, None)
+
+    def activate_job(self, job_id: int):
+        with Session(self.db_engine) as session:
+            job = session.get(Job, job_id)
+            if not job:
+                return None
+
+            job.active = True
+            session.commit()
+            return job
+
+    def deactivate_job(self, job_id: int):
+        with Session(self.db_engine) as session:
+            job = session.get(Job, job_id)
+            if not job:
+                return None
+
+            job.active = False
+            session.commit()
+            return job
+
+    def get_jobs_by_plugin_and_user(self, plugin_id: int, session_id: int):
+        with Session(self.db_engine) as session:
+            jobs = (
+                session.query(Job)
+                .filter(
+                    Job.plugin_id == plugin_id,
+                    Job.session_id == session_id,
+                )
+                .all()
+            )
+            return jobs
+
+    def get_jobs_by_plugin(self, plugin_id: int):
+        with Session(self.db_engine) as session:
+            jobs = session.query(Job).filter(Job.plugin_id == plugin_id).all()
+            return jobs
+
+    def get_job(self, id: int):
+        with Session(self.db_engine) as session:
+            return session.get(Job, id)
+
+    def get_all_plugins(self):
+        with Session(self.db_engine) as session:
+            plugins = session.query(Plugin).all()
+            return plugins
+
+    def get_all_jobs(self):
+        with Session(self.db_engine) as session:
+            jobs = session.query(Job).all()
+            return jobs
+
+    def create_value_version(self, payload: dict) -> dict:
         assert "field_id" in payload, "field_id is required"
 
         with Session(self.db_engine) as session:
@@ -93,7 +200,7 @@ class DAO:
 
     # ---------- read ----------
 
-    def get(self, version_id: int) -> dict:
+    def get_value_version(self, version_id: int) -> dict:
         with Session(self.db_engine) as session:
             version = session.get(ValueVersion, version_id)
             if not version:
@@ -116,7 +223,7 @@ class DAO:
 
             return version.to_dict()
 
-    def list(
+    def get_value_versions(
         self,
         field_id: str,
         search: Optional[str] = None,
@@ -143,7 +250,7 @@ class DAO:
 
     # ---------- update ----------
 
-    def update(self, version_id: int, payload: dict) -> dict:
+    def update_value_version(self, version_id: int, payload: dict) -> dict:
         with Session(self.db_engine) as session:
             version = session.get(ValueVersion, version_id)
             if not version:
@@ -207,3 +314,28 @@ class DAO:
                 "field_name": field_name,
                 "version_id": version_id,
             }
+
+    def delete_plugin(self, plugin_id: int) -> tuple[str, list[int]]:
+        deleted_job_ids = []
+        with Session(self.db_engine) as session:
+            # Load plugin in THIS session
+            plugin = session.get(Plugin, plugin_id)
+            if not plugin:
+                raise ValueError(f"Plugin with id {plugin_id} not found")
+            # 🔹 Capture before session closes
+            package = plugin.package
+            jobs = session.query(Job).filter(Job.plugin_id == plugin_id).all()
+            # Remove all jobs from scheduler and delete them
+            for job in jobs:
+                deleted_job_ids.append(job.id)
+                session.delete(job)
+
+            # Delete plugin from database
+            session.delete(plugin)
+            session.commit()
+
+        # 🔹 Post-commit side effects
+        for job_id in deleted_job_ids:
+            self.job_config_cache.pop(job_id, None)
+
+        return package, deleted_job_ids
