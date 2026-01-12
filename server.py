@@ -1,4 +1,5 @@
 import asyncio
+from functools import partial
 import inspect
 from typing import Annotated, Optional
 from fastapi import (
@@ -19,17 +20,21 @@ from sqlalchemy import create_engine
 from create_data import create_data
 from log_handler import JobLogHandler
 from log_service import LogService
-from models import Job, Plugin
-from plugin_manager import PluginManager, PluginSpec
+from models import (
+    Job,
+    Plugin,
+    create_value_version,
+    get_value_version,
+    get_value_versions,
+    update_value_version,
+)
+from plugin_manager import PluginManager
 from ws_manager import WSConnectionManager
 import os
 import dotenv
 import uvloop
 from sqlalchemy.orm import Session
-from sqlalchemy import select, update
-from datetime import datetime, date
-from enum import Enum as BaseEnum
-
+from sqlalchemy import select
 
 dotenv.load_dotenv()
 # Configure logging to show INFO and above messages
@@ -87,6 +92,20 @@ async def lifespan(app: FastAPI):
         log_handler=log_handler,
         module_paths=os.getenv("MODULE_PATH", "").split(":"),
     )
+
+    # update env functions
+    plugin_manager.env.update(
+        {
+            func.__name__: partial(func, db_engine)
+            for func in [
+                create_value_version,
+                get_value_version,
+                get_value_versions,
+                update_value_version,
+            ]
+        }
+    )
+
     plugin_manager.reload_all_jobs()
 
     # ---- STARTUP ----
@@ -255,15 +274,7 @@ def template(plugin_manager: PluginManagerState, package: str, payload: dict = B
         return {"result": template_str}
 
     try:
-        template_engine = plugin_instance.env().from_string(template_str)
-        # assign global function
-        result = template_engine.render(
-            get_value_versions=plugin_manager.get_value_versions,
-            get_value_version=plugin_manager.get_value_version,
-            update_value_version=plugin_manager.update_value_version,
-            create_value_version=plugin_manager.create_value_version,
-            **payload["params"],
-        )
+        result = plugin_manager.render(template_str, plugin_instance.env(), payload["params"])
         return {"result": result}
     except Exception as e:
         raise HTTPException(

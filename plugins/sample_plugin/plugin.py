@@ -1,8 +1,8 @@
-import asyncio
+import json
 import logging
 import pluggy
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
-from typing import List
+from typing import Any, Callable, List
 import sqlglot
 from datetime import datetime
 from jinja2 import DictLoader, Environment
@@ -163,9 +163,15 @@ class Plugin:
 
     @hookimpl
     @classmethod
-    async def run(cls, config: Config, logger: logging.Logger):
-        for i in range(10):
-            logger.info(f"Running step {i}")
-            await asyncio.sleep(0.5)
-        logger.info(config.model_dump())
+    async def run(
+        cls, config: Config, logger: logging.Logger, render: Callable[[str, Environment, dict], Any]
+    ):
+        version = json.loads(
+            render("{{ get_value_version(id) | tojson }}", cls._env, {"id": config.sql_id})
+        )
+        logger.info(version["value"])
+        # for i in range(10):
+        #     logger.info(f"Running step {i}")
+        #     await asyncio.sleep(0.5)
+        # logger.info(config.model_dump())
         return True
