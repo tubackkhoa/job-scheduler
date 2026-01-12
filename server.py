@@ -18,12 +18,10 @@ import logging
 
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine
-from create_data import create_data
 from log_handler import JobLogHandler
 from log_service import LogService
 from models import (
     Job,
-    Plugin,
 )
 from plugin_manager import PluginManager
 from schemas import ConfigPayload, DownloadPayload, PluginCreatePayload, TemplatePayload
@@ -31,8 +29,6 @@ from ws_manager import WSConnectionManager
 import os
 import dotenv
 import uvloop
-from sqlalchemy.orm import Session
-from sqlalchemy import select
 
 dotenv.load_dotenv()
 # Configure logging to show INFO and above messages
@@ -172,32 +168,6 @@ async def websocket_logs_endpoint(websocket: WebSocket, job_id: int):
 @app.get("/plugins")
 def plugins(dao: DAOState):
     return dao.get_all_plugins()
-
-
-@app.get("/plugin/by-name/{plugin_name}")
-def get_plugin_by_name(dao: DAOState, plugin_name: str):
-    """
-    Get a single plugin by package name with all its jobs.
-    Returns 404 if plugin not found.
-    """
-    with Session(dao.db_engine) as session:
-        stmt = select(Plugin).where(Plugin.package == plugin_name)
-        plugin = session.execute(stmt).scalar_one_or_none()
-
-        if not plugin:
-            raise HTTPException(status_code=404, detail=f"Plugin not found: {plugin_name}")
-
-        # Get all jobs for this plugin
-        stmt_jobs = select(Job).where(Job.plugin_id == plugin.id)
-        jobs = session.execute(stmt_jobs).scalars().all()
-
-        return {
-            "id": plugin.id,
-            "package": plugin.package,
-            "interval": plugin.interval,
-            "description": plugin.description,
-            "jobs": [job.to_dict() for job in jobs],
-        }
 
 
 @app.post("/plugins")
