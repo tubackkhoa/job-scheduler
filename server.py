@@ -1,4 +1,7 @@
+from models import ValueVersion
+from sqlalchemy.engine.base import Engine
 import asyncio
+from functools import partial
 import inspect
 from typing import Annotated, Optional
 from fastapi import (
@@ -15,30 +18,69 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 
 from fastapi.staticfiles import StaticFiles
-from jinja2 import Environment
 from sqlalchemy import create_engine
 from create_data import create_data
 from log_handler import JobLogHandler
 from log_service import LogService
-from models import Job, Plugin, SqlVersion
+from models import (
+    Job,
+    Plugin,
+    ValueVersion,
+    create_value_version,
+    get_value_version,
+    get_value_versions,
+    update_value_version
+)
 from plugin_manager import PluginManager
 from ws_manager import WSConnectionManager
 import os
 import dotenv
 import uvloop
 from sqlalchemy.orm import Session
-from sqlalchemy import select, update
-from datetime import datetime, date
-from enum import Enum as BaseEnum
-
+from sqlalchemy import select
 
 dotenv.load_dotenv()
 # Configure logging to show INFO and above messages
 logging.basicConfig(level=logging.DEBUG, handlers=[logging.NullHandler()])
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+import json
 
 manager = WSConnectionManager()
 
+def apply_value_version_all_jobs(db_engine: Engine, version_id: int, session_id: Optional[int] = None):
+    with Session(db_engine) as session:
+        version = session.get(ValueVersion, version_id)
+        if not version:
+            raise Exception(f"ValueVersion {version_id} not found")
+
+        parts = version.field_id.split('.', 1)
+        if len(parts) != 2:
+            raise Exception(f"Invalid field_id format: {version.field_id}, expected 'plugin_id.field_name'")
+
+        plugin_id_str, field_name = parts
+        plugin_id = int(plugin_id_str)
+        if session_id:
+            jobs = session.query(Job).filter(Job.plugin_id == plugin_id, Job.session_id == session_id).all()
+        else:
+            jobs = session.query(Job).filter(Job.plugin_id == plugin_id).all()
+        updated_count = 0
+
+        for job in jobs:
+            config = json.loads(job.config) if job.config else {}
+            config[field_name] = int(version_id)
+            job.config = json.dumps(config)
+            PluginManager._active_job_cache[job.id] = job.config
+            updated_count += 1
+
+        session.commit()
+
+        return {
+            "success": True,
+            "updated_jobs": updated_count,
+            "plugin_id": plugin_id,
+            "field_name": field_name,
+            "version_id": version_id,
+        }
 
 # define state transform for app
 def get_plugin_manager(request: Request) -> PluginManager:
@@ -88,6 +130,21 @@ async def lifespan(app: FastAPI):
         log_handler=log_handler,
         module_paths=os.getenv("MODULE_PATH", "").split(":"),
     )
+
+    # update env functions
+    plugin_manager.env.update(
+        {
+            func.__name__: partial(func, db_engine)
+            for func in [
+                create_value_version,
+                get_value_version,
+                get_value_versions,
+                update_value_version,
+                apply_value_version_all_jobs
+            ]
+        }
+    )
+
     plugin_manager.reload_all_jobs()
 
     # ---- STARTUP ----
@@ -186,17 +243,14 @@ def get_plugin_by_name(plugin_manager: PluginManagerState, plugin_name: str):
     with Session(plugin_manager.db_engine) as session:
         stmt = select(Plugin).where(Plugin.package == plugin_name)
         plugin = session.execute(stmt).scalar_one_or_none()
-        
+
         if not plugin:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Plugin not found: {plugin_name}"
-            )
-        
+            raise HTTPException(status_code=404, detail=f"Plugin not found: {plugin_name}")
+
         # Get all jobs for this plugin
         stmt_jobs = select(Job).where(Job.plugin_id == plugin.id)
         jobs = session.execute(stmt_jobs).scalars().all()
-        
+
         return {
             "id": plugin.id,
             "package": plugin.package,
@@ -212,7 +266,7 @@ def get_plugin_by_name(plugin_manager: PluginManagerState, plugin_name: str):
                     "active": job.active,
                 }
                 for job in jobs
-            ]
+            ],
         }
 
 
@@ -228,7 +282,6 @@ def create_plugin(plugin_manager: PluginManagerState, payload: dict = Body(...))
       "description": "Sample plugin"
     }
     """
-    from sqlalchemy.orm import Session
 
     required_keys = {"package", "interval"}
     if not required_keys.issubset(payload):
@@ -260,8 +313,7 @@ def template(plugin_manager: PluginManagerState, package: str, payload: dict = B
         return {"result": template_str}
 
     try:
-        template_engine = plugin_instance.env().from_string(template_str)
-        result = template_engine.render(**payload["params"])
+        result = plugin_manager.render(template_str, plugin_instance.env(), payload["params"])
         return {"result": result}
     except Exception as e:
         raise HTTPException(
@@ -352,6 +404,26 @@ def download_module(plugin_manager: PluginManagerState, name: str, payload: dict
         return {"success": success}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to download module: {str(e)}")
+
+
+@app.put("/install/{package}")
+def install_module(plugin_manager: PluginManagerState, package: str):
+    try:
+        plugin = plugin_manager.get_plugin_instance(package)
+        assert plugin
+        return {"success": plugin.install()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to install plugin: {str(e)}")
+
+
+@app.put("/uninstall/{package}")
+def uninstall_module(plugin_manager: PluginManagerState, package: str):
+    try:
+        plugin = plugin_manager.get_plugin_instance(package)
+        assert plugin
+        return {"success": plugin.uninstall()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to uninstall plugin: {str(e)}")
 
 
 @app.delete("/plugins/{plugin_id}")
@@ -470,601 +542,322 @@ def clear_logs(log_service: LogServiceState, job_id: int):
     return result
 
 
-@app.post("/api/sql-versions")
-def create_sql_version(plugin_manager: PluginManagerState, payload: dict = Body(...)):
-    required_keys = {"name", "sql_query"}
-    if not required_keys.issubset(payload):
-        raise HTTPException(
-            status_code=400,
-            detail="Missing required fields: name, sql_query",
-        )
+# @app.post("/api/mlflow/sync")
+# async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(...)):
+#     import httpx
+#     import json
+#     import logging
+#     from typing import Dict, Any, List
 
-    try:
-        with Session(plugin_manager.db_engine) as session:
-            sql_version = SqlVersion(
-                name=payload["name"],
-                description=payload.get("description"),
-                sql_query=payload["sql_query"],
-                tags=payload.get("tags"),
-            )
-            session.add(sql_version)
-            session.commit()
-            session.refresh(sql_version)
+#     # Validate required fields
+#     required_fields = {"plugin_name", "model_tag", "webhook_url", "webhook_api_key"}
+#     if not required_fields.issubset(payload):
+#         raise HTTPException(
+#             status_code=400,
+#             detail=f"Missing required fields: {required_fields - set(payload.keys())}",
+#         )
 
-            return {
-                "id": sql_version.id,
-                "name": sql_version.name,
-                "description": sql_version.description,
-                "sql_query": sql_version.sql_query,
-                "created_at": sql_version.created_at.isoformat(),
-                "updated_at": sql_version.updated_at.isoformat(),
-                "is_active": sql_version.is_active,
-                "tags": sql_version.tags,
-            }
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to create SQL version: {str(e)}",
-        )
+#     plugin_name = payload["plugin_name"]
+#     model_tag = payload["model_tag"]
+#     webhook_url = payload["webhook_url"]
+#     webhook_api_key = payload["webhook_api_key"]
+#     webhook_test_key = payload.get("webhook_test_key", "")
+#     session_id = payload.get("session_id", 1)
+#     model_type = payload.get("model_type", "mlflow_custom")
 
+#     # Setup logger
+#     logger = logging.getLogger(f"mlflow_sync.{model_tag}")
+#     logger.info(f"🔍 Starting MLflow sync for model_tag: '{model_tag}'")
 
-@app.get("/api/sql-versions")
-def get_sql_versions(
-    plugin_manager: PluginManagerState,
-    search: Optional[str] = None,
-    limit: int = 100,
-    offset: int = 0,
-):
-    try:
-        with Session(plugin_manager.db_engine) as session:
-            stmt = select(SqlVersion)
-            if search:
-                stmt = stmt.where(SqlVersion.name.ilike(f"%{search}%"))
+#     try:
+#         # Step 1: Fetch active models from MLflow
+#         from plugins.mlflow_plugin.utils import get_models_with_backtest_watching
 
-            stmt = stmt.order_by(SqlVersion.created_at.desc()).limit(limit).offset(offset)
-            versions = session.execute(stmt).scalars().all()
+#         active_models = get_models_with_backtest_watching()
+#         logger.info(f"✅ Found {len(active_models)} active models in MLflow")
+#         active_identities = {m["identity"] for m in active_models}
 
-            return {
-                "versions": [
-                    {
-                        "id": v.id,
-                        "name": v.name,
-                        "description": v.description,
-                        "sql_query": v.sql_query,
-                        "created_at": v.created_at.isoformat(),
-                        "updated_at": v.updated_at.isoformat(),
-                        "is_active": v.is_active,
-                        "tags": v.tags,
-                    }
-                    for v in versions
-                ],
-                "count": len(versions),
-                "search": search,
-                "limit": limit,
-                "offset": offset,
-            }
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch SQL versions: {str(e)}",
-        )
+#         # Step 2: Get existing jobs from database by querying plugin directly
+#         with Session(plugin_manager.db_engine) as session:
+#             stmt = select(Plugin).where(Plugin.package == plugin_name)
+#             target_plugin = session.execute(stmt).scalar_one_or_none()
 
+#             if not target_plugin:
+#                 raise HTTPException(status_code=404, detail=f"Plugin not found: {plugin_name}")
 
-@app.get("/api/sql-versions/latest")
-def get_latest_sql_version(plugin_manager: PluginManagerState):
-    """
-    Get the latest SQL version sorted by updated_at DESC.
-    Returns 404 if no SQL version exists.
-    
-    Note: This route must be defined BEFORE /api/sql-versions/{version_id}
-    to prevent FastAPI from trying to parse 'latest' as an integer.
-    """
-    try:
-        with Session(plugin_manager.db_engine) as session:
-            stmt = select(SqlVersion).order_by(SqlVersion.updated_at.desc()).limit(1)
-            version = session.execute(stmt).scalar_one_or_none()
+#             plugin_id = target_plugin.id
 
-            if not version:
-                raise HTTPException(
-                    status_code=404,
-                    detail="No SQL version found",
-                )
+#             # Get all jobs for this plugin
+#             stmt_jobs = select(Job).where(Job.plugin_id == plugin_id)
+#             jobs = session.execute(stmt_jobs).scalars().all()
 
-            return {
-                "id": version.id,
-                "name": version.name,
-                "description": version.description,
-                "sql_query": version.sql_query,
-                "created_at": version.created_at.isoformat(),
-                "updated_at": version.updated_at.isoformat(),
-                "is_active": version.is_active,
-                "tags": version.tags,
-            }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch latest SQL version: {str(e)}",
-        )
+#             # Build map of existing jobs: {model_identity: job_id}
+#             existing_jobs: Dict[str, int] = {}
+#             for job in jobs:
+#                 try:
+#                     config = json.loads(job.config) if isinstance(job.config, str) else job.config
+#                     identity = config.get("model_identity")
+#                     tag = config.get("model_tag")
 
+#                     if tag == model_tag and identity:
+#                         existing_jobs[identity] = job.id
+#                 except (json.JSONDecodeError, KeyError) as e:
+#                     logger.warning(f"⚠️  Failed to parse job {job.id} config: {e}")
 
-@app.get("/api/sql-versions/{version_id}")
-def get_sql_version(
-    plugin_manager: PluginManagerState,
-    version_id: int,
-):
-    try:
-        with Session(plugin_manager.db_engine) as session:
-            stmt = select(SqlVersion).where(
-                SqlVersion.id == version_id,
-            )
-            version = session.execute(stmt).scalar_one_or_none()
+#         existing_identities = set(existing_jobs.keys())
+#         logger.info(f"📊 Found {len(existing_jobs)} existing jobs with tag '{model_tag}'")
 
-            if not version:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"SQL version {version_id} not found",
-                )
+#         # Step 3: Determine sync plan
+#         to_create = active_identities - existing_identities
+#         to_stop = existing_identities - active_identities
+#         logger.info(f"🔄 Sync plan: {len(to_create)} to create, {len(to_stop)} to stop")
 
-            return {
-                "id": version.id,
-                "name": version.name,
-                "description": version.description,
-                "sql_query": version.sql_query,
-                "created_at": version.created_at.isoformat(),
-                "updated_at": version.updated_at.isoformat(),
-                "is_active": version.is_active,
-                "tags": version.tags,
-            }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch SQL version: {str(e)}",
-        )
+#         # Step 4: Get base config - try SQL version first, fallback to plugin default
+#         try:
+#             # Try to fetch latest SQL version
+#             sql_query_from_version = None  # Store SQL query separately
+#             with Session(plugin_manager.db_engine) as session:
+#                 stmt = select(SqlVersion).order_by(SqlVersion.updated_at.desc()).limit(1)
+#                 sql_version = session.execute(stmt).scalar_one_or_none()
 
+#                 if sql_version:
+#                     logger.info(f"📋 Using SQL version config: {sql_version.name}")
+#                     sql_query_from_version = sql_version.sql_query  # Store the SQL query
 
-@app.put("/api/sql-versions/{version_id}")
-def update_sql_version(
-    plugin_manager: PluginManagerState,
-    version_id: int,
-    payload: dict = Body(...),
-):
-    """
-    Update an existing SQL version.
+#                     # Parse SQL version tags as base config
+#                     if sql_version.tags:
+#                         try:
+#                             plugin_default_config = (
+#                                 json.loads(sql_version.tags)
+#                                 if isinstance(sql_version.tags, str)
+#                                 else sql_version.tags
+#                             )
+#                             logger.info(f"✅ Loaded config from SQL version tags")
+#                         except json.JSONDecodeError as e:
+#                             logger.warning(
+#                                 f"⚠️  Failed to parse SQL version tags: {e}, falling back to plugin default"
+#                             )
+#                             plugin_default_config = None
+#                     else:
+#                         plugin_default_config = (
+#                             {}
+#                         )  # Empty dict if no tags, but we still have SQL query
 
-    Expected payload:
-    {
-      "name": "v1.1",  # Optional
-      "description": "Updated ranking",  # Optional
-      "sql_query": "SELECT ...",  # Optional
-      "tags": "{...}"  # Optional
-    }
-    """
-    try:
-        with Session(plugin_manager.db_engine) as session:
-            stmt = select(SqlVersion).where(SqlVersion.id == version_id)
-            version = session.execute(stmt).scalar_one_or_none()
+#                     # Add SQL query to config if we have it
+#                     if plugin_default_config is not None and sql_query_from_version:
+#                         plugin_default_config["sql"] = sql_query_from_version
+#                 else:
+#                     logger.info(f"⚠️  No SQL version found, using plugin default config")
+#                     plugin_default_config = None
 
-            if not version:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"SQL version {version_id} not found",
-                )
+#             # Fallback to plugin default config if SQL version config not available
+#             if plugin_default_config is None:
+#                 import importlib
 
-            # Update fields if provided
-            if "name" in payload:
-                version.name = payload["name"]
-            if "description" in payload:
-                version.description = payload["description"]
-            if "sql_query" in payload:
-                version.sql_query = payload["sql_query"]
-            if "tags" in payload:
-                version.tags = payload["tags"]
+#                 parts = plugin_name.rsplit(".", 1)
+#                 module_path = parts[0] if len(parts) == 2 else plugin_name
+#                 class_name = parts[1] if len(parts) == 2 else "Plugin"
 
-            version.updated_at = datetime.now()
+#                 module = importlib.import_module(module_path)
+#                 plugin_class = getattr(module, class_name, None)
 
-            session.commit()
-            session.refresh(version)
+#                 if plugin_class and hasattr(plugin_class, "config"):
+#                     default_config_obj = plugin_class.config()
+#                     if hasattr(default_config_obj, "model_dump"):
+#                         plugin_default_config = default_config_obj.model_dump()
+#                     elif hasattr(default_config_obj, "dict"):
+#                         plugin_default_config = default_config_obj.dict()
+#                     else:
+#                         plugin_default_config = dict(default_config_obj)
+#                     logger.info(f"✅ Loaded plugin default config")
+#                 else:
+#                     plugin_default_config = {}
+#                     logger.warning(f"⚠️  No plugin config method found")
+#         except Exception as e:
+#             logger.warning(f"⚠️  Failed to load config: {e}")
+#             plugin_default_config = {}
 
-            return {
-                "id": version.id,
-                "name": version.name,
-                "description": version.description,
-                "sql_query": version.sql_query,
-                "created_at": version.created_at.isoformat(),
-                "updated_at": version.updated_at.isoformat(),
-                "is_active": version.is_active,
-                "tags": version.tags,
-            }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to update SQL version: {str(e)}",
-        )
+#         # Step 5: Execute sync
+#         created = []
+#         stopped = []
+#         errors = []
+#         jobs_to_delete = []
 
+#         async with httpx.AsyncClient(timeout=60.0) as client:
+#             headers = {
+#                 "test-system-api-key": webhook_test_key,
+#                 "Content-Type": "application/json",
+#             }
 
-@app.delete("/api/sql-versions/{version_id}")
-def delete_sql_version(plugin_manager: PluginManagerState, version_id: int):
-    try:
-        with Session(plugin_manager.db_engine) as session:
-            stmt = select(SqlVersion).where(SqlVersion.id == version_id)
-            version = session.execute(stmt).scalar_one_or_none()
+#             # Create new models
+#             for model in active_models:
+#                 identity = model["identity"]
+#                 if identity not in to_create:
+#                     continue
 
-            if not version:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"SQL version {version_id} not found",
-                )
+#                 try:
+#                     # Call webhook to register model
+#                     resp = await client.post(
+#                         f"{webhook_url}/api/test-system/model",
+#                         headers=headers,
+#                         json={
+#                             "modelName": model["model_name"],
+#                             "identity": identity,
+#                             "tag": model_tag,
+#                             "version": str(model["version"]),
+#                         },
+#                     )
 
-            session.delete(version)
-            session.commit()
+#                     if resp.status_code in (200, 201):
+#                         logger.info(f"✅ Registered model via webhook: {identity}")
 
-            return {
-                "success": True,
-                "message": f"SQL version {version_id} deleted",
-            }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to delete SQL version: {str(e)}",
-        )
+#                         # Build job config
+#                         job_config = plugin_default_config.copy()
+#                         job_config.update(
+#                             {
+#                                 "model_type": model.get("model_name") or model_type,
+#                                 "model_identity": identity,
+#                                 "model_tag": model_tag,
+#                                 "model_uri": model.get("model_uri", ""),
+#                                 "webhook_url": webhook_url,
+#                                 "webhook_api_key": webhook_api_key,
+#                                 "enable_use_default_config": False,
+#                             }
+#                         )
 
+#                         # Custom JSON serializer for non-serializable objects
+#                         def json_serializer(obj):
+#                             if isinstance(obj, (datetime, date)):
+#                                 return obj.isoformat()
+#                             if isinstance(obj, BaseEnum):
+#                                 return obj.value
+#                             if hasattr(obj, "__dict__"):
+#                                 return str(obj)
+#                             return str(obj)
 
-@app.post("/api/sql-versions/{version_id}/activate")
-def activate_sql_version(plugin_manager: PluginManagerState, version_id: int):
+#                         # Create job via PluginManager
+#                         plugin_manager.add_job(
+#                             session_id,
+#                             plugin_id,
+#                             json.dumps(job_config, default=json_serializer),
+#                             f"Auto-created for {identity}",
+#                         )
+#                         logger.info(f"📝 Created job for {identity}")
+#                         created.append(identity)
 
-    try:
-        with Session(plugin_manager.db_engine) as session:
-            # Get the version to activate
-            stmt = select(SqlVersion).where(SqlVersion.id == version_id)
-            version = session.execute(stmt).scalar_one_or_none()
+#                     elif "exist" in resp.text.lower() or resp.status_code == 409:
+#                         # Model already exists, try to start it
+#                         logger.info(f"⚠️  Model already exists, calling start endpoint: {identity}")
+#                         start_resp = await client.post(
+#                             f"{webhook_url}/api/test-system/model/start",
+#                             headers=headers,
+#                             json={"identity": identity},
+#                         )
 
-            if not version:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"SQL version {version_id} not found",
-                )
+#                         if start_resp.status_code in (200, 201):
+#                             logger.info(f"✅ Started existing model via webhook: {identity}")
 
-            session_id = version.id
+#                             # Build job config
+#                             job_config = plugin_default_config.copy()
+#                             job_config.update(
+#                                 {
+#                                     "model_type": model.get("model_name") or model_type,
+#                                     "model_identity": identity,
+#                                     "model_tag": model_tag,
+#                                     "model_uri": model.get("model_uri", ""),
+#                                     "webhook_url": webhook_url,
+#                                     "webhook_api_key": webhook_api_key,
+#                                     "enable_use_default_config": False,
+#                                 }
+#                             )
 
-            # Deactivate all versions for this session
-            update_stmt = (
-                update(SqlVersion).where(SqlVersion.id == session_id).values(is_active=False)
-            )
-            session.execute(update_stmt)
+#                             # Custom JSON serializer for non-serializable objects
+#                             def json_serializer(obj):
+#                                 if isinstance(obj, (datetime, date)):
+#                                     return obj.isoformat()
+#                                 if isinstance(obj, BaseEnum):
+#                                     return obj.value
+#                                 if hasattr(obj, "__dict__"):
+#                                     return str(obj)
+#                                 return str(obj)
 
-            # Activate the selected version
-            version.is_active = True
+#                             # Create job via PluginManager
+#                             plugin_manager.add_job(
+#                                 session_id,
+#                                 plugin_id,
+#                                 json.dumps(job_config, default=json_serializer),
+#                                 f"Auto-created for {identity}",
+#                             )
+#                             logger.info(f"📝 Created job for {identity}")
+#                             created.append(identity)
+#                         else:
+#                             error = f"HTTP {start_resp.status_code}: {start_resp.text[:200]}"
+#                             logger.warning(f"⚠️  Failed to start {identity}: {error}")
+#                             errors.append({"identity": identity, "action": "start", "error": error})
 
-            session.commit()
+#                     else:
+#                         error = f"HTTP {resp.status_code}: {resp.text[:200]}"
+#                         logger.warning(f"⚠️  Failed to register {identity}: {error}")
+#                         errors.append({"identity": identity, "action": "create", "error": error})
 
-            return {
-                "success": True,
-                "message": f"SQL version {version_id} activated",
-            }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to activate SQL version: {str(e)}",
-        )
+#                 except Exception as e:
+#                     logger.error(f"❌ Error creating {identity}: {e}")
+#                     errors.append({"identity": identity, "action": "create", "error": str(e)})
 
+#             # Stop inactive models
+#             for model_identity in to_stop:
+#                 job_id = existing_jobs.get(model_identity)
 
-@app.post("/api/mlflow/sync")
-async def mlflow_sync(plugin_manager: PluginManagerState, payload: dict = Body(...)):
-    import httpx
-    import json
-    import logging
-    from typing import Dict, Any, List
+#                 try:
+#                     resp = await client.post(
+#                         f"{webhook_url}/api/test-system/model/stop",
+#                         headers=headers,
+#                         json={"identity": model_identity, "unlockCredential": True},
+#                     )
 
-    # Validate required fields
-    required_fields = {"plugin_name", "model_tag", "webhook_url", "webhook_api_key"}
-    if not required_fields.issubset(payload):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Missing required fields: {required_fields - set(payload.keys())}",
-        )
+#                     if resp.status_code in (200, 201):
+#                         logger.info(f"🛑 Stopped model via webhook: {model_identity}")
+#                         stopped.append(model_identity)
+#                         if job_id:
+#                             jobs_to_delete.append(job_id)
+#                     else:
+#                         error = f"HTTP {resp.status_code}: {resp.text[:200]}"
+#                         logger.warning(f"⚠️  Failed to stop {model_identity}: {error}")
+#                         errors.append(
+#                             {"identity": model_identity, "action": "stop", "error": error}
+#                         )
 
-    plugin_name = payload["plugin_name"]
-    model_tag = payload["model_tag"]
-    webhook_url = payload["webhook_url"]
-    webhook_api_key = payload["webhook_api_key"]
-    webhook_test_key = payload.get("webhook_test_key", "")
-    session_id = payload.get("session_id", 1)
-    model_type = payload.get("model_type", "mlflow_custom")
+#                 except Exception as e:
+#                     logger.error(f"❌ Error stopping {model_identity}: {e}")
+#                     errors.append({"identity": model_identity, "action": "stop", "error": str(e)})
 
-    # Setup logger
-    logger = logging.getLogger(f"mlflow_sync.{model_tag}")
-    logger.info(f"🔍 Starting MLflow sync for model_tag: '{model_tag}'")
+#         # Step 6: Delete stopped jobs
+#         for job_id in jobs_to_delete:
+#             try:
+#                 plugin_manager.remove_job(job_id)
+#                 logger.info(f"🗑️  Deleted job {job_id}")
+#             except Exception as e:
+#                 logger.error(f"❌ Failed to delete job {job_id}: {e}")
+#                 errors.append({"action": "delete_job", "job_id": job_id, "error": str(e)})
 
-    try:
-        # Step 1: Fetch active models from MLflow
-        from plugins.mlflow_plugin.utils import get_models_with_backtest_watching
+#         logger.info(
+#             f"✨ Sync complete: {len(created)} created, {len(stopped)} stopped, "
+#             f"{len(errors)} errors"
+#         )
 
-        active_models = get_models_with_backtest_watching()
-        logger.info(f"✅ Found {len(active_models)} active models in MLflow")
-        active_identities = {m["identity"] for m in active_models}
-        
-        # Step 2: Get existing jobs from database by querying plugin directly
-        with Session(plugin_manager.db_engine) as session:
-            stmt = select(Plugin).where(Plugin.package == plugin_name)
-            target_plugin = session.execute(stmt).scalar_one_or_none()
-            
-            if not target_plugin:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Plugin not found: {plugin_name}"
-                )
-            
-            plugin_id = target_plugin.id
-            
-            # Get all jobs for this plugin
-            stmt_jobs = select(Job).where(Job.plugin_id == plugin_id)
-            jobs = session.execute(stmt_jobs).scalars().all()
-            
-            # Build map of existing jobs: {model_identity: job_id}
-            existing_jobs: Dict[str, int] = {}
-            for job in jobs:
-                try:
-                    config = json.loads(job.config) if isinstance(job.config, str) else job.config
-                    identity = config.get("model_identity")
-                    tag = config.get("model_tag")
-                    
-                    if tag == model_tag and identity:
-                        existing_jobs[identity] = job.id
-                except (json.JSONDecodeError, KeyError) as e:
-                    logger.warning(f"⚠️  Failed to parse job {job.id} config: {e}")
-        
-        existing_identities = set(existing_jobs.keys())
-        logger.info(f"📊 Found {len(existing_jobs)} existing jobs with tag '{model_tag}'")
+#         return {
+#             "created": created,
+#             "stopped": stopped,
+#             "errors": errors,
+#             "active_count": len(active_identities),
+#             "existing_count": len(existing_identities),
+#         }
 
-        # Step 3: Determine sync plan
-        to_create = active_identities - existing_identities
-        to_stop = existing_identities - active_identities
-        logger.info(f"🔄 Sync plan: {len(to_create)} to create, {len(to_stop)} to stop")
-
-        # Step 4: Get base config - try SQL version first, fallback to plugin default
-        try:
-            # Try to fetch latest SQL version
-            sql_query_from_version = None  # Store SQL query separately
-            with Session(plugin_manager.db_engine) as session:
-                stmt = select(SqlVersion).order_by(SqlVersion.updated_at.desc()).limit(1)
-                sql_version = session.execute(stmt).scalar_one_or_none()
-                
-                if sql_version:
-                    logger.info(f"📋 Using SQL version config: {sql_version.name}")
-                    sql_query_from_version = sql_version.sql_query  # Store the SQL query
-                    
-                    # Parse SQL version tags as base config
-                    if sql_version.tags:
-                        try:
-                            plugin_default_config = json.loads(sql_version.tags) if isinstance(sql_version.tags, str) else sql_version.tags
-                            logger.info(f"✅ Loaded config from SQL version tags")
-                        except json.JSONDecodeError as e:
-                            logger.warning(f"⚠️  Failed to parse SQL version tags: {e}, falling back to plugin default")
-                            plugin_default_config = None
-                    else:
-                        plugin_default_config = {}  # Empty dict if no tags, but we still have SQL query
-                    
-                    # Add SQL query to config if we have it
-                    if plugin_default_config is not None and sql_query_from_version:
-                        plugin_default_config["sql"] = sql_query_from_version
-                else:
-                    logger.info(f"⚠️  No SQL version found, using plugin default config")
-                    plugin_default_config = None
-            
-            # Fallback to plugin default config if SQL version config not available
-            if plugin_default_config is None:
-                import importlib
-
-                parts = plugin_name.rsplit(".", 1)
-                module_path = parts[0] if len(parts) == 2 else plugin_name
-                class_name = parts[1] if len(parts) == 2 else "Plugin"
-
-                module = importlib.import_module(module_path)
-                plugin_class = getattr(module, class_name, None)
-
-                if plugin_class and hasattr(plugin_class, "config"):
-                    default_config_obj = plugin_class.config()
-                    if hasattr(default_config_obj, "model_dump"):
-                        plugin_default_config = default_config_obj.model_dump()
-                    elif hasattr(default_config_obj, "dict"):
-                        plugin_default_config = default_config_obj.dict()
-                    else:
-                        plugin_default_config = dict(default_config_obj)
-                    logger.info(f"✅ Loaded plugin default config")
-                else:
-                    plugin_default_config = {}
-                    logger.warning(f"⚠️  No plugin config method found")
-        except Exception as e:
-            logger.warning(f"⚠️  Failed to load config: {e}")
-            plugin_default_config = {}
-
-        # Step 5: Execute sync
-        created = []
-        stopped = []
-        errors = []
-        jobs_to_delete = []
-
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            headers = {
-                "test-system-api-key": webhook_test_key,
-                "Content-Type": "application/json",
-            }
-
-            # Create new models
-            for model in active_models:
-                identity = model["identity"]
-                if identity not in to_create:
-                    continue
-
-                try:
-                    # Call webhook to register model
-                    resp = await client.post(
-                        f"{webhook_url}/api/test-system/model",
-                        headers=headers,
-                        json={
-                            "modelName": model["model_name"],
-                            "identity": identity,
-                            "tag": model_tag,
-                            "version": str(model["version"]),
-                        },
-                    )
-                    
-                    if resp.status_code in (200, 201):
-                        logger.info(f"✅ Registered model via webhook: {identity}")
-
-                        # Build job config
-                        job_config = plugin_default_config.copy()
-                        job_config.update({
-                            "model_type": model.get("model_name") or model_type,
-                            "model_identity": identity,
-                            "model_tag": model_tag,
-                            "model_uri": model.get("model_uri", ""),
-                            "webhook_url": webhook_url,
-                            "webhook_api_key": webhook_api_key,
-                            "enable_use_default_config": False,
-                        })
-                        
-                        # Custom JSON serializer for non-serializable objects
-                        def json_serializer(obj):
-                            if isinstance(obj, (datetime, date)):
-                                return obj.isoformat()
-                            if isinstance(obj, BaseEnum):
-                                return obj.value
-                            if hasattr(obj, "__dict__"):
-                                return str(obj)
-                            return str(obj)
-                        
-                        # Create job via PluginManager
-                        plugin_manager.add_job(
-                            session_id,
-                            plugin_id,
-                            json.dumps(job_config, default=json_serializer),
-                            f"Auto-created for {identity}"
-                        )
-                        logger.info(f"📝 Created job for {identity}")
-                        created.append(identity)
-                    
-                    elif "exist" in resp.text.lower() or resp.status_code == 409:
-                        # Model already exists, try to start it
-                        logger.info(f"⚠️  Model already exists, calling start endpoint: {identity}")
-                        start_resp = await client.post(
-                            f"{webhook_url}/api/test-system/model/start",
-                            headers=headers,
-                            json={"identity": identity},
-                        )
-                        
-                        if start_resp.status_code in (200, 201):
-                            logger.info(f"✅ Started existing model via webhook: {identity}")
-                            
-                            # Build job config
-                            job_config = plugin_default_config.copy()
-                            job_config.update({
-                                "model_type": model.get("model_name") or model_type,
-                                "model_identity": identity,
-                                "model_tag": model_tag,
-                                "model_uri": model.get("model_uri", ""),
-                                "webhook_url": webhook_url,
-                                "webhook_api_key": webhook_api_key,
-                                "enable_use_default_config": False,
-                            })
-                            
-                            # Custom JSON serializer for non-serializable objects
-                            def json_serializer(obj):
-                                if isinstance(obj, (datetime, date)):
-                                    return obj.isoformat()
-                                if isinstance(obj, BaseEnum):
-                                    return obj.value
-                                if hasattr(obj, "__dict__"):
-                                    return str(obj)
-                                return str(obj)
-                            
-                            # Create job via PluginManager
-                            plugin_manager.add_job(
-                                session_id,
-                                plugin_id,
-                                json.dumps(job_config, default=json_serializer),
-                                f"Auto-created for {identity}"
-                            )
-                            logger.info(f"📝 Created job for {identity}")
-                            created.append(identity)
-                        else:
-                            error = f"HTTP {start_resp.status_code}: {start_resp.text[:200]}"
-                            logger.warning(f"⚠️  Failed to start {identity}: {error}")
-                            errors.append({"identity": identity, "action": "start", "error": error})
-                    
-                    else:
-                        error = f"HTTP {resp.status_code}: {resp.text[:200]}"
-                        logger.warning(f"⚠️  Failed to register {identity}: {error}")
-                        errors.append({"identity": identity, "action": "create", "error": error})
-
-                except Exception as e:
-                    logger.error(f"❌ Error creating {identity}: {e}")
-                    errors.append({"identity": identity, "action": "create", "error": str(e)})
-
-            # Stop inactive models
-            for model_identity in to_stop:
-                job_id = existing_jobs.get(model_identity)
-
-                try:
-                    resp = await client.post(
-                        f"{webhook_url}/api/test-system/model/stop",
-                        headers=headers,
-                        json={"identity": model_identity, "unlockCredential": True},
-                    )
-
-                    if resp.status_code in (200, 201):
-                        logger.info(f"🛑 Stopped model via webhook: {model_identity}")
-                        stopped.append(model_identity)
-                        if job_id:
-                            jobs_to_delete.append(job_id)
-                    else:
-                        error = f"HTTP {resp.status_code}: {resp.text[:200]}"
-                        logger.warning(f"⚠️  Failed to stop {model_identity}: {error}")
-                        errors.append(
-                            {"identity": model_identity, "action": "stop", "error": error}
-                        )
-
-                except Exception as e:
-                    logger.error(f"❌ Error stopping {model_identity}: {e}")
-                    errors.append({"identity": model_identity, "action": "stop", "error": str(e)})
-
-        # Step 6: Delete stopped jobs
-        for job_id in jobs_to_delete:
-            try:
-                plugin_manager.remove_job(job_id)
-                logger.info(f"🗑️  Deleted job {job_id}")
-            except Exception as e:
-                logger.error(f"❌ Failed to delete job {job_id}: {e}")
-                errors.append({"action": "delete_job", "job_id": job_id, "error": str(e)})
-
-        logger.info(
-            f"✨ Sync complete: {len(created)} created, {len(stopped)} stopped, "
-            f"{len(errors)} errors"
-        )
-
-        return {
-            "created": created,
-            "stopped": stopped,
-            "errors": errors,
-            "active_count": len(active_identities),
-            "existing_count": len(existing_identities),
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ MLflow sync failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"MLflow sync failed: {str(e)}")
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         logger.error(f"❌ MLflow sync failed: {e}", exc_info=True)
+#         raise HTTPException(status_code=500, detail=f"MLflow sync failed: {str(e)}")
 
 
 # static site

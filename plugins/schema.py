@@ -1,0 +1,49 @@
+from typing import Any, Literal, TypedDict, List, cast
+
+
+UIWidget = Literal[
+    "datetime",
+    "text",
+    "textarea",
+    "password",
+    "email",
+    "uri",
+    "date",
+    "updown",
+    "range",
+    "checkbox",
+    "radio",
+    "select",
+    "checkboxes",
+    "files",
+]
+
+
+class ModelExpr(TypedDict, total=False):
+    list: str
+    detail: str
+    create: str
+    update: str
+
+
+JSONUISchema = TypedDict(
+    "JSONUISchema",
+    {
+        "type": Literal["string", "number", "sql", "markdown", "js", "yaml", "yml", "json"],
+        "enum": list[Any],
+        "default": Any,  # default value for uiSchema
+        "ui:field": Literal[
+            "MLThresholdsTable", "MultiSelect", "Template", "Version"
+        ],  # for render field
+        "ui:widget": UIWidget,  # for render widget
+        "ui:expr": str | tuple[str, *tuple[list[str], ...]],  # expression with memo support
+        "ui:options": dict,  # standard ui:options for json_schema_form, mean other ui:option should be placed in here
+        "model:binding": List[str],  # for binding element with path
+        "model:expr": ModelExpr,  # for rendering component with list, detail and update, create data
+    },
+    total=False,
+)
+
+
+def ui_schema(extra: JSONUISchema) -> dict:
+    return cast(dict, extra)

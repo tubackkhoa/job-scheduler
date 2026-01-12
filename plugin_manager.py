@@ -5,13 +5,13 @@ import json
 import logging
 import subprocess
 import sys
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 import pluggy
 from pydantic import BaseModel
 from apscheduler.util import undefined
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from jinja2 import Environment
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.orm import Session
 from models import Job, Plugin
 import zipfile
@@ -141,7 +141,18 @@ class PluginSpec:
     def config(cls, json: Optional[dict[str, Any]] = None) -> BaseModel: ...
 
     @hookspec
-    async def run(cls, config: BaseModel, logger: logging.Logger) -> Any: ...
+    async def run(
+        cls,
+        config: BaseModel,
+        logger: logging.Logger,
+        render: Callable[[str, Environment, dict], Any],
+    ) -> Any: ...
+
+    @hookspec
+    async def install(cls) -> bool: ...
+
+    @hookspec
+    async def uninstall(cls) -> bool: ...
 
 
 class PluginManager:
@@ -166,6 +177,7 @@ class PluginManager:
     #         lock.release()
 
     _active_job_cache: Dict[int, str] = {}
+    env: Dict[str, Any] = {}
     # static pluggy manager, so that all pluginmanager share the same plugins
     manager = pluggy.PluginManager(PROJECT_NAME)
     manager.add_hookspecs(PluginSpec)
@@ -238,25 +250,35 @@ class PluginManager:
 
         os.makedirs(target_dir, exist_ok=True)
 
-        args = [
-            sys.executable,
-            "-m",
-            "pip",
-            "download",
-            requirement,
-            "--dest",
-            target_dir,
-            "--no-deps",
-            "--no-input",  # disable prompts
-            "--exists-action=w",  # w = wipe existing files
-        ]
+        if is_vcs:
+            # For git URLs, use install --target (works with private repos)
+            args = [
+                "uv",
+                "pip",
+                "install",
+                requirement,
+                "--target",
+                target_dir,
+                "--no-deps",
+            ]
+        else:
+            # For regular packages, use download
+            args = [
+                "uv",
+                "pip",
+                "download",
+                requirement,
+                "--dest",
+                target_dir,
+                "--no-deps",
+            ]
 
         scheduler_logger.info(f"Downloading into {target_dir} ...")
 
         result = subprocess.run(args, capture_output=True, text=True)
 
         if result.returncode == 0:
-            return extract_package_files(target_dir)
+            return extract_package_files(target_dir) if not is_vcs else True
 
         scheduler_logger.error(f"Download failed: {result.stderr}")
         return False
@@ -288,6 +310,15 @@ class PluginManager:
         return cls.manager.get_plugin(package)
 
     @classmethod
+    def render(cls, template_str: str, env: Environment, payload: dict):
+        template_engine = env.from_string(template_str)
+        # assign global function
+        return template_engine.render(
+            **cls.env,
+            **payload,
+        )
+
+    @classmethod
     def run_plugin_job(cls, package: str, job_id: int):
         """
         Wrapper to run a plugin's 'run' method asynchronously,
@@ -316,7 +347,7 @@ class PluginManager:
             logger.setLevel(logging.INFO)
 
         try:
-            retval = asyncio.run(plugin.run(config, logger))
+            retval = asyncio.run(plugin.run(config, logger, cls.render))
             # logger.info(f"Job executed successfully (return value: {retval})")
             return retval
         except Exception as e:
@@ -352,7 +383,8 @@ class PluginManager:
         return plugin
 
     def add_plugin(self, package: str, interval: int, description: Optional[str] = None) -> int:
-        self.load_plugin(package)
+        # load plugin override module to make sure new code if sharing the same module
+        self.load_plugin(package, True)
         # Insert into DB
         with Session(self.db_engine) as session:
             plugin_row = Plugin(
