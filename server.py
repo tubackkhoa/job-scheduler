@@ -26,6 +26,7 @@ from models import (
     Plugin,
 )
 from plugin_manager import PluginManager
+from schemas import ConfigPayload, DownloadPayload, PluginCreatePayload, TemplatePayload
 from ws_manager import WSConnectionManager
 import os
 import dotenv
@@ -195,22 +196,12 @@ def get_plugin_by_name(dao: DAOState, plugin_name: str):
             "package": plugin.package,
             "interval": plugin.interval,
             "description": plugin.description,
-            "jobs": [
-                {
-                    "id": job.id,
-                    "session_id": job.session_id,
-                    "plugin_id": job.plugin_id,
-                    "config": job.config,
-                    "description": job.description,
-                    "active": job.active,
-                }
-                for job in jobs
-            ],
+            "jobs": [job.to_dict() for job in jobs],
         }
 
 
 @app.post("/plugins")
-def create_plugin(plugin_manager: PluginManagerState, payload: dict = Body(...)):
+def create_plugin(plugin_manager: PluginManagerState, payload: PluginCreatePayload):
     """
     Create a plugin record and load it into the PluginManager.
 
@@ -232,7 +223,7 @@ def create_plugin(plugin_manager: PluginManagerState, payload: dict = Body(...))
     # Load into manager
     try:
         plugin_id = plugin_manager.add_plugin(
-            payload["package"], int(payload["interval"]), payload.get("description")
+            payload.package, payload.interval, payload.description
         )
         return {
             "id": plugin_id,
@@ -245,15 +236,17 @@ def create_plugin(plugin_manager: PluginManagerState, payload: dict = Body(...))
 
 
 @app.post("/template/{package}")
-def template(plugin_manager: PluginManagerState, package: str, payload: dict = Body(...)):
+def template(
+    plugin_manager: PluginManagerState, package: str, payload: TemplatePayload = Body(...)
+):
     plugin_instance = plugin_manager.get_plugin_instance(package)
-    template_str = payload.get("template", "")
+    template_str = payload.template
     if plugin_instance is None:
         return {"result": template_str}
 
     try:
         result = plugin_manager.render(
-            plugin_instance.roles(), template_str, plugin_instance.env(), payload["params"]
+            plugin_instance.roles(), template_str, plugin_instance.env(), payload.params
         )
         return {"result": result}
     except Exception as e:
@@ -338,13 +331,15 @@ def reload_plugin(plugin_manager: PluginManagerState, package: str):
 
 
 @app.post("/download/{name}")
-def download_module(plugin_manager: PluginManagerState, name: str, payload: dict = Body(...)):
+def download_module(
+    plugin_manager: PluginManagerState, name: str, payload: DownloadPayload = Body(...)
+):
     try:
-        version_or_vsi = payload["version"]
+        version_or_vsi = payload.version
         success = plugin_manager.download_package(name, version_or_vsi)
         return {"success": success}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to download module: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Failed to download module: {str(e)}")
 
 
 @app.put("/install/{package}")
@@ -384,35 +379,36 @@ def delete_plugin(plugin_manager: PluginManagerState, plugin_id: int):
 
 @app.post("/config/{job_id}")
 def update_config(
-    dao: DAOState, plugin_manager: PluginManagerState, job_id: int, payload: dict = Body(...)
+    dao: DAOState,
+    plugin_manager: PluginManagerState,
+    job_id: int,
+    payload: ConfigPayload = Body(...),
 ):
     try:
         if job_id == 0:
-            plugin_id = payload["pluginId"]
+            plugin_id = payload.plugin_id
         else:
             job_item = dao.get_job(job_id)
-            assert job_item
+            if not job_item:
+                raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
             plugin_id = job_item.plugin_id
 
         plugin_item = dao.get_plugin(plugin_id)
-        assert plugin_item
+        if not plugin_item:
+            raise HTTPException(status_code=404, detail=f"Plugin {plugin_id} not found")
         plugin = plugin_manager.get_plugin_instance(plugin_item.package)
         if not plugin:
-            return {"error": "Plugin not found"}
-        config = plugin.config(payload.get("config"))
+            raise HTTPException(status_code=404, detail="Plugin not found")
+        config = plugin.config(payload.config)
         if job_id == 0:
-            # Accept both userId (legacy) and sessionId (new)
-            session_id = payload.get("sessionId") or payload.get("userId")
-            if not session_id:
-                raise HTTPException(status_code=400, detail="sessionId or userId is required")
             plugin_manager.add_job(
-                session_id,
+                payload.session_id,
                 plugin_id,
                 config.model_dump_json(),
-                payload.get("description"),
+                payload.description,
             )
         else:
-            dao.update_job(job_id, config.model_dump_json(), payload.get("description"))
+            dao.update_job(job_id, config.model_dump_json(), payload.description)
 
         return config
     except Exception as e:

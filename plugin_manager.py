@@ -13,7 +13,7 @@ from apscheduler.util import undefined
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from jinja2 import Environment
 from acl_resolver import ACLResolver, Role
-from models import DAO, Job, Plugin
+from models import DAO, Plugin
 import zipfile
 import tarfile
 import glob
@@ -225,7 +225,7 @@ class PluginManager:
         all_jobs = self.dao.get_all_jobs()
 
         for job in all_jobs:
-            self.add_job_instance(job, look_up[job.plugin_id])
+            self.add_job_instance(job.id, job.active, look_up[job.plugin_id])
 
     def start(self):
         self.scheduler.start()
@@ -238,52 +238,33 @@ class PluginManager:
         if not version:
             raise ArgumentError("Please provide a version")
 
-        # Detect VCS requirement directly from version
         is_vcs = version.startswith(("git+", "github+"))
 
-        if is_vcs:
-            requirement = version
-            ref = version.rsplit("@", 1)[-1]
-            target_dir = f"{self.plugin_path}/{name}@{ref}"
-        else:
-            version_underscore = version.replace(".", "_")
-            target_dir = f"{self.plugin_path}/{name}@{version_underscore}"
-            requirement = f"{name}=={version}"
+        ref = version.rsplit("@", 1)[-1] if is_vcs else version.replace(".", "_")
+        requirement = version if is_vcs else f"{name}=={version}"
+        target_dir = f"{self.plugin_path}/{name}@{ref}"
 
         os.makedirs(target_dir, exist_ok=True)
 
-        if is_vcs:
-            # For git URLs, use install --target (works with private repos)
-            args = [
-                "uv",
-                "pip",
-                "install",
-                requirement,
-                "--target",
-                target_dir,
-                "--no-deps",
-            ]
-        else:
-            # For regular packages, use download
-            args = [
-                "uv",
-                "pip",
-                "download",
-                requirement,
-                "--dest",
-                target_dir,
-                "--no-deps",
-            ]
+        args = [
+            "uv",
+            "pip",
+            "install" if is_vcs else "download",
+            requirement,
+            "--target" if is_vcs else "--dest",
+            target_dir,
+            "--no-deps",
+        ]
 
-        scheduler_logger.info(f"Downloading into {target_dir} ...")
+        scheduler_logger.info("Downloading into %s ...", target_dir)
 
         result = subprocess.run(args, capture_output=True, text=True)
 
-        if result.returncode == 0:
-            return extract_package_files(target_dir) if not is_vcs else True
+        if result.returncode != 0:
+            scheduler_logger.error("Download failed: %s", result.stderr)
+            return False
 
-        scheduler_logger.error(f"Download failed: {result.stderr}")
-        return False
+        return True if is_vcs else extract_package_files(target_dir)
 
     @staticmethod
     def get_job_scheduler_id(job_id: int) -> str:
@@ -407,17 +388,14 @@ class PluginManager:
         config: str,
         description: Optional[str] = None,
     ):
-        job = self.dao.add_job(session_id, plugin_id, config, description)
+        job_id = self.dao.add_job(session_id, plugin_id, config, description)
         plugin = self.dao.get_plugin(plugin_id)
         assert plugin is not None
-        self.add_job_instance(job, plugin)
+        self.add_job_instance(job_id, False, plugin)
 
-    def add_job_instance(self, job: Job, plugin: Plugin):
+    def add_job_instance(self, job_id: int, active: bool, plugin: Plugin):
 
-        # update cache
-        DAO.job_config_cache[job.id] = job.config
-
-        job_scheduler_id = self.get_job_scheduler_id(job.id)
+        job_scheduler_id = self.get_job_scheduler_id(job_id)
         if self.scheduler.get_job(job_scheduler_id) is not None:
             return  # job already exists
 
@@ -440,8 +418,8 @@ class PluginManager:
             self.run_plugin_job,
             "interval",
             seconds=plugin.interval,
-            args=[plugin.package, job.id],
-            next_run_time=undefined if job.active else None,
+            args=[plugin.package, job_id],
+            next_run_time=undefined if active else None,
             id=job_scheduler_id,
             name=job_scheduler_id,
             coalesce=True,

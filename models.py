@@ -46,6 +46,16 @@ class Job(Base):
     config: Mapped[str] = mapped_column(Text, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "plugin_id": self.plugin_id,
+            "config": self.config,
+            "description": self.description,
+            "active": self.active,
+        }
+
 
 class ValueVersion(Base):
     __tablename__ = "value_versions"
@@ -116,7 +126,12 @@ class DAO:
             )
             session.add(job)
             session.commit()
-            return job
+
+            job_id = job.id
+
+        # update cache
+        DAO.job_config_cache[job.id] = config
+        return job_id
 
     def update_job(self, id: int, config: str, description: Optional[str] = None):
         with Session(self.db_engine) as session:
