@@ -163,6 +163,11 @@ class Plugin:
 
     @hookimpl
     @classmethod
+    def roles(cls):
+        return {"admin"}
+
+    @hookimpl
+    @classmethod
     async def run(
         cls, config: Config, logger: logging.Logger, render: Callable[[str, Environment, dict], Any]
     ):

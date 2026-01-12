@@ -1,7 +1,7 @@
+from acl_resolver import ACLResolver
 from models import ValueVersion
 from sqlalchemy.engine.base import Engine
 import asyncio
-from functools import partial
 import inspect
 from typing import Annotated, Optional
 from fastapi import (
@@ -26,10 +26,6 @@ from models import (
     Job,
     Plugin,
     ValueVersion,
-    create_value_version,
-    get_value_version,
-    get_value_versions,
-    update_value_version
 )
 from plugin_manager import PluginManager
 from ws_manager import WSConnectionManager
@@ -47,20 +43,29 @@ import json
 
 manager = WSConnectionManager()
 
-def apply_value_version_all_jobs(db_engine: Engine, version_id: int, session_id: Optional[int] = None):
+
+def apply_value_version_all_jobs(
+    db_engine: Engine, version_id: int, session_id: Optional[int] = None
+):
     with Session(db_engine) as session:
         version = session.get(ValueVersion, version_id)
         if not version:
             raise Exception(f"ValueVersion {version_id} not found")
 
-        parts = version.field_id.split('.', 1)
+        parts = version.field_id.split(".", 1)
         if len(parts) != 2:
-            raise Exception(f"Invalid field_id format: {version.field_id}, expected 'plugin_id.field_name'")
+            raise Exception(
+                f"Invalid field_id format: {version.field_id}, expected 'plugin_id.field_name'"
+            )
 
         plugin_id_str, field_name = parts
         plugin_id = int(plugin_id_str)
         if session_id:
-            jobs = session.query(Job).filter(Job.plugin_id == plugin_id, Job.session_id == session_id).all()
+            jobs = (
+                session.query(Job)
+                .filter(Job.plugin_id == plugin_id, Job.session_id == session_id)
+                .all()
+            )
         else:
             jobs = session.query(Job).filter(Job.plugin_id == plugin_id).all()
         updated_count = 0
@@ -81,6 +86,7 @@ def apply_value_version_all_jobs(db_engine: Engine, version_id: int, session_id:
             "field_name": field_name,
             "version_id": version_id,
         }
+
 
 # define state transform for app
 def get_plugin_manager(request: Request) -> PluginManager:
@@ -131,19 +137,8 @@ async def lifespan(app: FastAPI):
         module_paths=os.getenv("MODULE_PATH", "").split(":"),
     )
 
-    # update env functions
-    plugin_manager.env.update(
-        {
-            func.__name__: partial(func, db_engine)
-            for func in [
-                create_value_version,
-                get_value_version,
-                get_value_versions,
-                update_value_version,
-                apply_value_version_all_jobs
-            ]
-        }
-    )
+    # update ACL logic
+    plugin_manager.set_acl_resolver(ACLResolver(db_engine))
 
     plugin_manager.reload_all_jobs()
 
@@ -313,7 +308,9 @@ def template(plugin_manager: PluginManagerState, package: str, payload: dict = B
         return {"result": template_str}
 
     try:
-        result = plugin_manager.render(template_str, plugin_instance.env(), payload["params"])
+        result = plugin_manager.render(
+            plugin_instance.roles(), template_str, plugin_instance.env(), payload["params"]
+        )
         return {"result": result}
     except Exception as e:
         raise HTTPException(

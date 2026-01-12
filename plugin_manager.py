@@ -1,11 +1,12 @@
 import asyncio
 from ctypes import ArgumentError
+from functools import partial
 import importlib
 import json
 import logging
 import subprocess
 import sys
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Set
 import pluggy
 from pydantic import BaseModel
 from apscheduler.util import undefined
@@ -13,7 +14,8 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from jinja2 import Environment
 from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.orm import Session
-from models import Job, Plugin
+from acl_resolver import ACLResolver, Role
+from models import DAO, Job, Plugin
 import zipfile
 import tarfile
 import glob
@@ -149,6 +151,9 @@ class PluginSpec:
     ) -> Any: ...
 
     @hookspec
+    def roles(cls) -> Optional[Set[Role]]: ...
+
+    @hookspec
     async def install(cls) -> bool: ...
 
     @hookspec
@@ -176,8 +181,7 @@ class PluginManager:
     #     finally:
     #         lock.release()
 
-    _active_job_cache: Dict[int, str] = {}
-    env: Dict[str, Any] = {}
+    _acl_resolver: Optional[ACLResolver] = None
     # static pluggy manager, so that all pluginmanager share the same plugins
     manager = pluggy.PluginManager(PROJECT_NAME)
     manager.add_hookspecs(PluginSpec)
@@ -310,11 +314,20 @@ class PluginManager:
         return cls.manager.get_plugin(package)
 
     @classmethod
-    def render(cls, template_str: str, env: Environment, payload: dict):
+    def set_acl_resolver(cls, acl_resolver: ACLResolver):
+        cls._acl_resolver = acl_resolver
+
+    @classmethod
+    def render(cls, roles: Optional[Set[Role]], template_str: str, env: Environment, payload: dict):
         template_engine = env.from_string(template_str)
+        functions = (
+            {}
+            if cls._acl_resolver is None or roles is None
+            else cls._acl_resolver.get_allowed_functions(roles)
+        )
         # assign global function
         return template_engine.render(
-            **cls.env,
+            **functions,
             **payload,
         )
 
@@ -329,7 +342,7 @@ class PluginManager:
         if plugin is None:
             return None
 
-        job_config = cls._active_job_cache.get(job_id)
+        job_config = DAO.job_config_cache.get(job_id)
 
         if job_config is None:
             # No active job means no config to run this plugin instance for this user
@@ -347,7 +360,8 @@ class PluginManager:
             logger.setLevel(logging.INFO)
 
         try:
-            retval = asyncio.run(plugin.run(config, logger, cls.render))
+            render_function = partial(cls.render, plugin.roles())
+            retval = asyncio.run(plugin.run(config, logger, render_function))
             # logger.info(f"Job executed successfully (return value: {retval})")
             return retval
         except Exception as e:
@@ -424,7 +438,7 @@ class PluginManager:
     def add_job_instance(self, job: Job, plugin: Plugin):
 
         # update cache
-        self._active_job_cache[job.id] = job.config
+        DAO.job_config_cache[job.id] = job.config
 
         job_scheduler_id = self.get_job_scheduler_id(job.id)
         if self.scheduler.get_job(job_scheduler_id) is not None:
@@ -465,7 +479,7 @@ class PluginManager:
                 job.config = config
                 if description:
                     job.description = description
-                self._active_job_cache[job.id] = job.config
+                DAO.job_config_cache[job.id] = job.config
                 session.commit()
 
     def remove_job(self, job_id: int):
@@ -480,7 +494,7 @@ class PluginManager:
         job_scheduler_id = self.get_job_scheduler_id(job_id)
         if self.scheduler.get_job(job_scheduler_id) is not None:
             self.scheduler.remove_job(job_scheduler_id)
-            self._active_job_cache.pop(job_id, None)
+            DAO.job_config_cache.pop(job_id, None)
 
             # remove all handlers for this logger to save memory
             logger = logging.getLogger(job_scheduler_id)
@@ -495,7 +509,7 @@ class PluginManager:
             job_scheduler_id = self.get_job_scheduler_id(job_id)
             if self.scheduler.get_job(job_scheduler_id) is not None:
                 self.scheduler.remove_job(job_scheduler_id)
-            self._active_job_cache.pop(job_id, None)
+            DAO.job_config_cache.pop(job_id, None)
 
     def activate_job(self, job_id: int):
         with Session(self.db_engine) as session:
@@ -571,7 +585,7 @@ class PluginManager:
                 job_scheduler_id = self.get_job_scheduler_id(job.id)
                 if self.scheduler.get_job(job_scheduler_id) is not None:
                     self.scheduler.remove_job(job_scheduler_id)
-                    self._active_job_cache.pop(job.id, None)
+                    DAO.job_config_cache.pop(job.id, None)
 
                     # Remove logger handlers
                     logger = logging.getLogger(job_scheduler_id)
