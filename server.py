@@ -24,13 +24,12 @@ from models import (
     Job,
 )
 from plugin_manager import PluginManager
-from schemas import ConfigPayload, DownloadPayload, PluginCreatePayload, TemplatePayload
+from schemas import ConfigPayload, DownloadPayload, PluginCreatePayload, Settings, TemplatePayload
 from ws_manager import WSConnectionManager
 import os
-import dotenv
 import uvloop
 
-dotenv.load_dotenv()
+
 # Configure logging to show INFO and above messages
 logging.basicConfig(level=logging.DEBUG, handlers=[logging.NullHandler()])
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
@@ -51,36 +50,37 @@ PluginManagerState = Annotated[PluginManager, Depends(app_state("plugin_manager"
 LogServiceState = Annotated[LogService, Depends(app_state("log_service"))]
 DAOState = Annotated[DAO, Depends(app_state("dao"))]
 
+settings = Settings()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # These will be initialised once an event loop is running (inside lifespan)
-    db_connection = os.getenv("DB_CONNECTION")
-    assert db_connection
-    db_engine = create_engine(db_connection)
-    dao = DAO(db_engine)
-
     # Initialise log service and handler
-    use_log_indexer = os.getenv("USE_LOG_INDEXER", "false").lower() in ("true", "1", "yes")
+
     log_service = LogService(
-        log_dir=os.getenv("LOG_DIR", "logs"),
-        max_file_size=int(os.getenv("LOG_MAX_SIZE", 10 * 1024 * 1024)),
-        max_files=int(os.getenv("LOG_MAX_FILES", 10)),
-        retention_days=int(os.getenv("LOG_RETENTION_DAYS", 7)),
-        useIndexer=use_log_indexer,
+        log_dir=settings.log_dir,
+        max_file_size=settings.log_max_size,
+        max_files=settings.log_max_files,
+        retention_days=settings.log_retention_days,
+        useIndexer=settings.use_log_indexer,
     )
 
     loop = asyncio.get_running_loop()
     log_handler = JobLogHandler(manager.send_log, loop, log_service=log_service)
 
+    # These will be initialised once an event loop is running (inside lifespan)
+    db_engine = create_engine(settings.db_connection)
+    dao = DAO(db_engine)
+
+    # update ACL logic
+    PluginManager.acl_resolver = ACLResolver(dao)
+    # create plugin_instance
     plugin_manager = PluginManager(
         dao,
         log_handler=log_handler,
-        module_paths=os.getenv("MODULE_PATH", "").split(":"),
+        module_paths=settings.module_path.split(":"),
     )
 
-    # update ACL logic
-    plugin_manager.set_acl_resolver(ACLResolver(dao))
     plugin_manager.reload_all_jobs()
 
     # ---- STARTUP ----
@@ -463,10 +463,10 @@ def clear_logs(log_service: LogServiceState, job_id: int):
 
 
 # static site
-static_files = os.getenv("STATIC_FILES")
-if static_files:
+
+if settings.static_files:
     app.mount(
         "/",
-        StaticFiles(directory=static_files, html=True),
+        StaticFiles(directory=settings.static_files, html=True),
         name="static",
     )

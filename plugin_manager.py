@@ -179,7 +179,7 @@ class PluginManager:
     #     finally:
     #         lock.release()
 
-    _acl_resolver: Optional[ACLResolver] = None
+    acl_resolver: Optional[ACLResolver] = None
     # static pluggy manager, so that all pluginmanager share the same plugins
     manager = pluggy.PluginManager(PROJECT_NAME)
     manager.add_hookspecs(PluginSpec)
@@ -293,16 +293,12 @@ class PluginManager:
         return cls.manager.get_plugin(package)
 
     @classmethod
-    def set_acl_resolver(cls, acl_resolver: ACLResolver):
-        cls._acl_resolver = acl_resolver
-
-    @classmethod
     def render(cls, roles: Optional[Set[Role]], template_str: str, env: Environment, payload: dict):
         template_engine = env.from_string(template_str)
         functions = (
             {}
-            if cls._acl_resolver is None or roles is None
-            else cls._acl_resolver.get_allowed_functions(roles)
+            if cls.acl_resolver is None or roles is None
+            else cls.acl_resolver.get_allowed_functions(roles)
         )
         # assign global function
         return template_engine.render(
