@@ -1,5 +1,6 @@
 import asyncio
 from ctypes import ArgumentError
+from datetime import datetime
 import importlib
 import json
 import logging
@@ -11,9 +12,9 @@ from pydantic import BaseModel
 from apscheduler.util import undefined
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from jinja2 import Environment
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.orm import Session
-from models import Job, Plugin
+from models import Job, Plugin, ValueVersion
 import zipfile
 import tarfile
 import glob
@@ -559,3 +560,104 @@ class PluginManager:
             # Delete plugin from database
             session.delete(plugin)
             session.commit()
+
+    def create_value_version(self, payload: dict):
+        #  validate at model declaration
+        assert "field_id" in payload, "field_id is required"
+        with Session(self.db_engine) as session:
+            value_version = ValueVersion(**payload)
+            session.add(value_version)
+            session.commit()
+            session.refresh(value_version)
+
+            return value_version.to_dict()
+
+    def get_value_versions(
+        self,
+        field_id: str,
+        search: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ):
+        with Session(self.db_engine) as session:
+            stmt = select(ValueVersion).where(ValueVersion.field_id == field_id)
+            if search:
+                stmt = stmt.where(ValueVersion.name.ilike(f"%{search}%"))
+
+            stmt = stmt.order_by(ValueVersion.created_at.desc()).limit(limit).offset(offset)
+            versions = session.execute(stmt).scalars().all()
+
+            return {
+                "versions": [version.to_dict() for version in versions],
+                "count": len(versions),
+                "search": search,
+                "limit": limit,
+                "offset": offset,
+            }
+
+    def get_latest_value_version(self, field_id: str):
+        with Session(self.db_engine) as session:
+            stmt = (
+                select(ValueVersion)
+                .where(ValueVersion.field_id == field_id)
+                .order_by(ValueVersion.updated_at.desc())
+                .limit(1)
+            )
+            version = session.execute(stmt).scalar_one_or_none()
+
+            if not version:
+                raise Exception(f"No SQL version found for field_id: {field_id}")
+
+            return version.to_dict()
+
+    def get_value_version(
+        self,
+        version_id: int,
+    ):
+        with Session(self.db_engine) as session:
+            version = session.get(ValueVersion, version_id)
+            if not version:
+                raise Exception(
+                    f"SQL version {version_id} not found",
+                )
+            return version.to_dict()
+
+    def update_value_version(
+        self,
+        version_id: int,
+        payload: dict,
+    ):
+
+        with Session(self.db_engine) as session:
+            version = session.get(ValueVersion, version_id)
+            if not version:
+                raise Exception(
+                    f"SQL version {version_id} not found",
+                )
+
+            # Update fields if provided
+            for field in payload.keys():
+                if field in payload:
+                    setattr(version, field, payload[field])
+
+            version.updated_at = datetime.now()
+            session.commit()
+            session.refresh(version)
+
+            return version.to_dict()
+
+    def delete_value_version(self, version_id: int):
+        with Session(self.db_engine) as session:
+            version = session.get(ValueVersion, version_id)
+            if not version:
+                raise Exception(
+                    f"SQL version {version_id} not found",
+                )
+
+            session.delete(version)
+            session.commit()
+
+            return {
+                "success": True,
+                "message": f"SQL version {version_id} deleted",
+            }

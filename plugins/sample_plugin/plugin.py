@@ -9,13 +9,6 @@ from jinja2 import DictLoader, Environment
 
 from plugins import ui_schema
 
-from .models import (
-    sync_database,
-    create_value_version,
-    get_value_version,
-    get_value_versions,
-    update_value_version,
-)
 from .data import JSON_TPL, SQL_TPL, YAML_TPL, MD_TPL, countries
 
 
@@ -141,10 +134,6 @@ class Plugin:
             "MyClass": MyClass,
             "get_users": lambda: ["tupt", "cuongnv"],
             "get_cities_by_country": lambda country_name: countries.get(country_name, []),
-            "get_value_versions": get_value_versions,
-            "get_value_version": get_value_version,
-            "update_value_version": update_value_version,
-            "create_value_version": create_value_version,
         }
     )
 
@@ -155,7 +144,7 @@ class Plugin:
     @hookimpl
     @classmethod
     def install(cls) -> bool:
-        return sync_database()
+        return True
 
     @hookimpl
     @classmethod

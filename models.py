@@ -1,13 +1,14 @@
 from sqlalchemy import (
     Boolean,
     Integer,
+    String,
     Text,
     CheckConstraint,
     text,
     Sequence,
     DateTime,
 )
-from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped
+from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped, Session
 from datetime import datetime
 
 
@@ -42,13 +43,13 @@ class Job(Base):
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
 
 
-class SqlVersion(Base):
-    __tablename__ = "sql_versions"
-
-    id: Mapped[int] = mapped_column(Integer, Sequence("sql_versions_id_seq"), primary_key=True)
+class ValueVersion(Base):
+    __tablename__ = "value_versions"
+    id: Mapped[int] = mapped_column(Integer, Sequence("value_versions_id_seq"), primary_key=True)
+    field_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
-    sql_query: Mapped[str] = mapped_column(Text, nullable=False)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP")
     )
@@ -57,3 +58,12 @@ class SqlVersion(Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     tags: Mapped[str | None] = mapped_column(Text)  # JSON stored as text
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "value": self.value,
+            "is_active": self.is_active,
+        }
