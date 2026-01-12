@@ -34,7 +34,7 @@ dotenv.load_dotenv()
 # Configure logging to show INFO and above messages
 logging.basicConfig(level=logging.DEBUG, handlers=[logging.NullHandler()])
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-import json
+
 
 manager = WSConnectionManager()
 
