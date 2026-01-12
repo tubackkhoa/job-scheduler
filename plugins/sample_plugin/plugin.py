@@ -24,6 +24,22 @@ PROJECT_NAME = "alpha-miner"
 hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
 
 
+def ui_schema_binding(field_path: list[str]):
+    return ui_schema(
+        {
+            "ui:field": "Version",
+            "model:binding": field_path,
+            "model:expr": {
+                "list": "j`{{ get_value_versions('${field_id}', '${search}', ${limit}, ${offset}) | tojson }}`",
+                "detail": "j`{{ get_value_version(${id}) | tojson }}`",
+                "create": "j`{{ create_value_version(${payload}) | tojson }}`",
+                "update": "j`{{ update_value_version(${id}, ${payload}) | tojson }}`",
+            },
+            "ui:options": {"size": 12},
+        }
+    )
+
+
 class Config(BaseModel):
     warmup_bars: int = 150
     extra_bars: int = 1
@@ -64,19 +80,7 @@ class Config(BaseModel):
     sql_id: int = Field(
         0,
         title="Search / Select SQL Version",
-        json_schema_extra=ui_schema(
-            {
-                "ui:field": "Version",
-                "model:binding": ["sql"],
-                "model:expr": {
-                    "list": "j`{{ get_value_versions('${field_id}', '${search}', ${limit}, ${offset}) | tojson }}`",
-                    "detail": "j`{{ get_value_version(${id}) | tojson }}`",
-                    "create": "j`{{ create_value_version(${payload}) | tojson }}`",
-                    "update": "j`{{ update_value_version(${id}, ${payload}) | tojson }}`",
-                },
-                "ui:options": {"size": 12},
-            }
-        ),
+        json_schema_extra=ui_schema_binding(["sql"]),
     )
     sql: str = Field(
         SQL_TPL,
@@ -89,6 +93,11 @@ class Config(BaseModel):
     yaml_template: str = Field(
         YAML_TPL,
         json_schema_extra=ui_schema({"ui:field": "Template", "type": "yaml"}),
+    )
+    md_id: int = Field(
+        0,
+        title="Search / Select Markdown Version",
+        json_schema_extra=ui_schema_binding(["md_template"]),
     )
     md_template: str = Field(
         MD_TPL,
