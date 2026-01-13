@@ -1,8 +1,18 @@
+from enum import Enum
 import os
 from typing import Optional
 
 import httpx
 
+class ModelType(str, Enum):
+    top10_assets = "top10_assets"
+    top5_assets = "top5_assets"
+    top41_assets = "top41_assets"
+    btc_model = "btc_model"
+    all = "all"
+
+    def __str__(self):
+        return self.value
 
 def _get_api_config(
     env: str = "production",
@@ -29,30 +39,35 @@ def list_trade_models(
     api_url: Optional[str] = None,
     api_key: Optional[str] = None,
     status: str = "active",
-):
-    url, key = _get_api_config(env, api_url, api_key)
-    resp = httpx.get(
-        f"{url}/api/trading-models",
-        params={"status": status},
-        headers={"Authorization": f"Bearer {key}"},
-        timeout=30,
+):  
+    versions = []
+    try:
+        url, key = _get_api_config(env, api_url, api_key)
+        resp = httpx.get(
+            f"{url}/api/trading-models",
+            params={"status": status},
+            headers={"Authorization": f"Bearer {key}"},
+            timeout=30,
     )
-    resp.raise_for_status()
-    result = resp.json()
-    items = result.get("data", []) if isinstance(result, dict) else result
-    return {
-        "versions": [
-            {"id": item.get("key") or item.get("id"), "name": item.get("name", ""), **item}
-            for item in items
-        ]
-    }
+        resp.raise_for_status()
+        result = resp.json()
+        items = result.get("data", []) if isinstance(result, dict) else result
+        for item in items:
+            versions.append({"id": item.get("key") or item.get("id"), "name": item.get("key", "")})
+        return {
+            "versions": versions
+        }
+    except Exception as e:
+        return {
+            "versions": [{'id': item.value, 'name': item.value} for item in ModelType]
+        }
 
 
 def create_trade_model(
     payload: dict,
-    env: str = "production",
     api_url: Optional[str] = None,
     api_key: Optional[str] = None,
+    env: str = "production",
 ):
     url, key = _get_api_config(env, api_url, api_key)
     payload.setdefault("status", "active")
@@ -69,9 +84,9 @@ def create_trade_model(
 
 def deactivate_trade_model(
     key: str,
-    env: str = "production",
     api_url: Optional[str] = None,
     api_key: Optional[str] = None,
+    env: str = "production",
 ):
     url, api_key_resolved = _get_api_config(env, api_url, api_key)
     resp = httpx.put(

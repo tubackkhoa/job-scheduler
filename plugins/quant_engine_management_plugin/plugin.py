@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Callable, Any
 import logging
 from pydantic import BaseModel
@@ -10,6 +11,13 @@ PROJECT_NAME = "quant_engine_management_plugin"
 
 hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
 
+
+class ModelEnv(str, Enum):
+    staging = "staging"
+    production = "production"
+    uat = "uat"
+    def __str__(self):
+        return self.value
 
 class Config(BaseModel):
     webhook_url: str = Field(
@@ -24,17 +32,19 @@ class Config(BaseModel):
         json_schema_extra=ui_schema({"ui:widget": "password", "ui:options": {"size": 6}}),
     )
 
+    env: ModelEnv = ModelEnv.staging
+
     model_type: str = Field(
         "",
         title="Model Type",
         json_schema_extra=ui_schema_crud(
             field_path=["model_type"],
             crud_exprs={
-                "list": "j`{{ list_trade_models('${webhook_url}', '${webhook_api_key}') | tojson }}`",
-                "create": "j`{{ create_trade_model('${webhook_url}', '${webhook_api_key}', ${payload}) | tojson }}`",
-                "delete": "j`{{ deactivate_trade_model('${webhook_url}', '${webhook_api_key}', '${key}') | tojson }}`",
+                "list": "{{ list_trade_models(env, webhook_url, webhook_api_key) | tojson }}",
+                "create": "{{ create_trade_model(payload, webhook_url, webhook_api_key, env) | tojson }}",
+                "delete": "{{ deactivate_trade_model(key, webhook_url, webhook_api_key, env) | tojson }}",
             },
-            deps=["webhook_url", "webhook_api_key"],
+            deps=["webhook_url", "webhook_api_key", "env"],
             ui_options={
                 "createSchema": {
                     "type": "object",
@@ -79,7 +89,10 @@ class Plugin:
     @classmethod
     def config(cls, json=None):
         return Config.model_validate(json or {})
-
+    @hookimpl
+    @classmethod
+    def roles(cls):
+        return {"admin"}
     @hookimpl
     @classmethod
     async def run(
