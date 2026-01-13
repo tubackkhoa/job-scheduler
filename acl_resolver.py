@@ -2,7 +2,7 @@ from typing import Any, Optional, TypedDict, Dict, Set, Literal, Union
 
 Role = Literal["admin", "job_editor", "field_editor"]
 PluginGlobals = Literal["get_plugins"]
-JobGlobals = Literal["apply_value_version_all_jobs"]
+JobGlobals = Literal["apply_value_version_all_jobs", "get_jobs_by_plugin_and_session"]
 FieldGlobals = Literal[
     "create_value_version", "get_value_version", "get_value_versions", "update_value_version"
 ]
@@ -39,7 +39,7 @@ ACL_TREE: AclTree = {
     },
     "job": {
         "roles": {"admin", "job_editor"},
-        "globals": {"apply_value_version_all_jobs"},
+        "globals": {"apply_value_version_all_jobs", "get_jobs_by_plugin_and_session"},
     },
     "field": {
         "roles": {"admin", "job_editor", "field_editor"},

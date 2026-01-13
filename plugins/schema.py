@@ -12,10 +12,12 @@ UIWidget = Literal[
     "updown",
     "range",
     "checkbox",
+    "hidden",
     "radio",
     "select",
     "checkboxes",
     "files",
+    "JobDetai",
 ]
 
 
@@ -24,6 +26,7 @@ class ModelExpr(TypedDict, total=False):
     detail: str
     create: str
     update: str
+    apply: str
 
 
 JSONUISchema = TypedDict(

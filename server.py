@@ -74,7 +74,10 @@ async def lifespan(app: FastAPI):
 
     # update ACL logic
     PluginManager.acl_resolver = ACLResolver(
-        job_globals={"apply_value_version_all_jobs": dao.apply_value_version_all_jobs},
+        job_globals={
+            "apply_value_version_all_jobs": dao.apply_value_version_all_jobs,
+            "get_jobs_by_plugin_and_session": dao.get_jobs_by_plugin_and_session,
+        },
         field_globals={
             "create_value_version": dao.create_value_version,
             "get_value_version": dao.get_value_version,
@@ -242,7 +245,7 @@ def schema(dao: DAOState, plugin_manager: PluginManagerState, session_id: int, p
     try:
         plugin = plugin_manager.get_plugin_instance(plugin_item.package)
         if plugin != None:
-            configs = dao.get_jobs_by_plugin_and_user(plugin_id, session_id)
+            configs = dao.get_jobs_by_plugin_and_session(plugin_id, session_id)
             if len(configs) == 0:
                 # add empty config so that when saving it will be new job
                 configs.append(
