@@ -293,13 +293,17 @@ class PluginManager:
         return cls.manager.get_plugin(package)
 
     @classmethod
-    def render(cls, roles: Optional[Set[Role]], template_str: str, env: Environment, payload: dict):
-        template_engine = env.from_string(template_str)
-        functions = (
+    def get_globals(cls, roles: Optional[Set[Role]]):
+        return (
             {}
             if cls.acl_resolver is None or roles is None
             else cls.acl_resolver.get_allowed_functions(roles)
         )
+
+    @classmethod
+    def render(cls, roles: Optional[Set[Role]], template_str: str, env: Environment, payload: dict):
+        template_engine = env.from_string(template_str)
+        functions = cls.get_globals(roles)
         # assign global function
         return template_engine.render(
             **functions,

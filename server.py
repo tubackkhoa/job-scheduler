@@ -73,7 +73,16 @@ async def lifespan(app: FastAPI):
     dao = DAO(db_engine)
 
     # update ACL logic
-    PluginManager.acl_resolver = ACLResolver(dao)
+    PluginManager.acl_resolver = ACLResolver(
+        job_globals={"apply_value_version_all_jobs": dao.apply_value_version_all_jobs},
+        field_globals={
+            "create_value_version": dao.create_value_version,
+            "get_value_version": dao.get_value_version,
+            "get_value_versions": dao.get_value_versions,
+            "update_value_version": dao.update_value_version,
+        },
+    )
+
     # create plugin_instance
     plugin_manager = PluginManager(
         dao,
@@ -250,14 +259,12 @@ def schema(dao: DAOState, plugin_manager: PluginManagerState, session_id: int, p
 
             # Built-in Jinja tags are provided by extensions
             env = plugin.env()
-
+            globals = {**plugin_manager.get_globals(plugin.roles()), **env.globals}
             return {
                 "schema": plugin.schema(),
                 "configs": configs,
                 "env": {
-                    "globals": {
-                        name: describe_callable(value) for name, value in env.globals.items()
-                    },
+                    "globals": {name: describe_callable(value) for name, value in globals.items()},
                     "filters": {
                         name: describe_callable(value) for name, value in env.filters.items()
                     },
