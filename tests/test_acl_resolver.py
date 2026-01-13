@@ -6,7 +6,7 @@ from acl_resolver import ACLResolver, Role
 
 
 @pytest.fixture
-def node_globals():
+def plugin_globals():
     return {"get_plugins": MagicMock(name="get_plugins_func")}
 
 
@@ -26,9 +26,9 @@ def field_globals():
 
 
 @pytest.fixture
-def acl_resolver(node_globals, job_globals, field_globals):
+def acl_resolver(plugin_globals, job_globals, field_globals):
     return ACLResolver(
-        node_globals=node_globals,
+        plugin_globals=plugin_globals,
         job_globals=job_globals,
         field_globals=field_globals,
     )
