@@ -254,8 +254,8 @@ jobs:
         if: always()
         uses: appleboy/discord-action@master
         with:
-          webhook_id: ${{ secret.DISCORD_WEBHOOK_QUANT_ID }}
-          webhook_token: ${{ secret.DISCORD_WEBHOOK_QUANT_TOKEN }}
+          webhook_id: ${{ secrets.DISCORD_WEBHOOK_QUANT_ID }}
+          webhook_token: ${{ secrets.DISCORD_WEBHOOK_QUANT_TOKEN }}
           username: GitBot
           message: |
             <@${{ env.PIC_ADMIN }}> ${{ job.status == 'success' && ':white_check_mark:' || ':x:' }} **${{ env.CHART_NAME }}** — `${{ env.ENV_NAME }}`
