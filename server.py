@@ -236,12 +236,12 @@ def template(
     plugin_instance = plugin_manager.get_plugin_instance(package)
     template_str = payload.template
     if plugin_instance is None:
-        return {"result": template_str}
+        return template_str
     try:
         result = plugin_manager.render(
             plugin_instance.roles(), template_str, plugin_instance.env(), payload.params
         )
-        return {"result": result}
+        return result
     except Exception as e:
         raise HTTPException(
             status_code=400,
