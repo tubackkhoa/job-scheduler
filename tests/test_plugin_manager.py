@@ -5,7 +5,10 @@ import sys
 import asyncio
 import logging
 
+from sqlalchemy import create_engine
+
 # Import the PluginManager and extract_package_files
+from models import DAO
 from plugin_manager import PluginManager, extract_package_files
 
 
@@ -16,7 +19,9 @@ class TestPluginManager(unittest.TestCase):
             PluginManager.manager.unregister(plugin, name)
         # Use an in-memory SQLite for tests
         self.db_url = "sqlite:///:memory:"
-        self.pm = PluginManager(self.db_url, module_paths=["tests.plugins"], plugin_path="plugins")
+        self.pm = PluginManager(
+            DAO(create_engine(self.db_url)), module_paths=["tests.plugins"], plugin_path="plugins"
+        )
 
     @patch("plugin_manager.glob.glob")
     @patch("plugin_manager.zipfile.ZipFile")

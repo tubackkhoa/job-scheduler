@@ -1,19 +1,19 @@
 import asyncio
 from ctypes import ArgumentError
+from functools import partial
 import importlib
 import json
 import logging
 import subprocess
 import sys
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Optional, Set
 import pluggy
 from pydantic import BaseModel
 from apscheduler.util import undefined
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from jinja2 import Environment
-from sqlalchemy import Engine, create_engine, select
-from sqlalchemy.orm import Session
-from models import Job, Plugin
+from acl_resolver import ACLResolver, Role
+from models import DAO, Plugin
 import zipfile
 import tarfile
 import glob
@@ -149,6 +149,9 @@ class PluginSpec:
     ) -> Any: ...
 
     @hookspec
+    def roles(cls) -> Optional[Set[Role]]: ...
+
+    @hookspec
     async def install(cls) -> bool: ...
 
     @hookspec
@@ -176,15 +179,14 @@ class PluginManager:
     #     finally:
     #         lock.release()
 
-    _active_job_cache: Dict[int, str] = {}
-    env: Dict[str, Any] = {}
+    acl_resolver: Optional[ACLResolver] = None
     # static pluggy manager, so that all pluginmanager share the same plugins
     manager = pluggy.PluginManager(PROJECT_NAME)
     manager.add_hookspecs(PluginSpec)
 
     def __init__(
         self,
-        db_engine: Engine | str,
+        dao: DAO,
         module_paths: Optional[list[str]] = None,
         plugin_path="plugins",
         log_handler: Optional[logging.Handler] = None,
@@ -197,7 +199,7 @@ class PluginManager:
                 if path and path not in sys.path:
                     sys.path.insert(0, path)
         self.plugin_path = plugin_path
-        self.db_engine = create_engine(db_engine) if isinstance(db_engine, str) else db_engine
+        self.dao = dao
         # Pass any additional user-provided args
         self.scheduler = AsyncIOScheduler(**(scheduler_kwargs or {}))
         self.log_handler = log_handler
@@ -209,7 +211,7 @@ class PluginManager:
         Useful for initial load or after a restart.
         """
         # Register all plugins from the database
-        all_plugins = self.get_all_plugins()
+        all_plugins = self.dao.get_all_plugins()
         look_up = {}
         for plugin in all_plugins:
             print(f"Loading plugin: {plugin.package}")
@@ -220,10 +222,10 @@ class PluginManager:
                 continue
             look_up[plugin.id] = plugin
 
-        all_jobs = self.get_all_jobs()
+        all_jobs = self.dao.get_all_jobs()
 
         for job in all_jobs:
-            self.add_job_instance(job, look_up[job.plugin_id])
+            self.add_job_instance(job.id, job.active, look_up[job.plugin_id])
 
     def start(self):
         self.scheduler.start()
@@ -236,52 +238,33 @@ class PluginManager:
         if not version:
             raise ArgumentError("Please provide a version")
 
-        # Detect VCS requirement directly from version
         is_vcs = version.startswith(("git+", "github+"))
 
-        if is_vcs:
-            requirement = version
-            ref = version.rsplit("@", 1)[-1]
-            target_dir = f"{self.plugin_path}/{name}@{ref}"
-        else:
-            version_underscore = version.replace(".", "_")
-            target_dir = f"{self.plugin_path}/{name}@{version_underscore}"
-            requirement = f"{name}=={version}"
+        ref = version.rsplit("@", 1)[-1] if is_vcs else version.replace(".", "_")
+        requirement = version if is_vcs else f"{name}=={version}"
+        target_dir = f"{self.plugin_path}/{name}@{ref}"
 
         os.makedirs(target_dir, exist_ok=True)
 
-        if is_vcs:
-            # For git URLs, use install --target (works with private repos)
-            args = [
-                "uv",
-                "pip",
-                "install",
-                requirement,
-                "--target",
-                target_dir,
-                "--no-deps",
-            ]
-        else:
-            # For regular packages, use download
-            args = [
-                "uv",
-                "pip",
-                "download",
-                requirement,
-                "--dest",
-                target_dir,
-                "--no-deps",
-            ]
+        args = [
+            "uv",
+            "pip",
+            "install" if is_vcs else "download",
+            requirement,
+            "--target" if is_vcs else "--dest",
+            target_dir,
+            "--no-deps",
+        ]
 
-        scheduler_logger.info(f"Downloading into {target_dir} ...")
+        scheduler_logger.info("Downloading into %s ...", target_dir)
 
         result = subprocess.run(args, capture_output=True, text=True)
 
-        if result.returncode == 0:
-            return extract_package_files(target_dir) if not is_vcs else True
+        if result.returncode != 0:
+            scheduler_logger.error("Download failed: %s", result.stderr)
+            return False
 
-        scheduler_logger.error(f"Download failed: {result.stderr}")
-        return False
+        return True if is_vcs else extract_package_files(target_dir)
 
     @staticmethod
     def get_job_scheduler_id(job_id: int) -> str:
@@ -310,13 +293,19 @@ class PluginManager:
         return cls.manager.get_plugin(package)
 
     @classmethod
-    def render(cls, template_str: str, env: Environment, payload: dict):
-        template_engine = env.from_string(template_str)
-        # assign global function
-        return template_engine.render(
-            **cls.env,
-            **payload,
+    def get_globals(cls, roles: Optional[Set[Role]]):
+        return (
+            {}
+            if cls.acl_resolver is None or roles is None
+            else cls.acl_resolver.get_allowed_functions(roles)
         )
+
+    @classmethod
+    def render(cls, roles: Optional[Set[Role]], template_str: str, env: Environment, payload: dict):
+        template_engine = env.from_string(template_str)
+        functions = cls.get_globals(roles)
+        # assign global function
+        return template_engine.render(**functions, **payload, this=payload)
 
     @classmethod
     def run_plugin_job(cls, package: str, job_id: int):
@@ -329,7 +318,7 @@ class PluginManager:
         if plugin is None:
             return None
 
-        job_config = cls._active_job_cache.get(job_id)
+        job_config = DAO.job_config_cache.get(job_id)
 
         if job_config is None:
             # No active job means no config to run this plugin instance for this user
@@ -347,7 +336,8 @@ class PluginManager:
             logger.setLevel(logging.INFO)
 
         try:
-            retval = asyncio.run(plugin.run(config, logger, cls.render))
+            render_function = partial(cls.render, plugin.roles())
+            retval = asyncio.run(plugin.run(config, logger, render_function))
             # logger.info(f"Job executed successfully (return value: {retval})")
             return retval
         except Exception as e:
@@ -386,18 +376,7 @@ class PluginManager:
         # load plugin override module to make sure new code if sharing the same module
         self.load_plugin(package, True)
         # Insert into DB
-        with Session(self.db_engine) as session:
-            plugin_row = Plugin(
-                package=package,
-                interval=interval,
-                description=description,
-            )
-
-            session.add(plugin_row)
-            session.flush()  # get ID
-            plugin_id = plugin_row.id
-            session.commit()
-            return plugin_id
+        return self.dao.add_plugin(package, interval, description)
 
     def add_job(
         self,
@@ -406,27 +385,14 @@ class PluginManager:
         config: str,
         description: Optional[str] = None,
     ):
-        with Session(self.db_engine) as session:
-            job = Job(
-                session_id=session_id,
-                plugin_id=plugin_id,
-                config=config,
-                active=False,
-                description=description,
-            )
-            session.add(job)
-            session.commit()
+        job_id = self.dao.add_job(session_id, plugin_id, config, description)
+        plugin = self.dao.get_plugin(plugin_id)
+        assert plugin is not None
+        self.add_job_instance(job_id, False, plugin)
 
-            plugin = session.get(Plugin, plugin_id)
-            assert plugin is not None
-            self.add_job_instance(job, plugin)
+    def add_job_instance(self, job_id: int, active: bool, plugin: Plugin):
 
-    def add_job_instance(self, job: Job, plugin: Plugin):
-
-        # update cache
-        self._active_job_cache[job.id] = job.config
-
-        job_scheduler_id = self.get_job_scheduler_id(job.id)
+        job_scheduler_id = self.get_job_scheduler_id(job_id)
         if self.scheduler.get_job(job_scheduler_id) is not None:
             return  # job already exists
 
@@ -449,8 +415,8 @@ class PluginManager:
             self.run_plugin_job,
             "interval",
             seconds=plugin.interval,
-            args=[plugin.package, job.id],
-            next_run_time=undefined if job.active else None,
+            args=[plugin.package, job_id],
+            next_run_time=undefined if active else None,
             id=job_scheduler_id,
             name=job_scheduler_id,
             coalesce=True,
@@ -458,29 +424,12 @@ class PluginManager:
             replace_existing=True,
         )
 
-    def update_job(self, id: int, config: str, description: Optional[str] = None):
-        with Session(self.db_engine) as session:
-            job = session.get(Job, id)
-            if job:
-                job.config = config
-                if description:
-                    job.description = description
-                self._active_job_cache[job.id] = job.config
-                session.commit()
-
     def remove_job(self, job_id: int):
-        with Session(self.db_engine) as session:
-            job = session.get(Job, job_id)
-            if not job:
-                return
-            session.delete(job)
-            session.commit()
-
+        self.dao.remove_job(job_id)
         # Remove the specific job from scheduler
         job_scheduler_id = self.get_job_scheduler_id(job_id)
         if self.scheduler.get_job(job_scheduler_id) is not None:
             self.scheduler.remove_job(job_scheduler_id)
-            self._active_job_cache.pop(job_id, None)
 
             # remove all handlers for this logger to save memory
             logger = logging.getLogger(job_scheduler_id)
@@ -495,92 +444,41 @@ class PluginManager:
             job_scheduler_id = self.get_job_scheduler_id(job_id)
             if self.scheduler.get_job(job_scheduler_id) is not None:
                 self.scheduler.remove_job(job_scheduler_id)
-            self._active_job_cache.pop(job_id, None)
 
     def activate_job(self, job_id: int):
-        with Session(self.db_engine) as session:
-            job = session.get(Job, job_id)
-            if not job:
-                return
+        if not self.dao.activate_job(job_id):
+            return
 
-            job.active = True
-            session.commit()
-
-            # Resume the job
-            job_scheduler_id = self.get_job_scheduler_id(job_id)
-            self.scheduler.resume_job(job_scheduler_id)
+        # Resume the job
+        job_scheduler_id = self.get_job_scheduler_id(job_id)
+        self.scheduler.resume_job(job_scheduler_id)
 
     def deactivate_job(self, job_id: int):
-        with Session(self.db_engine) as session:
-            job = session.get(Job, job_id)
-            if not job:
-                return
-
-            job.active = False
-            session.commit()
+        if not self.dao.deactivate_job(job_id):
+            return
 
         # Pause the job
         job_scheduler_id = self.get_job_scheduler_id(job_id)
         self.scheduler.pause_job(job_scheduler_id)
-
-    def get_jobs_for_plugin_and_user(self, plugin_id: int, session_id: int):
-        with Session(self.db_engine) as session:
-            jobs = (
-                session.query(Job)
-                .filter(
-                    Job.plugin_id == plugin_id,
-                    Job.session_id == session_id,
-                )
-                .all()
-            )
-            return jobs
-
-    def get_plugin_by_id(self, id: int):
-        with Session(self.db_engine) as session:
-            return session.get(Plugin, id)
-
-    def get_job_by_id(self, id: int):
-        with Session(self.db_engine) as session:
-            return session.get(Job, id)
-
-    def get_all_plugins(self):
-        with Session(self.db_engine) as session:
-            plugins = session.query(Plugin).all()
-            return plugins
-
-    def get_all_jobs(self):
-        with Session(self.db_engine) as session:
-            jobs = session.query(Job).all()
-            return jobs
 
     def delete_plugin(self, plugin_id: int):
         """
         Delete a plugin from the database and unload it from memory.
         Also removes all associated jobs.
         """
-        with Session(self.db_engine) as session:
-            plugin = session.get(Plugin, plugin_id)
-            if not plugin:
-                raise ValueError(f"Plugin with id {plugin_id} not found")
 
-            # Get all jobs for this plugin
-            jobs = session.query(Job).filter(Job.plugin_id == plugin_id).all()
+        # Get all jobs for this plugin
+        package, deleted_job_ids = self.dao.delete_plugin(plugin_id)
 
-            # Remove all jobs from scheduler and delete them
-            for job in jobs:
-                job_scheduler_id = self.get_job_scheduler_id(job.id)
-                if self.scheduler.get_job(job_scheduler_id) is not None:
-                    self.scheduler.remove_job(job_scheduler_id)
-                    self._active_job_cache.pop(job.id, None)
+        # Remove all jobs from scheduler and delete them
+        for job_id in deleted_job_ids:
+            job_scheduler_id = self.get_job_scheduler_id(job_id)
+            if self.scheduler.get_job(job_scheduler_id) is not None:
+                self.scheduler.remove_job(job_scheduler_id)
 
-                    # Remove logger handlers
-                    logger = logging.getLogger(job_scheduler_id)
-                    logger.handlers.clear()
-                session.delete(job)
+                # Remove logger handlers
+                logger = logging.getLogger(job_scheduler_id)
+                logger.handlers.clear()
 
-            # Unload plugin from memory
-            self.unload_plugin(plugin.package)
-
-            # Delete plugin from database
-            session.delete(plugin)
-            session.commit()
+        # Unload plugin from memory
+        self.unload_plugin(package)

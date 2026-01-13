@@ -1,3 +1,3 @@
-from .schema import ui_schema
+from .schema import ui_schema, ui_schema_crud
 
-__all__ = ["ui_schema"]
+__all__ = ["ui_schema", "ui_schema_crud"]
