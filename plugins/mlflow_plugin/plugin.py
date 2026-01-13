@@ -281,7 +281,7 @@ class Plugin:
         plugin = plugin_manager.load_plugin(ml_plugin.package)
         assert plugin
         plugin.env().globals["plugin_manager"] = plugin_manager
-        plugin_manager.add_job_instance(ml_job, ml_plugin)
+        plugin_manager.add_job_instance(ml_job.id, ml_job.active, ml_plugin)
 
     @hookimpl
     @classmethod
