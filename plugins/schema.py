@@ -19,7 +19,7 @@ UIWidget = Literal[
     "files",
 ]
 
-UIField = Literal["MLThresholdsTable", "MultiSelect", "Template", "Version", "Select"]
+UIField = Literal["MLThresholdsTable", "Template", "Version", "Select"]
 
 
 class ModelExpr(TypedDict, total=False):

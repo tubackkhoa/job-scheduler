@@ -39,7 +39,13 @@ class Config(BaseModel):
     quote_asset: str = "USDT"
     base_assets: List[str] = Field(
         default_factory=list,
-        json_schema_extra=ui_schema({"ui:field": "MultiSelect", "default": "BTC,ETH,SOL,BNB,LINK"}),
+        json_schema_extra=ui_schema(
+            {
+                "ui:field": "Select",
+                "default": "BTC,ETH,SOL,BNB,LINK",
+                "ui:options": {"multiple": True},
+            }
+        ),
     )
     country: str = Field(
         "USA",
@@ -55,8 +61,8 @@ class Config(BaseModel):
         default_factory=list,
         json_schema_extra=ui_schema(
             {
-                "ui:field": "MultiSelect",
-                "ui:options": {"size": 6},
+                "ui:field": "Select",
+                "ui:options": {"size": 6, "multiple": True},
                 "ui:expr": (
                     "{ default: {{ get_cities_by_country(country) }} }",
                     ["country"],  # dependency paths, can be many, eg : ["abc"], ["abc", "def"]

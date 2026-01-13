@@ -46,12 +46,24 @@ TODAY_PRICE_MAP = {
 class Config(BaseModel):
     base_assets: List[str] = Field(
         default_factory=list,
-        json_schema_extra=ui_schema({"ui:field": "MultiSelect", "default": "BTC,ETH,SOL,BNB,LINK"}),
+        json_schema_extra=ui_schema(
+            {
+                "ui:field": "Select",
+                "default": "BTC,ETH,SOL,BNB,LINK",
+                "ui:options": {"multiple": True},
+            }
+        ),
     )
     fees: float = 0.001
     bootstrap_windows: List[int] = Field(
         default_factory=list,
-        json_schema_extra=ui_schema({"ui:field": "MultiSelect", "default": [10, 20, 30, 60]}),
+        json_schema_extra=ui_schema(
+            {
+                "ui:field": "Select",
+                "default": [10, 20, 30, 60],
+                "ui:options": {"multiple": True},
+            }
+        ),
     )
     report: str = Field(
         """
