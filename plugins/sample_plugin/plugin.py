@@ -23,10 +23,10 @@ def ui_schema_binding(field_path: list[str]):
             "ui:field": "Version",
             "model:binding": field_path,
             "model:expr": {
-                "list": "j`{{ get_value_versions('${field_id}', '${search}', ${limit}, ${offset}) | tojson }}`",
-                "detail": "j`{{ get_value_version(${id}) | tojson }}`",
-                "create": "j`{{ create_value_version(${payload}) | tojson }}`",
-                "update": "j`{{ update_value_version(${id}, ${payload}) | tojson }}`",
+                "list": "{{ get_value_versions(field_id, search, limit, offset) | tojson }}",
+                "detail": "{{ get_value_version(id) | tojson }}",
+                "create": "{{ create_value_version(payload) | tojson }}",
+                "update": "{{ update_value_version(id, payload) | tojson }}",
             },
             "ui:options": {"size": 12},
         }
@@ -58,9 +58,7 @@ class Config(BaseModel):
                 "ui:field": "MultiSelect",
                 "ui:options": {"size": 6},
                 "ui:expr": (
-                    """
-            { default: j`{{ get_cities_by_country(country) }}` }
-        """,
+                    "{ default: {{ get_cities_by_country(country) }} }",
                     ["country"],  # dependency paths, can be many, eg : ["abc"], ["abc", "def"]
                 ),
             }
