@@ -176,4 +176,3 @@ def delete_value_version(db_engine: Engine, version_id: int):
             "success": True,
             "message": f"SQL version {version_id} deleted",
         }
-

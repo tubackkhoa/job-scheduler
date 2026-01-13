@@ -27,9 +27,15 @@ from models import (
     Plugin,
     ValueVersion,
     create_value_version,
+    delete_value_version,
     get_value_version,
     get_value_versions,
     update_value_version
+)
+from utils import (
+    list_trade_models,
+    create_trade_model,
+    deactivate_trade_model,
 )
 from plugin_manager import PluginManager
 from ws_manager import WSConnectionManager
@@ -137,6 +143,7 @@ async def lifespan(app: FastAPI):
             func.__name__: partial(func, db_engine)
             for func in [
                 create_value_version,
+                delete_value_version,
                 get_value_version,
                 get_value_versions,
                 update_value_version,
@@ -144,6 +151,13 @@ async def lifespan(app: FastAPI):
             ]
         }
     )
+
+    # Trade models API functions (no db_engine needed, use api_url/api_key directly)
+    plugin_manager.env.update({
+        "list_trade_models": list_trade_models,
+        "create_trade_model": create_trade_model,
+        "deactivate_trade_model": deactivate_trade_model,
+    })
 
     plugin_manager.reload_all_jobs()
 
