@@ -8,18 +8,20 @@ FieldGlobals = Literal[
 ]
 
 
-class ACLNodeField(TypedDict):
+class ACLNode(TypedDict):
     roles: Set[Role]
+    globals: Optional[Set[str]]
+
+
+class ACLNodeField(ACLNode):
     globals: Optional[Set[FieldGlobals]]
 
 
-class ACLNodeJob(TypedDict):
-    roles: Set[Role]
+class ACLNodeJob(ACLNode):
     globals: Optional[Set[JobGlobals]]
 
 
-class ACLNodePlugin(TypedDict):
-    roles: Set[Role]
+class ACLNodePlugin(ACLNode):
     globals: Optional[Set[PluginGlobals]]
 
 
@@ -68,7 +70,7 @@ class ACLResolver:
         allowed: Dict[str, Any] = {}
 
         for level in ACL_TREE.keys():  # type: ignore
-            node = ACL_TREE[level]
+            node: ACLNode = ACL_TREE[level]
             if not roles.isdisjoint(node["roles"]):
                 globals_set = node.get("globals")
                 if globals_set:
