@@ -222,7 +222,8 @@ def template(
     template_str = payload.template
     if plugin_instance is None:
         return {"result": template_str}
-
+    # update this for access all value
+    payload.params["this"] = payload.params
     try:
         result = plugin_manager.render(
             plugin_instance.roles(), template_str, plugin_instance.env(), payload.params
