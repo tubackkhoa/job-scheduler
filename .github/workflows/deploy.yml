@@ -20,6 +20,7 @@ env:
   PIC: "684700353148747791"
   # PIC_1: "596272320247758868"
   PIC_INFRA: "769401829540102154"
+  PIC_ADMIN: "266200643730014218"
 
 
 jobs:
@@ -216,6 +217,74 @@ jobs:
             • Run: ${{ env.RUN_URL }}
             ${{ job.status != 'success' && format('<@{}> please check deploy failure!', env.PIC, env.PIC_1, env.PIC_INFRA) || '' }}
 
+      - &get_pr_info
+        name: Get PR Info
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          echo "Fetching PR info for commit $GITHUB_SHA..."
+
+          # Fetch PR info
+          gh pr list --repo ${{ github.repository }} --search "${{ github.sha }}" --state merged --json number,title,url,author --limit 1 --template '{{range .}}PR_FOUND=true
+          PR_NUMBER={{.number}}
+          PR_TITLE={{.title}}
+          PR_URL={{.url}}
+          PR_AUTHOR={{.author.login}}
+          {{end}}' > pr_info.env || true
+
+          if [ -s pr_info.env ]; then
+            cat pr_info.env >> $GITHUB_ENV
+            echo "PR found."
+          else
+            echo "PR_FOUND=false" >> $GITHUB_ENV
+            echo "No PR found."
+          fi
+
+          echo "PUSHER_NAME=${{ github.actor }}" >> $GITHUB_ENV
+
+          if [[ "${{ github.event.forced }}" == "true" ]]; then
+            echo "IS_FORCE_PUSH=true" >> $GITHUB_ENV
+          else
+            echo "IS_FORCE_PUSH=false" >> $GITHUB_ENV
+          fi
+
+      - &notify_discord_enhanced
+        name: Notify Discord (Enhanced)
+        if: always()
+        uses: appleboy/discord-action@master
+        with:
+          webhook_id: ${{ secret.DISCORD_WEBHOOK_QUANT_ID }}
+          webhook_token: ${{ secret.DISCORD_WEBHOOK_QUANT_TOKEN }}
+          username: GitBot
+          message: |
+            <@${{ env.PIC_ADMIN }}> ${{ job.status == 'success' && ':white_check_mark:' || ':x:' }} **${{ env.CHART_NAME }}** — `${{ env.ENV_NAME }}`
+
+            ${{ env.IS_FORCE_PUSH == 'true' && '⚠️ **FORCE PUSH**' || '' }}
+            ${{ env.PR_FOUND == 'true' && format('🔀 **PR:** [#{0} {1}]({2}) by `{3}`', env.PR_NUMBER, env.PR_TITLE, env.PR_URL, env.PR_AUTHOR) || format('• **Pushed by:** `{0}`', env.PUSHER_NAME) }}
+
+            • Ref: `${{ github.ref_name }}`
+            • Commit: `${{ env.SHORT_COMMIT }}`
+            • Image: `${{ github.ref_name }}.${{ env.SHORT_COMMIT }}`
+            • Run: ${{ env.RUN_URL }}
+            ${{ job.status != 'success' && format('<@{}> please check deploy failure!', env.PIC_ADMIN) || '' }}
+
+
+  # ==========================
+  # Notify Code Change (PR/Force Push)
+  # ==========================
+  notify_code_change:
+    if: github.ref_type == 'branch' && github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    env:
+      ENV_NAME: main
+    steps:
+      - *checkout
+      - *install_gh_cli
+      - *set_short_commit
+      - *get_pr_info
+      - *notify_discord_enhanced
+
 
   # ==========================
   # Build Docker Images
@@ -266,5 +335,4 @@ jobs:
       - *set_short_commit
       - *run_deploy_vm_prod
       - *notify_single_prod
-
 
