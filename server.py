@@ -8,6 +8,7 @@ from fastapi import (
     FastAPI,
     Body,
     HTTPException,
+    Response,
     Request,
     WebSocket,
     WebSocketDisconnect,
@@ -241,7 +242,7 @@ def template(
         result = plugin_manager.render(
             plugin_instance.roles(), template_str, plugin_instance.env(), payload.params
         )
-        return result
+        return Response(content=result, media_type="text/plain")
     except Exception as e:
         raise HTTPException(
             status_code=400,
