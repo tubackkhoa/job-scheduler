@@ -305,10 +305,7 @@ class PluginManager:
         template_engine = env.from_string(template_str)
         functions = cls.get_globals(roles)
         # assign global function
-        return template_engine.render(
-            **functions,
-            **payload,
-        )
+        return template_engine.render(**functions, **payload, this=payload)
 
     @classmethod
     def run_plugin_job(cls, package: str, job_id: int):
