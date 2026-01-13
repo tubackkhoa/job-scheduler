@@ -17,7 +17,6 @@ UIWidget = Literal[
     "select",
     "checkboxes",
     "files",
-    "JobDetai",
 ]
 
 UIField = Literal["MLThresholdsTable", "MultiSelect", "Template", "Version", "Select"]
@@ -40,7 +39,7 @@ JSONUISchema = TypedDict(
         "default": Any,  # default value for uiSchema
         "ui:field": UIField,  # for render field
         "ui:widget": UIWidget,  # for render widget
-        "ui:expr": str | tuple[str, *tuple[list[str], ...]],  # expression with memo support
+        "ui:expr": str | tuple[str, list[str]],  # expression with memo support
         "ui:options": dict,  # standard ui:options for json_schema_form, mean other ui:option should be placed in here
         "model:binding": List[str],  # for binding element with path
         "model:deps": List[str],  # dependency field paths to inject into context
