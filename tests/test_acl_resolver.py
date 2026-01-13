@@ -7,7 +7,7 @@ from acl_resolver import ACLResolver, Role
 
 @pytest.fixture
 def plugin_globals():
-    return {"get_plugins": MagicMock(name="get_plugins_func")}
+    return {"get_all_plugins": MagicMock(name="get_all_plugins_func")}
 
 
 @pytest.fixture

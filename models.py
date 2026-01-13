@@ -35,6 +35,14 @@ class Plugin(Base):
         ),
     )
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "package": self.package,
+            "interval": self.interval,
+            "description": self.description,
+        }
+
 
 class Job(Base):
     __tablename__ = "jobs"

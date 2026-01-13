@@ -80,6 +80,7 @@ async def lifespan(app: FastAPI):
 
     # update ACL logic
     PluginManager.acl_resolver = ACLResolver(
+        plugin_globals={"get_all_plugins": dao.get_all_plugins},
         job_globals={
             "apply_value_version_all_jobs": dao.apply_value_version_all_jobs,
             "get_jobs_by_plugin_and_session": dao.get_jobs_by_plugin_and_session,
