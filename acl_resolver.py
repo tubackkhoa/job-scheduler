@@ -1,7 +1,7 @@
 from typing import Any, Optional, TypedDict, Dict, Set, Literal, Union
 
 Role = Literal["admin", "job_editor", "field_editor"]
-NodeGlobals = Literal["get_plugins"]
+PluginGlobals = Literal["get_plugins"]
 JobGlobals = Literal["apply_value_version_all_jobs"]
 FieldGlobals = Literal[
     "create_value_version", "get_value_version", "get_value_versions", "update_value_version"
@@ -20,7 +20,7 @@ class ACLNodeJob(TypedDict):
 
 class ACLNodePlugin(TypedDict):
     roles: Set[Role]
-    globals: Optional[Set[NodeGlobals]]
+    globals: Optional[Set[PluginGlobals]]
 
 
 class AclTree(TypedDict):
@@ -54,12 +54,12 @@ ACL_TREE: AclTree = {
 class ACLResolver:
     def __init__(
         self,
-        node_globals: Optional[Dict[str, Any]] = None,
-        job_globals: Optional[Dict[str, Any]] = None,
-        field_globals: Optional[Dict[str, Any]] = None,
+        plugin_globals: Optional[Dict[PluginGlobals, Any]] = None,
+        job_globals: Optional[Dict[JobGlobals, Any]] = None,
+        field_globals: Optional[Dict[FieldGlobals, Any]] = None,
     ):
-        self.globals_map: Dict[str, Dict[str, Any]] = {
-            "plugin": node_globals or {},
+        self.globals_map = {
+            "plugin": plugin_globals or {},
             "job": job_globals or {},
             "field": field_globals or {},
         }
