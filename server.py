@@ -23,6 +23,12 @@ from log_service import LogService
 from models import (
     Job,
 )
+from utils import (
+    list_trade_models,
+    create_trade_model,
+    deactivate_trade_model,
+)
+
 from plugin_manager import PluginManager
 from schemas import ConfigPayload, DownloadPayload, PluginCreatePayload, Settings, TemplatePayload
 from ws_manager import WSConnectionManager
@@ -77,6 +83,9 @@ async def lifespan(app: FastAPI):
         job_globals={
             "apply_value_version_all_jobs": dao.apply_value_version_all_jobs,
             "get_jobs_by_plugin_and_session": dao.get_jobs_by_plugin_and_session,
+            "list_trade_models": list_trade_models,
+            "create_trade_model": create_trade_model,
+            "deactivate_trade_model": deactivate_trade_model,
         },
         field_globals={
             "create_value_version": dao.create_value_version,
@@ -90,8 +99,10 @@ async def lifespan(app: FastAPI):
     plugin_manager = PluginManager(
         dao,
         log_handler=log_handler,
-        module_paths=settings.module_path.split(":"),
+        module_paths=settings.module_path.split(":") if settings.module_path else None,
     )
+
+    # Trade models API functions (no db_engine needed, use api_url/api_key directly)
 
     plugin_manager.reload_all_jobs()
 

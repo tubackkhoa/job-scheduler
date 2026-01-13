@@ -56,9 +56,12 @@ class Settings(BaseSettings):
     log_retention_days: int = 7
 
     # Required fields from your previous error
-    db_connection: str = Field(default=...)
-    module_path: str = ""
-    static_files: Optional[str] = Field(default=...)
+    db_connection: str = ""
+    module_path: Optional[str] = ""
+    static_files: Optional[str] = ""
 
     # Configuration for loading from a .env file
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+
+print(Settings())
