@@ -1,5 +1,5 @@
 function stdin_default({ useCallback, useState }, { Box, Button, TextField, Typography }, { buildJinjaContext }) {
-  return function({ registry }) {
+  return function({ registry, onChange, formData, fieldPathId }) {
     const render = useCallback(
       buildJinjaContext(
         registry.formContext.pluginPackage,
@@ -9,7 +9,7 @@ function stdin_default({ useCallback, useState }, { Box, Button, TextField, Typo
       [registry.formContext]
     );
     const [input, setInput] = useState(
-      `{{ get_all_plugins() | tolist | tojson }}`
+      formData || `{{ get_all_plugins() | tolist | tojson }}`
     );
     const [output, setOutput] = useState("");
     const [loading, setLoading] = useState(false);
@@ -33,6 +33,9 @@ function stdin_default({ useCallback, useState }, { Box, Button, TextField, Typo
         multiline: true,
         minRows: 4,
         value: input,
+        onBlur: () => {
+          onChange(input, fieldPathId.path);
+        },
         onChange: (e) => setInput(e.target.value),
         fullWidth: true
       }

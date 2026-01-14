@@ -37,7 +37,7 @@ def ui_schema_binding(field_path: list[str]):
 class Config(BaseModel):
 
     dynamic: str = Field(
-        ...,
+        "",
         json_schema_extra=ui_schema(
             {
                 "ui:field": "Dynamic",
