@@ -80,8 +80,10 @@ async def lifespan(app: FastAPI):
 
     # update ACL logic
     PluginManager.acl_resolver = ACLResolver(
+        plugin_globals={"get_all_plugins": dao.get_all_plugins},
         job_globals={
             "apply_value_version_all_jobs": dao.apply_value_version_all_jobs,
+            "get_jobs_by_plugin_and_session": dao.get_jobs_by_plugin_and_session,
             "list_trade_models": list_trade_models,
             "create_trade_model": create_trade_model,
             "deactivate_trade_model": deactivate_trade_model,
@@ -98,11 +100,10 @@ async def lifespan(app: FastAPI):
     plugin_manager = PluginManager(
         dao,
         log_handler=log_handler,
-        module_paths=settings.module_path.split(":"),
+        module_paths=settings.module_path.split(":") if settings.module_path else None,
     )
 
     # Trade models API functions (no db_engine needed, use api_url/api_key directly)
-    
 
     plugin_manager.reload_all_jobs()
 
@@ -194,7 +195,7 @@ def plugins(dao: DAOState):
 
 
 @app.post("/plugins")
-def create_plugin(plugin_manager: PluginManagerState, payload: PluginCreatePayload):
+def create_plugin(plugin_manager: PluginManagerState, payload: PluginCreatePayload = Body(...)):
     """
     Create a plugin record and load it into the PluginManager.
 
@@ -205,14 +206,6 @@ def create_plugin(plugin_manager: PluginManagerState, payload: PluginCreatePaylo
       "description": "Sample plugin"
     }
     """
-
-    required_keys = {"package", "interval"}
-    if not required_keys.issubset(payload):
-        raise HTTPException(
-            status_code=400,
-            detail="Missing required fields: package, interval",
-        )
-
     # Load into manager
     try:
         plugin_id = plugin_manager.add_plugin(
@@ -256,7 +249,7 @@ def schema(dao: DAOState, plugin_manager: PluginManagerState, session_id: int, p
     try:
         plugin = plugin_manager.get_plugin_instance(plugin_item.package)
         if plugin != None:
-            configs = dao.get_jobs_by_plugin_and_user(plugin_id, session_id)
+            configs = dao.get_jobs_by_plugin_and_session(plugin_id, session_id)
             if len(configs) == 0:
                 # add empty config so that when saving it will be new job
                 configs.append(

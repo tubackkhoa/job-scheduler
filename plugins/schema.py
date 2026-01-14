@@ -12,11 +12,14 @@ UIWidget = Literal[
     "updown",
     "range",
     "checkbox",
+    "hidden",
     "radio",
     "select",
     "checkboxes",
     "files",
 ]
+
+UIField = Literal["MLThresholdsTable", "MultiSelect", "Template", "Version", "Select"]
 
 
 class ModelExpr(TypedDict, total=False):
@@ -24,6 +27,7 @@ class ModelExpr(TypedDict, total=False):
     detail: str
     create: str
     update: str
+    apply: str
     delete: str
 
 
@@ -33,11 +37,9 @@ JSONUISchema = TypedDict(
         "type": Literal["string", "number", "sql", "markdown", "js", "yaml", "yml", "json"],
         "enum": list[Any],
         "default": Any,  # default value for uiSchema
-        "ui:field": Literal[
-            "Crud", "MLThresholdsTable", "MultiSelect", "Template", "Version"
-        ],  # for render field
+        "ui:field": UIField,  # for render field
         "ui:widget": UIWidget,  # for render widget
-        "ui:expr": str | tuple[str, *tuple[list[str], ...]],  # expression with memo support
+        "ui:expr": str | tuple[str, list[str]],  # expression with memo support
         "ui:options": dict,  # standard ui:options for json_schema_form, mean other ui:option should be placed in here
         "model:binding": List[str],  # for binding element with path
         "model:deps": List[str],  # dependency field paths to inject into context

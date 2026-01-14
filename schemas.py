@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     log_retention_days: int = 7
 
     # Required fields from your previous error
-    db_connection: Optional[str] = ""
+    db_connection: str = ""
     module_path: Optional[str] = ""
     static_files: Optional[str] = ""
 

@@ -35,6 +35,14 @@ class Plugin(Base):
         ),
     )
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "package": self.package,
+            "interval": self.interval,
+            "description": self.description,
+        }
+
 
 class Job(Base):
     __tablename__ = "jobs"
@@ -172,17 +180,12 @@ class DAO:
             session.commit()
             return job
 
-    def get_jobs_by_plugin_and_user(self, plugin_id: int, session_id: int):
+    def get_jobs_by_plugin_and_session(self, plugin_id: int, session_id: Optional[int] = None):
         with Session(self.db_engine) as session:
-            jobs = (
-                session.query(Job)
-                .filter(
-                    Job.plugin_id == plugin_id,
-                    Job.session_id == session_id,
-                )
-                .all()
-            )
-            return jobs
+            query = session.query(Job).filter(Job.plugin_id == plugin_id)
+            if session_id is not None:
+                query = query.filter(Job.session_id == session_id)
+            return query.all()
 
     def get_jobs_by_plugin(self, plugin_id: int):
         with Session(self.db_engine) as session:
@@ -296,7 +299,7 @@ class DAO:
                 "message": f"SQL version {version_id} deleted",
             }
 
-    def apply_value_version_all_jobs(self, version_id: int, jobs: List[Job]):
+    def apply_value_version_all_jobs(self, version_id: int, job_ids: List[int]):
         with Session(self.db_engine) as session:
             version = session.get(ValueVersion, version_id)
             if not version:
@@ -313,7 +316,10 @@ class DAO:
 
             updated_count = 0
 
-            for job in jobs:
+            for job_id in job_ids:
+                job = session.get(Job, job_id)
+                if not job:
+                    continue
                 config = json.loads(job.config) if job.config else {}
                 config[field_name] = int(version_id)
                 job.config = json.dumps(config)
