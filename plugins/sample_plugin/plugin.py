@@ -1,5 +1,6 @@
 import json
 import logging
+from pathlib import Path
 import pluggy
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 from typing import Any, Callable, List
@@ -9,7 +10,7 @@ from jinja2 import DictLoader, Environment
 
 from plugins import ui_schema
 
-from .data import JSON_TPL, SQL_TPL, YAML_TPL, MD_TPL, countries
+from .data import JSON_TPL, SQL_TPL, YAML_TPL, MD_TPL, countries, tolist
 
 
 PROJECT_NAME = "alpha-miner"
@@ -34,6 +35,19 @@ def ui_schema_binding(field_path: list[str]):
 
 
 class Config(BaseModel):
+
+    dynamic: str = Field(
+        ...,
+        json_schema_extra=ui_schema(
+            {
+                "ui:field": "Dynamic",
+                "ui:options": {
+                    "code": Path(__file__).parent.joinpath("field.js").read_text(),
+                    "size": 12,
+                },
+            }
+        ),
+    )
     warmup_bars: int = 150
     extra_bars: int = 1
     quote_asset: str = "USDT"
@@ -144,6 +158,8 @@ class Plugin:
     _env.filters["in_clause"] = lambda values: (
         "()" if not values else "(" + ",".join(repr(v) for v in values) + ")"
     )
+
+    _env.filters["tolist"] = tolist
 
     @hookimpl
     @classmethod

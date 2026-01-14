@@ -150,3 +150,17 @@ MD_TPL = """
   }
 }
 """
+
+
+def pick(d, keys):
+    return {k: d[k] for k in keys if k in d}
+
+
+def tolist(obj, *include):
+    result = []
+    for item in obj:
+        data = item.to_dict()
+        if include:
+            data = pick(data, include)
+        result.append(data)
+    return result
