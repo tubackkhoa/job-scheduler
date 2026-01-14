@@ -223,7 +223,6 @@ class PluginManager:
             look_up[plugin.id] = plugin
 
         all_jobs = self.dao.get_all_jobs()
-
         for job in all_jobs:
             self.add_job_instance(job.id, job.active, look_up[job.plugin_id])
 
@@ -411,6 +410,7 @@ class PluginManager:
                 logger.addHandler(self.log_handler)
 
         # replace_existing allow override
+        print("add job", job_scheduler_id)
         self.scheduler.add_job(
             self.run_plugin_job,
             "interval",
