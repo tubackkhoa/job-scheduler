@@ -196,7 +196,7 @@ def plugins(dao: DAOState):
 
 
 @app.post("/plugins")
-def create_plugin(plugin_manager: PluginManagerState, payload: PluginCreatePayload):
+def create_plugin(plugin_manager: PluginManagerState, payload: PluginCreatePayload = Body(...)):
     """
     Create a plugin record and load it into the PluginManager.
 
@@ -207,14 +207,6 @@ def create_plugin(plugin_manager: PluginManagerState, payload: PluginCreatePaylo
       "description": "Sample plugin"
     }
     """
-
-    required_keys = {"package", "interval"}
-    if not required_keys.issubset(payload):
-        raise HTTPException(
-            status_code=400,
-            detail="Missing required fields: package, interval",
-        )
-
     # Load into manager
     try:
         plugin_id = plugin_manager.add_plugin(

@@ -62,6 +62,3 @@ class Settings(BaseSettings):
 
     # Configuration for loading from a .env file
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-
-
-print(Settings())
