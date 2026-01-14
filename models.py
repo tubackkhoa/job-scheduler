@@ -180,17 +180,12 @@ class DAO:
             session.commit()
             return job
 
-    def get_jobs_by_plugin_and_session(self, plugin_id: int, session_id: int):
+    def get_jobs_by_plugin_and_session(self, plugin_id: int, session_id: Optional[int] = None):
         with Session(self.db_engine) as session:
-            jobs = (
-                session.query(Job)
-                .filter(
-                    Job.plugin_id == plugin_id,
-                    Job.session_id == session_id,
-                )
-                .all()
-            )
-            return jobs
+            query = session.query(Job).filter(Job.plugin_id == plugin_id)
+            if session_id is not None:
+                query = query.filter(Job.session_id == session_id)
+            return query.all()
 
     def get_jobs_by_plugin(self, plugin_id: int):
         with Session(self.db_engine) as session:
