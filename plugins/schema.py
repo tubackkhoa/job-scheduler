@@ -82,15 +82,15 @@ def ui_schema_crud(
             ),
         )
     """
-    default_exprs = {
-        "list": "j`{{ get_value_versions('${field_id}', '${search}', ${limit}, ${offset}) | tojson }}`",
-        "detail": "j`{{ get_value_version(${id}) | tojson }}`",
-        "create": "j`{{ create_value_version(${payload}) | tojson }}`",
-        "update": "j`{{ update_value_version(${id}, ${payload}) | tojson }}`",
-        "delete": "j`{{ delete_value_version(${id}) | tojson }}`",
-    }
+    # default_exprs = {
+    #     "list": "j`{{ get_value_versions('${field_id}', '${search}', ${limit}, ${offset}) | tojson }}`",
+    #     "detail": "j`{{ get_value_version(${id}) | tojson }}`",
+    #     "create": "j`{{ create_value_version(${payload}) | tojson }}`",
+    #     "update": "j`{{ update_value_version(${id}, ${payload}) | tojson }}`",
+    #     "delete": "j`{{ delete_value_version(${id}) | tojson }}`",
+    # }
 
-    model_expr = {**default_exprs, **(crud_exprs or {})}
+    model_expr = {**(crud_exprs or {})}
 
     schema: dict = {
         "ui:field": "Crud",
