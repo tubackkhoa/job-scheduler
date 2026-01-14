@@ -250,10 +250,10 @@ def schema(dao: DAOState, plugin_manager: PluginManagerState, session_id: int, p
     try:
         plugin = plugin_manager.get_plugin_instance(plugin_item.package)
         if plugin != None:
-            configs = dao.get_jobs_by_plugin_and_session(plugin_id, session_id)
-            if len(configs) == 0:
+            jobs = dao.get_jobs_by_plugin_and_session(plugin_id, session_id)
+            if len(jobs) == 0:
                 # add empty config so that when saving it will be new job
-                configs.append(
+                jobs.append(
                     Job(
                         active=False,
                         description="",
@@ -269,7 +269,7 @@ def schema(dao: DAOState, plugin_manager: PluginManagerState, session_id: int, p
             globals = {**plugin_manager.get_globals(plugin.roles()), **env.globals}
             return {
                 "schema": plugin.schema(),
-                "configs": configs,
+                "jobs": jobs,
                 "env": {
                     "globals": {name: describe_callable(value) for name, value in globals.items()},
                     "filters": {
