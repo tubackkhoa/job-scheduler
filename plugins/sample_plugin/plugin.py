@@ -41,15 +41,15 @@ class DynamicCode(BaseModel):
             {
                 "ui:field": "Dynamic",
                 "code": Path(__file__).parent.joinpath("compile_plugin.js").read_text(),
+                # "url": "CompilePluginComponent.tsx",
                 "ui:options": {
                     "size": 6,
                 },
             }
         ),
     )
-
     dynamic: str = Field(
-        ...,
+        "",
         json_schema_extra=ui_schema(
             {
                 "ui:field": "Dynamic",
@@ -65,7 +65,8 @@ class DynamicCode(BaseModel):
 class Config(BaseModel):
 
     dynamic_code: DynamicCode = Field(
-        ..., json_schema_extra=ui_schema({"ui:options": {"size": 12, "section": True}})
+        ...,
+        json_schema_extra=ui_schema({"ui:options": {"size": 12, "section": True}}),
     )
 
     warmup_bars: int = 150
