@@ -187,11 +187,6 @@ class DAO:
                 query = query.filter(Job.session_id == session_id)
             return query.all()
 
-    def get_jobs_by_plugin(self, plugin_id: int):
-        with Session(self.db_engine) as session:
-            jobs = session.query(Job).filter(Job.plugin_id == plugin_id).all()
-            return jobs
-
     def get_job(self, id: int):
         with Session(self.db_engine) as session:
             return session.get(Job, id)

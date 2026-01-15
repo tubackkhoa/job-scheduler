@@ -1,4 +1,4 @@
-from typing import Any, Literal, TypedDict, List, cast
+from typing import Any, Literal, TypedDict, List, cast, Optional
 
 
 UIWidget = Literal[
@@ -51,55 +51,3 @@ JSONUISchema = TypedDict(
 
 def ui_schema(extra: JSONUISchema) -> dict:
     return cast(dict, extra)
-
-
-def ui_schema_crud(
-    field_path: list[str],
-    crud_exprs: dict[str, str] | None = None,
-    deps: list[str] | None = None,
-    ui_options: dict | None = None,
-) -> dict:
-    """
-    Generic CRUD field schema helper with full expression flexibility.
-
-    Args:
-        field_path: Path to the value field (e.g., ["model_type"])
-        crud_exprs: Dict of operation -> jinja expression. Keys: list, detail, create, update, delete
-                   Example: {"list": "j`{{ my_list_func('${field_id}') | tojson }}`"}
-        deps: List of dependency field paths to inject into context (e.g., ["api_url", "api_key"])
-        ui_options: Additional UI options (size, etc.)
-
-    Usage:
-        model_type_id: int = Field(
-            0,
-            json_schema_extra=ui_schema_crud(
-                field_path=["model_type"],
-                crud_exprs={
-                    "list": "j`{{ list_model_types('${field_id}', '${search}', ${api_url}) | tojson }}`",
-                    "create": "j`{{ sync_model_types(${api_url}, ${api_key}) | tojson }}`",
-                },
-                deps=["api_url", "api_key"],
-            ),
-        )
-    """
-    # default_exprs = {
-    #     "list": "j`{{ get_value_versions('${field_id}', '${search}', ${limit}, ${offset}) | tojson }}`",
-    #     "detail": "j`{{ get_value_version(${id}) | tojson }}`",
-    #     "create": "j`{{ create_value_version(${payload}) | tojson }}`",
-    #     "update": "j`{{ update_value_version(${id}, ${payload}) | tojson }}`",
-    #     "delete": "j`{{ delete_value_version(${id}) | tojson }}`",
-    # }
-
-    model_expr = {**(crud_exprs or {})}
-
-    schema: dict = {
-        "ui:field": "Crud",
-        "model:binding": field_path,
-        "model:expr": model_expr,
-        "ui:options": {"size": 12, **(ui_options or {})},
-    }
-
-    if deps:
-        schema["model:deps"] = deps
-
-    return ui_schema(cast(JSONUISchema, schema))
