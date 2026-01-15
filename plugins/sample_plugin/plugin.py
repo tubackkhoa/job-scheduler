@@ -34,20 +34,40 @@ def ui_schema_binding(field_path: list[str]):
     )
 
 
-class Config(BaseModel):
-
-    dynamic: str = Field(
+class DynamicCode(BaseModel):
+    code: str = Field(
         "",
         json_schema_extra=ui_schema(
             {
                 "ui:field": "Dynamic",
+                "code": Path(__file__).parent.joinpath("compile_plugin.js").read_text(),
                 "ui:options": {
-                    "code": Path(__file__).parent.joinpath("field.js").read_text(),
-                    "size": 12,
+                    "size": 6,
                 },
             }
         ),
     )
+
+    dynamic: str = Field(
+        ...,
+        json_schema_extra=ui_schema(
+            {
+                "ui:field": "Dynamic",
+                "ui:expr:code": ("{{ dynamic_code.code }}", ["dynamic_code.code"]),
+                "ui:options": {
+                    "size": 6,
+                },
+            }
+        ),
+    )
+
+
+class Config(BaseModel):
+
+    dynamic_code: DynamicCode = Field(
+        ..., json_schema_extra=ui_schema({"ui:options": {"size": 12, "section": True}})
+    )
+
     warmup_bars: int = 150
     extra_bars: int = 1
     quote_asset: str = "USDT"
