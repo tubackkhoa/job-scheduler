@@ -61,7 +61,7 @@ class Config(BaseModel):
             {
                 "ui:field": "Select",
                 "default": [10, 20, 30, 60],
-                "ui:options": {"multiple": True},
+                "ui:options": {"multiple": True, "size": 6},
             }
         ),
     )
@@ -182,6 +182,11 @@ class Plugin:
     @classmethod
     def schema(cls):
         return Config.model_json_schema()
+
+    @hookimpl
+    @classmethod
+    def roles(cls):
+        return None
 
     @hookimpl
     @classmethod
