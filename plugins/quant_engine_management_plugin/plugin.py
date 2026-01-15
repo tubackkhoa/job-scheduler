@@ -113,7 +113,7 @@ class Config(BaseModel):
         "",
         title="Model Type",
         json_schema_extra=ui_schema_crud(
-            field_code=Path(__file__).parent.joinpath("crud.js").read_text(),
+            field_url=Path(__file__).parent.joinpath("crud.js").read_text(),
             # field_url="CrudField.tsx",
             field_path=["model_type"],
             crud_exprs={
