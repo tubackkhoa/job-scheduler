@@ -16,6 +16,7 @@ class ModelEnv(str, Enum):
     staging = "staging"
     production = "production"
     uat = "uat"
+    uat_test = "forward_test"
     def __str__(self):
         return self.value
 
@@ -33,6 +34,21 @@ class Config(BaseModel):
     )
 
     env: ModelEnv = ModelEnv.staging
+
+
+    # webhook_test_apikey: str = Field(
+    #     "",
+    #     title="Test API Key",
+    #     json_schema_extra=ui_schema({
+    #         "ui:widget": "password",
+    #         "ui:options": {"size": 6},
+    #         "ui:expr": (
+    #             """{"ui:classNames": '{{ "hidden" if env != "uat_testing_multiple_models" else "" }}', "default": {{ webhook_api_key | tojson if env != "uat_testing_multiple_models" else "" | tojson }}}""",
+    #             ["env", "webhook_api_key"],
+    #         ),
+    #     }),
+    # )
+
 
     model_type: str = Field(
         "",

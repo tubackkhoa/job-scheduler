@@ -391,6 +391,11 @@ def update_config(
         if not plugin:
             raise HTTPException(status_code=404, detail="Plugin not found")
         config = plugin.config(payload.config)
+        
+        # Validate config if plugin has validate method
+        if hasattr(plugin, 'validate'):
+            plugin.validate(config)
+        
         if job_id == 0:
             plugin_manager.add_job(
                 session_id,

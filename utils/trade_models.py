@@ -14,6 +14,10 @@ class ModelType(str, Enum):
     def __str__(self):
         return self.value
 
+def _is_test_env(env: str) -> bool:
+    return env == "forward_test"
+
+
 def _get_api_config(
     env: str = "production",
     api_url: Optional[str] = None,
@@ -43,24 +47,34 @@ def list_trade_models(
     versions = []
     try:
         url, key = _get_api_config(env, api_url, api_key)
-        resp = httpx.get(
-            f"{url}/api/trading-models",
-            params={"status": status},
-            headers={"Authorization": f"Bearer {key}"},
-            timeout=30,
-    )
+        if _is_test_env(env):
+            # Test env: GET /api/test-system/models?status=running
+            resp = httpx.get(
+                f"{url}/api/test-system/models",
+                params={"status": "running"},
+                headers={"test-system-api-key": key},
+                timeout=30,
+            )
+        else:
+            resp = httpx.get(
+                f"{url}/api/trading-models",
+                params={"status": status},
+                headers={"Authorization": f"Bearer {key}"},
+                timeout=30,
+            )
         resp.raise_for_status()
         result = resp.json()
-        items = result.get("data", []) if isinstance(result, dict) else result
-        for item in items:
-            versions.append({"id": item.get("key") or item.get("id"), "name": item.get("key", "")})
-        return {
-            "versions": versions
-        }
+        if _is_test_env(env):
+            items = result.get("models", [])
+            for item in items:
+                versions.append({"id": item.get("identity"), "name": item.get("identity", "")})
+        else:
+            items = result.get("data", []) if isinstance(result, dict) else result
+            for item in items:
+                versions.append({"id": item.get("key") or item.get("id"), "name": item.get("key", "")})
+        return {"versions": versions}
     except Exception as e:
-        return {
-            "versions": [{'id': item.value, 'name': item.value} for item in ModelType]
-        }
+        return {"versions": [{'id': item.value, 'name': item.value} for item in ModelType]}
 
 
 def create_trade_model(
@@ -70,6 +84,38 @@ def create_trade_model(
     env: str = "production",
 ):
     url, key = _get_api_config(env, api_url, api_key)
+    print(payload)
+    
+    if _is_test_env(env):
+        # Test env: POST /api/test-system/model
+        headers = {"test-system-api-key": key, "Content-Type": "application/json"}
+        identity = payload.get("key", payload.get("key", ""))
+        test_payload = {
+            "modelName": identity,
+            "identity": identity,
+            "tag": payload.get("tag", ""),
+            "version": "1",
+        }
+        resp = httpx.post(
+            f"{url}/api/test-system/model",
+            headers=headers,
+            json=test_payload,
+            timeout=30,
+        )
+        if "exist" in resp.text.lower() or resp.status_code == 409:
+            start_resp = httpx.post(
+                f"{url}/api/test-system/model/start",
+                headers=headers,
+                json={"identity": identity},
+                timeout=30,
+            )
+            start_resp.raise_for_status()
+            return {"id": identity, "name": identity, "started": True}
+        resp.raise_for_status()
+        result = resp.json()
+        return {"id": result.get("key") or result.get("id") or identity, "name": identity, **result}
+    
+    # Production: POST /api/trading-models
     payload.setdefault("status", "active")
     resp = httpx.post(
         f"{url}/api/trading-models",
@@ -89,11 +135,23 @@ def deactivate_trade_model(
     env: str = "production",
 ):
     url, api_key_resolved = _get_api_config(env, api_url, api_key)
-    resp = httpx.put(
-        f"{url}/api/trading-models/key/{key}",
-        json={"status": "inactive"},
-        headers={"quant-api-key": api_key_resolved},
-        timeout=30,
-    )
+    
+    if _is_test_env(env):
+        # Test env: POST /api/test-system/model/stop
+        resp = httpx.post(
+            f"{url}/api/test-system/model/stop",
+            headers={"test-system-api-key": api_key_resolved, "Content-Type": "application/json"},
+            json={"identity": key, "unlockCredential": True},
+            timeout=30,
+        )
+    else:
+        # Production: PUT /api/trading-models/key/{key}
+        resp = httpx.put(
+            f"{url}/api/trading-models/key/{key}",
+            json={"status": "inactive"},
+            headers={"quant-api-key": api_key_resolved},
+            timeout=30,
+        )
+    
     resp.raise_for_status()
     return {"success": True, "message": f"Trade model {key} deactivated"}

@@ -157,6 +157,14 @@ class PluginSpec:
     @hookspec
     async def uninstall(cls) -> bool: ...
 
+    @hookspec
+    def validate(cls, config: BaseModel) -> None:
+        """
+        Optional hook for validating job configuration before saving.
+        Should raise an exception if validation fails.
+        """
+        ...
+
 
 class PluginManager:
     """
@@ -224,6 +232,9 @@ class PluginManager:
 
         all_jobs = self.dao.get_all_jobs()
         for job in all_jobs:
+            # Populate job config cache so jobs can run after restart
+            if job.config:
+                DAO.job_config_cache[job.id] = job.config
             self.add_job_instance(job.id, job.active, look_up[job.plugin_id])
 
     def start(self):
@@ -384,10 +395,20 @@ class PluginManager:
         config: str,
         description: Optional[str] = None,
     ):
+        # Get plugin to check for validation
+        plugin_model = self.dao.get_plugin(plugin_id)
+        assert plugin_model is not None
+        
+        plugin_instance = self.get_plugin_instance(plugin_model.package)
+        if plugin_instance and hasattr(plugin_instance, 'validate'):
+            # Parse config and validate if plugin has validate method
+            config_dict = json.loads(config)
+            parsed_config = plugin_instance.config(config_dict)
+            plugin_instance.validate(parsed_config)
+        
+        # Proceed with saving job
         job_id = self.dao.add_job(session_id, plugin_id, config, description)
-        plugin = self.dao.get_plugin(plugin_id)
-        assert plugin is not None
-        self.add_job_instance(job_id, False, plugin)
+        self.add_job_instance(job_id, False, plugin_model)
 
     def add_job_instance(self, job_id: int, active: bool, plugin: Plugin):
 
@@ -409,8 +430,8 @@ class PluginManager:
             if self.log_handler not in logger.handlers:
                 logger.addHandler(self.log_handler)
 
+
         # replace_existing allow override
-        print("add job", job_scheduler_id)
         self.scheduler.add_job(
             self.run_plugin_job,
             "interval",
