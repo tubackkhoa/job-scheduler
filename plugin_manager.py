@@ -232,6 +232,9 @@ class PluginManager:
 
         all_jobs = self.dao.get_all_jobs()
         for job in all_jobs:
+            # Populate job config cache so jobs can run after restart
+            if job.config:
+                DAO.job_config_cache[job.id] = job.config
             self.add_job_instance(job.id, job.active, look_up[job.plugin_id])
 
     def start(self):
@@ -427,8 +430,8 @@ class PluginManager:
             if self.log_handler not in logger.handlers:
                 logger.addHandler(self.log_handler)
 
+
         # replace_existing allow override
-        print("add job", job_scheduler_id)
         self.scheduler.add_job(
             self.run_plugin_job,
             "interval",
