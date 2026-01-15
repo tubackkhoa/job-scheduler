@@ -1,5 +1,9 @@
 from typing import Any, Optional, TypedDict, Dict, Set, Literal, Union
-
+from utils import (
+    list_trade_models,
+    create_trade_model,
+    deactivate_trade_model,
+)
 from models import DAO
 
 

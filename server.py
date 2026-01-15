@@ -24,11 +24,6 @@ from log_service import LogService
 from models import (
     Job,
 )
-from utils import (
-    list_trade_models,
-    create_trade_model,
-    deactivate_trade_model,
-)
 
 from plugin_manager import PluginManager
 from schemas import ConfigPayload, DownloadPayload, PluginCreatePayload, Settings, TemplatePayload
