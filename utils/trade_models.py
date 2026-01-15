@@ -15,7 +15,7 @@ class ModelType(str, Enum):
         return self.value
 
 def _is_test_env(env: str) -> bool:
-    return env == "uat_testing_multiple_models"
+    return env == "forward_test"
 
 
 def _get_api_config(

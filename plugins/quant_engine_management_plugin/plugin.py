@@ -16,7 +16,7 @@ class ModelEnv(str, Enum):
     staging = "staging"
     production = "production"
     uat = "uat"
-    uat_test = "uat_testing_multiple_models"
+    uat_test = "forward_test"
     def __str__(self):
         return self.value
 
