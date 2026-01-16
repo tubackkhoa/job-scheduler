@@ -79,16 +79,16 @@ async def lifespan(app: FastAPI):
     dao = DAO(db_engine)
 
     # update ACL logic
-    adapter = (
-        Adapter(
+    adapter = None
+    if settings.redis_host:
+        from casbin_redis_adapter.adapter import Adapter
+
+        adapter = Adapter(
             host=settings.redis_host,
             port=settings.redis_port,
             db=settings.redis_db,
             key=f"{PROJECT_NAME}:job_policy",
         )
-        if settings.redis_host
-        else None
-    )
 
     PluginManager.acl_resolver = ACLResolver(dao, adapter)
 

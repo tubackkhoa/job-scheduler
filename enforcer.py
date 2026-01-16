@@ -1,7 +1,7 @@
 import importlib
 import inspect
 from casbin.fast_enforcer import FastEnforcer
-from casbin_redis_adapter.adapter import Adapter
+from casbin.persist import Adapter
 from casbin.enforcer import Enforcer
 from functools import wraps
 from jinja2 import pass_context
