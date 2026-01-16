@@ -1,16 +1,23 @@
+import os
+import tempfile
 import pytest
 from unittest.mock import MagicMock
-from typing import Dict, Callable
+from casbin.persist.adapters import FileAdapter
 
 from acl_resolver import ACLResolver
 from enforcer import ExecutionContext
+
+
+# --------------------
+# Fixtures
+# --------------------
 
 
 @pytest.fixture
 def dao():
     dao = MagicMock()
     dao.get_all_plugins = MagicMock(name="get_all_plugins")
-    dao.apply_value_version_all_jobs = MagicMock(name="apply_value_version_all_jobs")
+    dao.apply_value_version_all_jobs = MagicMock()
     dao.get_jobs_by_plugin_and_session = MagicMock()
     dao.create_value_version = MagicMock()
     dao.get_value_version = MagicMock()
@@ -20,20 +27,39 @@ def dao():
 
 
 @pytest.fixture
-def acl_resolver(dao):
-    return ACLResolver(dao=dao)
+def adapter():
+    fd, path = tempfile.mkstemp()
+    os.close(fd)
+
+    yield FileAdapter(path)
+
+    os.remove(path)
+
+
+@pytest.fixture
+def acl_resolver(dao, adapter):
+    return ACLResolver(dao=dao, adapter=adapter)
+
+
+# --------------------
+# Helpers
+# --------------------
 
 
 def make_ctx(allowed_permissions: set[str], is_admin: bool = False) -> ExecutionContext:
     ctx = MagicMock(spec=ExecutionContext)
 
-    def allowed(obj: str, action: str = "execute") -> bool:
-        if obj == "system.admin":
-            return is_admin
-        return obj in allowed_permissions
+    def allowed(permission: str, action: str = "execute") -> bool:
+        return permission in allowed_permissions
 
     ctx.allowed.side_effect = allowed
+    ctx.is_admin.return_value = is_admin
     return ctx
+
+
+# --------------------
+# Tests
+# --------------------
 
 
 def test_admin_has_all_permissions(acl_resolver):
@@ -54,6 +80,7 @@ def test_job_permissions(acl_resolver):
     allowed = acl_resolver.get_allowed_functions(ctx)
 
     assert "apply_value_version_all_jobs" in allowed
+    assert "create_value_version" not in allowed
 
 
 def test_field_permissions(acl_resolver):
@@ -65,7 +92,6 @@ def test_field_permissions(acl_resolver):
     assert "get_value_version" in allowed
     assert "get_value_versions" in allowed
     assert "update_value_version" in allowed
-
     assert "apply_value_version_all_jobs" not in allowed
 
 
