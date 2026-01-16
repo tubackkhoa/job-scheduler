@@ -28,7 +28,7 @@ PERMISSION_MAP: Dict[str, set[str | Callable]] = {
 
 
 class ACLResolver:
-    def __init__(self, dao: DAO, adapter: Adapter):
+    def __init__(self, dao: DAO, adapter: Optional[Adapter] = None):
         self.enforcer = create_enforcer(adapter)
         self.dao = dao
 

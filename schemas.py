@@ -63,6 +63,6 @@ class Settings(BaseSettings):
     # Configuration for loading from a .env file
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    redis_host: str
-    redis_port: int
-    redis_db: int
+    redis_host: Optional[str] = None
+    redis_port: Optional[int] = 0
+    redis_db: Optional[int] = 0

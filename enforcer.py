@@ -78,14 +78,15 @@ def has_role(subject: Subject, role: str) -> bool:
 # -----------------------------
 
 
-def create_enforcer(adapter: Adapter) -> Enforcer:
+def create_enforcer(adapter: Optional[Adapter] = None) -> Enforcer:
 
     enforcer = FastEnforcer("model.conf", adapter)
 
     enforcer.enable_auto_save(False)
     enforcer.add_function("has_role", has_role)
 
-    enforcer.load_policy()
+    if enforcer.adapter:
+        enforcer.load_policy()
 
     enforcer.add_policy(
         "role:admin",
