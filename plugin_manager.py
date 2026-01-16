@@ -1,3 +1,4 @@
+from ast import Tuple
 import asyncio
 from ctypes import ArgumentError
 from functools import partial
@@ -12,7 +13,9 @@ from pydantic import BaseModel
 from apscheduler.util import undefined
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from jinja2 import Environment
-from acl_resolver import ACLResolver, Role
+from acl_resolver import ACLResolver
+from enforcer import ExecutionContext, PermissionRule, Subject
+from casbin.enforcer import Enforcer
 from models import DAO, Plugin
 import zipfile
 import tarfile
@@ -149,7 +152,7 @@ class PluginSpec:
     ) -> Any: ...
 
     @hookspec
-    def roles(cls) -> Optional[Set[Role]]: ...
+    def roles(cls) -> tuple[PermissionRule, ...]: ...
 
     @hookspec
     async def install(cls) -> bool: ...
@@ -265,6 +268,16 @@ class PluginManager:
 
         return True if is_vcs else extract_package_files(target_dir)
 
+    @classmethod
+    def register_plugin_permissions(cls, package: str, plugin_cls: PluginSpec):
+        for rule in plugin_cls.roles():
+            permission = f"{package}:{rule["permission"]}"
+            cls.acl_resolver.enforcer.add_policy(
+                f"{rule["subject"]}:{rule["object"]}",
+                permission,
+                rule["action"],
+            )
+
     @staticmethod
     def get_job_scheduler_id(job_id: int) -> str:
         return f"{PROJECT_NAME}.job.{job_id}"
@@ -292,19 +305,11 @@ class PluginManager:
         return cls.manager.get_plugin(package)
 
     @classmethod
-    def get_globals(cls, roles: Optional[Set[Role]]):
-        return (
-            {}
-            if cls.acl_resolver is None or roles is None
-            else cls.acl_resolver.get_allowed_functions(roles)
-        )
-
-    @classmethod
-    def render(cls, roles: Optional[Set[Role]], template_str: str, env: Environment, payload: dict):
+    def render(cls, ctx: ExecutionContext, template_str: str, env: Environment, payload: dict):
         template_engine = env.from_string(template_str)
-        functions = cls.get_globals(roles)
+        functions = cls.acl_resolver.get_allowed_functions(ctx)
         # assign global function
-        return template_engine.render(**functions, **payload, this=payload)
+        return template_engine.render(**functions, **payload, this=payload, ctx=ctx)
 
     @classmethod
     def run_plugin_job(cls, package: str, job_id: int):
@@ -349,6 +354,10 @@ class PluginManager:
             cls.manager.unregister(existing_plugin, package)
 
     @classmethod
+    def create_ctx(cls, package: str, subject: Subject):
+        return ExecutionContext(subject, package, cls.acl_resolver.enforcer)
+
+    @classmethod
     def load_plugin(cls, package: str, override: bool = False):
 
         module_path, _, class_name = package.rpartition(".")
@@ -369,6 +378,7 @@ class PluginManager:
                 # Raise exception to prevent saving invalid plugin to database
                 raise RuntimeError(f"Failed to load plugin '{package}': {str(e)}") from e
 
+        cls.register_plugin_permissions(package, plugin)
         return plugin
 
     def add_plugin(self, package: str, interval: int, description: Optional[str] = None) -> int:

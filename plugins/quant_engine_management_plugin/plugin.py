@@ -3,10 +3,12 @@ from typing import Callable, Any, Optional
 import logging
 from pydantic import BaseModel
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
+from enforcer import ExecutionContext
 from plugins import ui_schema
 from jinja2.loaders import DictLoader
 from jinja2.environment import Environment
 from pathlib import Path
+from enforcer import require
 import pluggy
 
 PROJECT_NAME = "quant_engine_management_plugin"
@@ -139,12 +141,24 @@ class Config(BaseModel):
     )
 
 
+@require("fetch_data")
+def fetch_data(ctx):
+    print(ctx)
+    return {"data": 123}
+
+
 class Plugin:
+
     _env = Environment(
         loader=DictLoader({"base": "{% block content %}{% endblock %}"}),
         autoescape=False,
         trim_blocks=True,
         lstrip_blocks=True,
+    )
+    _env.globals.update(
+        {
+            "fetch_data": fetch_data,
+        }
     )
 
     @hookimpl
@@ -170,7 +184,20 @@ class Plugin:
     @hookimpl
     @classmethod
     def roles(cls):
-        return {"admin"}
+        return (
+            {
+                "subject": "group",
+                "object": "data",
+                "permission": "fetch_data",
+                "action": "execute",
+            },
+            {
+                "subject": "role",
+                "object": "admin",
+                "permission": "fetch_data",
+                "action": "execute",
+            },
+        )
 
     @hookimpl
     @classmethod

@@ -75,7 +75,7 @@ async def lifespan(app: FastAPI):
     dao = DAO(db_engine)
 
     # update ACL logic
-    PluginManager.acl_resolver = ACLResolver.from_dao(dao)
+    PluginManager.acl_resolver = ACLResolver(dao)
 
     # create plugin_instance
     plugin_manager = PluginManager(
