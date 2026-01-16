@@ -3,7 +3,6 @@ from fastapi.security import HTTPBasicCredentials, HTTPBasic
 from datetime import datetime, timedelta
 from typing import Set
 import secrets
-from jose import jwt
 
 from enforcer import dataclass
 
