@@ -28,20 +28,31 @@ class Subject:
 
 
 class ExecutionContext:
-    __slots__ = ("subject", "enforcer", "package", "_user")
+    __slots__ = ("subject", "package", "_user", "_allowed")
 
     def __init__(self, subject: Subject, package: str, enforcer: Enforcer):
-        self.subject = subject
-        self.package = package
-        self.enforcer = enforcer
-        self._user = f"user:{subject.user_id}"
+        object.__setattr__(self, "subject", subject)
+        object.__setattr__(self, "package", package)
+        object.__setattr__(self, "_user", f"user:{subject.user_id}")
+
+        object.__setattr__(
+            self,
+            "_allowed",
+            lambda permission: enforcer.enforce(
+                self._user,
+                permission,
+                self.subject,
+            ),
+        )
+
+    def __setattr__(self, name, value):
+        # 🔒 block mutation after initialization
+        if name in self.__slots__ and hasattr(self, name):
+            raise AttributeError("ExecutionContext is immutable")
+        super().__setattr__(name, value)
 
     def allowed(self, permission: str) -> bool:
-        return self.enforcer.enforce(
-            self._user,
-            permission,
-            self.subject,
-        )
+        return self._allowed(permission)
 
     def is_admin(self):
         return self.allowed("system.admin")
