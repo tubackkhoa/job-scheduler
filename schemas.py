@@ -10,7 +10,7 @@ class ConfigPayload(BaseModel):
     description: Optional[str] = None
 
     class Config:
-        allow_population_by_field_name = True
+        validate_by_name = True
         extra = "forbid"
 
 
@@ -62,3 +62,7 @@ class Settings(BaseSettings):
 
     # Configuration for loading from a .env file
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    redis_host: str
+    redis_port: int
+    redis_db: int

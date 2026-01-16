@@ -186,7 +186,7 @@ class Plugin:
     @hookimpl
     @classmethod
     def roles(cls):
-        return ()
+        return {}
 
     @hookimpl
     @classmethod

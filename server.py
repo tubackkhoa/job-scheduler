@@ -1,5 +1,6 @@
 from acl_resolver import ACLResolver
 from auth import User, get_user, require_auth
+from enforcer import Adapter
 from models import DAO
 import asyncio
 import inspect
@@ -26,7 +27,7 @@ from models import (
     Job,
 )
 
-from plugin_manager import PluginManager
+from plugin_manager import PROJECT_NAME, PluginManager
 from schemas import ConfigPayload, DownloadPayload, PluginCreatePayload, Settings, TemplatePayload
 from ws_manager import WSConnectionManager
 import os
@@ -77,7 +78,13 @@ async def lifespan(app: FastAPI):
     dao = DAO(db_engine)
 
     # update ACL logic
-    PluginManager.acl_resolver = ACLResolver(dao)
+    adapter = Adapter(
+        host=settings.redis_host,
+        port=settings.redis_port,
+        db=settings.redis_db,
+        key=f"{PROJECT_NAME}:job_policy",
+    )
+    PluginManager.acl_resolver = ACLResolver(dao, adapter)
 
     # create plugin_instance
     plugin_manager = PluginManager(
@@ -215,7 +222,7 @@ def template(
     if plugin_instance is None:
         return template_str
     try:
-        ctx = plugin_manager.create_ctx(package, user.id, user.roles, user.groups)
+        ctx = plugin_manager.create_ctx(package, user.id, user.roles)
         result = plugin_manager.render(ctx, template_str, plugin_instance.env(), payload.params)
         return Response(content=result, media_type="text/plain")
     except Exception as e:
@@ -256,7 +263,7 @@ def schema(
 
             # Built-in Jinja tags are provided by extensions
             env = plugin.env()
-            ctx = plugin_manager.create_ctx(plugin_item.package, user.id, user.roles, user.groups)
+            ctx = plugin_manager.create_ctx(plugin_item.package, user.id, user.roles)
             globals = {**plugin_manager.get_globals(ctx), **env.globals}
             return {
                 "schema": plugin.schema(),

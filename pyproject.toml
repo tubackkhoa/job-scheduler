@@ -28,7 +28,8 @@ dependencies = [
     "fastapi>=0.100",
     "uvicorn[standard]>=0.20",
     "alembic>=1.16.5",
-    "psycopg2",
+    "psycopg2>=2.9.11",
+    "casbin>=1.43.0",
     "sqlglot",
 ]
 

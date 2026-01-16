@@ -16,7 +16,6 @@ class User:
     username: str
     password: str
     roles: set[str]
-    groups: set[str]
 
 
 USERS: list[User] = [
@@ -25,14 +24,12 @@ USERS: list[User] = [
         "thanhtu",
         "admin",
         {"admin"},
-        {},
     ),
     User(
         2,
         "cuongnv",
         "admin",
         {"user"},
-        {"other"},
     ),
 ]
 

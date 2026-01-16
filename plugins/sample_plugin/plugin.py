@@ -211,20 +211,9 @@ class Plugin:
     @hookimpl
     @classmethod
     def roles(cls):
-        return (
-            {
-                "subject": "group",
-                "object": "data",
-                "permission": "fetch_data",
-                "action": "execute",
-            },
-            {
-                "subject": "role",
-                "object": "admin",
-                "permission": "fetch_data",
-                "action": "execute",
-            },
-        )
+        return {
+            "fetch_data": {"data", "admin"},
+        }
 
     @hookimpl
     @classmethod

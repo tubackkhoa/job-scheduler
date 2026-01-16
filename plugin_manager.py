@@ -14,7 +14,7 @@ from apscheduler.util import undefined
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from jinja2 import Environment
 from acl_resolver import ACLResolver
-from enforcer import ExecutionContext, PermissionRule, Subject
+from enforcer import ExecutionContext, Subject
 from casbin.enforcer import Enforcer
 from models import DAO, Plugin
 import zipfile
@@ -152,7 +152,7 @@ class PluginSpec:
     ) -> Any: ...
 
     @hookspec
-    def roles(cls) -> tuple[PermissionRule, ...]: ...
+    def roles(cls) -> dict[str, dict[str, set[str]]]: ...
 
     @hookspec
     async def install(cls) -> bool: ...
@@ -271,14 +271,22 @@ class PluginManager:
     @classmethod
     def register_plugin_permissions(cls, package: str, plugin_cls: PluginSpec):
         try:
-            for rule in plugin_cls.roles():
-                cls.acl_resolver.enforcer.add_policy(
-                    f"{rule['subject']}:{rule['object']}",
-                    f"{package}.{rule['permission']}",
-                    rule["action"],
-                )
+            roles = plugin_cls.roles()
+            if not isinstance(roles, dict):
+                return
+
+            enforcer = cls.acl_resolver.enforcer
+            for permission_key, actions in roles.items():
+                permission = f"{package}.{permission_key}"
+
+                for role in roles:
+                    enforcer.add_policy(f"role:{role}", permission)
+
         except Exception as ex:
-            scheduler_logger.error(ex)
+            scheduler_logger.exception(
+                "Failed to register plugin permissions",
+                extra={"package": package, "plugin": plugin_cls.__name__},
+            )
 
     @staticmethod
     def get_job_scheduler_id(job_id: int) -> str:
@@ -360,8 +368,8 @@ class PluginManager:
             cls.manager.unregister(existing_plugin, package)
 
     @classmethod
-    def create_ctx(cls, package: str, user_id: int, roles: set[str], groups: set[str]):
-        return ExecutionContext(Subject(user_id, roles, groups), package, cls.acl_resolver.enforcer)
+    def create_ctx(cls, package: str, user_id: int, roles: set[str]):
+        return ExecutionContext(Subject(user_id, roles), package, cls.acl_resolver.enforcer)
 
     @classmethod
     def load_plugin(cls, package: str, override: bool = False):
