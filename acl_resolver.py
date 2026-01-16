@@ -15,6 +15,8 @@ FieldGlobals = Literal[
     "get_value_version",
     "get_value_versions",
     "update_value_version",
+    "delete_value_version",
+    "get_jobs_depending_on_version",
 ]
 
 
@@ -64,6 +66,8 @@ ACL_TREE: AclTree = {
             "get_value_version",
             "get_value_versions",
             "update_value_version",
+            "delete_value_version",
+            "get_jobs_depending_on_version",
         },
     },
 }
