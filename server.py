@@ -81,6 +81,7 @@ async def lifespan(app: FastAPI):
     # update ACL logic
     adapter = None
     if settings.redis_host:
+        # using redis adapter on the fly
         from casbin_redis_adapter.adapter import Adapter
 
         adapter = Adapter(
