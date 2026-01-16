@@ -93,6 +93,8 @@ async def lifespan(app: FastAPI):
             "get_value_version": dao.get_value_version,
             "get_value_versions": dao.get_value_versions,
             "update_value_version": dao.update_value_version,
+            "delete_value_version": dao.delete_value_version,
+            "get_jobs_depending_on_version": dao.get_jobs_depending_on_version,
         },
     )
 
