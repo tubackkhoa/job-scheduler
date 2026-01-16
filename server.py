@@ -1,4 +1,5 @@
 from acl_resolver import ACLResolver
+from auth import User, get_user, require_auth
 from models import DAO
 import asyncio
 import inspect
@@ -51,6 +52,7 @@ def app_state(attr: str):
 PluginManagerState = Annotated[PluginManager, Depends(app_state("plugin_manager"))]
 LogServiceState = Annotated[LogService, Depends(app_state("log_service"))]
 DAOState = Annotated[DAO, Depends(app_state("dao"))]
+UserState = Annotated[User, Depends(get_user)]
 
 settings = Settings()
 
@@ -85,7 +87,6 @@ async def lifespan(app: FastAPI):
     )
 
     # Trade models API functions (no db_engine needed, use api_url/api_key directly)
-
     plugin_manager.reload_all_jobs()
 
     # ---- STARTUP ----
@@ -125,7 +126,7 @@ def describe_callable(obj):
     return data
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=lifespan, dependencies=[Depends(require_auth)])
 
 app.add_middleware(
     CORSMiddleware,
@@ -204,16 +205,18 @@ def create_plugin(plugin_manager: PluginManagerState, payload: PluginCreatePaylo
 
 @app.post("/template/{package}")
 def template(
-    plugin_manager: PluginManagerState, package: str, payload: TemplatePayload = Body(...)
+    plugin_manager: PluginManagerState,
+    user: UserState,
+    package: str,
+    payload: TemplatePayload = Body(...),
 ):
     plugin_instance = plugin_manager.get_plugin_instance(package)
     template_str = payload.template
     if plugin_instance is None:
         return template_str
     try:
-        result = plugin_manager.render(
-            plugin_instance.roles(), template_str, plugin_instance.env(), payload.params
-        )
+        ctx = plugin_manager.create_ctx(package, user.id, user.roles, user.groups)
+        result = plugin_manager.render(ctx, template_str, plugin_instance.env(), payload.params)
         return Response(content=result, media_type="text/plain")
     except Exception as e:
         raise HTTPException(
@@ -223,9 +226,16 @@ def template(
 
 
 @app.get("/schema/{session_id}/{plugin_id}")
-def schema(dao: DAOState, plugin_manager: PluginManagerState, session_id: int, plugin_id: int):
+def schema(
+    dao: DAOState,
+    plugin_manager: PluginManagerState,
+    user: UserState,
+    session_id: int,
+    plugin_id: int,
+):
     plugin_item = dao.get_plugin(plugin_id)
-    assert plugin_item
+    if not plugin_item:
+        raise HTTPException(status_code=404, detail="Plugin not found")
 
     try:
         plugin = plugin_manager.get_plugin_instance(plugin_item.package)
@@ -246,7 +256,8 @@ def schema(dao: DAOState, plugin_manager: PluginManagerState, session_id: int, p
 
             # Built-in Jinja tags are provided by extensions
             env = plugin.env()
-            globals = {**plugin_manager.get_globals(plugin.roles()), **env.globals}
+            ctx = plugin_manager.create_ctx(plugin_item.package, user.id, user.roles, user.groups)
+            globals = {**plugin_manager.get_globals(ctx), **env.globals}
             return {
                 "schema": plugin.schema(),
                 "jobs": jobs,

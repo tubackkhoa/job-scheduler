@@ -6,7 +6,7 @@ from casbin.enforcer import Enforcer
 from functools import wraps
 from jinja2 import pass_context
 from dataclasses import dataclass
-from typing import Literal, Set, TypedDict
+from typing import Literal, Optional, Set, TypedDict
 
 
 class PermissionRule(TypedDict):
@@ -43,14 +43,8 @@ def create_enforcer() -> Enforcer:
     enforcer.enable_auto_save(False)
     enforcer.add_function("has_role", has_role)
 
-    # default role
-    enforcer.add_policy(
-        "role:admin",
-        "system.admin",
-        "execute",
-    )
-
     enforcer.load_policy()
+
     return enforcer
 
 
@@ -65,6 +59,19 @@ class Subject:
     roles: Set[str]
     groups: Set[str]
 
+    def __init__(
+        self,
+        user_id: str,
+        roles: Optional[Set[str]] = None,
+        groups: Optional[Set[str]] = None,
+    ):
+        object.__setattr__(self, "user_id", user_id)
+        mapped_roles = {f"role:{role}" for role in (roles or set())}
+        mapped_groups = {f"group:{group}" for group in (groups or set())}
+
+        object.__setattr__(self, "roles", frozenset(mapped_roles))
+        object.__setattr__(self, "groups", frozenset(mapped_groups))
+
 
 class ExecutionContext:
     __slots__ = ("subject", "enforcer", "package")
@@ -75,12 +82,13 @@ class ExecutionContext:
         self.enforcer = enforcer
 
     def allowed(self, permission_key: str, action: str = "execute") -> bool:
-        return self.enforcer.enforce(
+        allowed = self.enforcer.enforce(
             f"user:{self.subject.user_id}",
             permission_key,
             action,
             self.subject,
         )
+        return allowed
 
     def require(self, permission_key: str, action: str = "execute"):
         if not self.allowed(permission_key, action):
@@ -103,12 +111,10 @@ def require(permission_key: str, action: str = "execute"):
             ctx: ExecutionContext = jinja_ctx.get("ctx")
             if ctx is None:
                 raise RuntimeError("ExecutionContext (ctx) is required")
-            permission = f"{ctx.package}:{permission_key}"
-            allowed = ctx.enforcer.enforce(
-                f"user:{ctx.subject.user_id}",
+            permission = f"{ctx.package}.{permission_key}"
+            allowed = ctx.allowed(
                 permission,
                 action,
-                ctx.subject,
             )
 
             if not allowed:

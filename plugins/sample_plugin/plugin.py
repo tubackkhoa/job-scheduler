@@ -7,7 +7,7 @@ from typing import Any, Callable, List
 import sqlglot
 from datetime import datetime
 from jinja2 import DictLoader, Environment
-
+from enforcer import ExecutionContext, require
 from plugins import ui_schema
 
 from .data import JSON_TPL, SQL_TPL, YAML_TPL, MD_TPL, countries, tolist
@@ -158,6 +158,11 @@ class MyClass:
         return {"fixed": "object", "name": self.name}
 
 
+@require("fetch_data")
+def fetch_data(ctx: ExecutionContext):
+    return ctx.subject
+
+
 class Plugin:
 
     _env = Environment(
@@ -170,6 +175,7 @@ class Plugin:
     _env.globals.update(
         {
             "datetime": datetime,
+            "fetch_data": fetch_data,
             "MyClass": MyClass,
             "get_users": lambda: ["tupt", "cuongnv"],
             "get_cities_by_country": lambda country_name: countries.get(country_name, []),
@@ -205,7 +211,20 @@ class Plugin:
     @hookimpl
     @classmethod
     def roles(cls):
-        return ()
+        return (
+            {
+                "subject": "group",
+                "object": "data",
+                "permission": "fetch_data",
+                "action": "execute",
+            },
+            {
+                "subject": "role",
+                "object": "admin",
+                "permission": "fetch_data",
+                "action": "execute",
+            },
+        )
 
     @hookimpl
     @classmethod

@@ -1,55 +1,45 @@
 import pytest
-from typing import Set
 from unittest.mock import MagicMock
+from typing import Dict, Callable
 
-from acl_resolver import ACLResolver, Role
-
-
-@pytest.fixture
-def plugin_globals():
-    return {"get_all_plugins": MagicMock(name="get_all_plugins_func")}
+from acl_resolver import ACLResolver
+from enforcer import ExecutionContext
 
 
 @pytest.fixture
-def job_globals():
-    return {"apply_value_version_all_jobs": MagicMock(name="apply_value_version_all_jobs_func")}
+def dao():
+    dao = MagicMock()
+    dao.get_all_plugins = MagicMock(name="get_all_plugins")
+    dao.apply_value_version_all_jobs = MagicMock(name="apply_value_version_all_jobs")
+    dao.get_jobs_by_plugin_and_session = MagicMock()
+    dao.create_value_version = MagicMock()
+    dao.get_value_version = MagicMock()
+    dao.get_value_versions = MagicMock()
+    dao.update_value_version = MagicMock()
+    return dao
 
 
 @pytest.fixture
-def field_globals():
-    return {
-        "create_value_version": MagicMock(name="create_value_version_func"),
-        "get_value_version": MagicMock(name="get_value_version_func"),
-        "get_value_versions": MagicMock(name="get_value_versions_func"),
-        "update_value_version": MagicMock(name="update_value_version_func"),
-    }
+def acl_resolver(dao):
+    return ACLResolver(dao=dao)
 
 
-@pytest.fixture
-def acl_resolver(plugin_globals, job_globals, field_globals):
-    return ACLResolver(
-        plugin_globals=plugin_globals,
-        job_globals=job_globals,
-        field_globals=field_globals,
-    )
+def make_ctx(allowed_permissions: set[str], is_admin: bool = False) -> ExecutionContext:
+    ctx = MagicMock(spec=ExecutionContext)
+
+    def allowed(obj: str, action: str = "execute") -> bool:
+        if obj == "system.admin":
+            return is_admin
+        return obj in allowed_permissions
+
+    ctx.allowed.side_effect = allowed
+    return ctx
 
 
 def test_admin_has_all_permissions(acl_resolver):
-    roles: Set[Role] = {"admin"}
+    ctx = make_ctx(set(), is_admin=True)
 
-    allowed = acl_resolver.get_allowed_functions(roles)
-
-    assert "apply_value_version_all_jobs" in allowed
-    assert "create_value_version" in allowed
-    assert "get_value_version" in allowed
-    assert "get_value_versions" in allowed
-    assert "update_value_version" in allowed
-
-
-def test_job_editor_permissions(acl_resolver):
-    roles: Set[Role] = {"job_editor"}
-
-    allowed = acl_resolver.get_allowed_functions(roles)
+    allowed = acl_resolver.get_allowed_functions(ctx)
 
     assert "apply_value_version_all_jobs" in allowed
     assert "create_value_version" in allowed
@@ -58,10 +48,18 @@ def test_job_editor_permissions(acl_resolver):
     assert "update_value_version" in allowed
 
 
-def test_field_editor_permissions(acl_resolver):
-    roles: Set[Role] = {"field_editor"}
+def test_job_permissions(acl_resolver):
+    ctx = make_ctx({"job"})
 
-    allowed = acl_resolver.get_allowed_functions(roles)
+    allowed = acl_resolver.get_allowed_functions(ctx)
+
+    assert "apply_value_version_all_jobs" in allowed
+
+
+def test_field_permissions(acl_resolver):
+    ctx = make_ctx({"field"})
+
+    allowed = acl_resolver.get_allowed_functions(ctx)
 
     assert "create_value_version" in allowed
     assert "get_value_version" in allowed
@@ -71,27 +69,27 @@ def test_field_editor_permissions(acl_resolver):
     assert "apply_value_version_all_jobs" not in allowed
 
 
-def test_unknown_role_gets_nothing(acl_resolver):
-    roles = {"unknown"}  # type: ignore
+def test_unknown_permission_gets_nothing(acl_resolver):
+    ctx = make_ctx({"unknown"})
 
-    allowed = acl_resolver.get_allowed_functions(roles)
+    allowed = acl_resolver.get_allowed_functions(ctx)
 
     assert allowed == {}
 
 
-def test_multiple_roles_merge_permissions(acl_resolver):
-    roles: Set[Role] = {"job_editor", "field_editor"}
+def test_multiple_permissions_merge(acl_resolver):
+    ctx = make_ctx({"job", "field"})
 
-    allowed = acl_resolver.get_allowed_functions(roles)
+    allowed = acl_resolver.get_allowed_functions(ctx)
 
     assert "apply_value_version_all_jobs" in allowed
     assert "create_value_version" in allowed
 
 
 def test_allowed_functions_are_callable(acl_resolver):
-    roles: Set[Role] = {"admin"}
+    ctx = make_ctx(set(), is_admin=True)
 
-    allowed = acl_resolver.get_allowed_functions(roles)
+    allowed = acl_resolver.get_allowed_functions(ctx)
 
     for name, fn in allowed.items():
         assert callable(fn), f"{name} is not callable"

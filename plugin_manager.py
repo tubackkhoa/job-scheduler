@@ -270,13 +270,15 @@ class PluginManager:
 
     @classmethod
     def register_plugin_permissions(cls, package: str, plugin_cls: PluginSpec):
-        for rule in plugin_cls.roles():
-            permission = f"{package}:{rule["permission"]}"
-            cls.acl_resolver.enforcer.add_policy(
-                f"{rule["subject"]}:{rule["object"]}",
-                permission,
-                rule["action"],
-            )
+        try:
+            for rule in plugin_cls.roles():
+                cls.acl_resolver.enforcer.add_policy(
+                    f"{rule['subject']}:{rule['object']}",
+                    f"{package}.{rule['permission']}",
+                    rule["action"],
+                )
+        except Exception as ex:
+            scheduler_logger.error(ex)
 
     @staticmethod
     def get_job_scheduler_id(job_id: int) -> str:
@@ -305,9 +307,13 @@ class PluginManager:
         return cls.manager.get_plugin(package)
 
     @classmethod
+    def get_globals(cls, ctx: ExecutionContext):
+        return cls.acl_resolver.get_allowed_functions(ctx)
+
+    @classmethod
     def render(cls, ctx: ExecutionContext, template_str: str, env: Environment, payload: dict):
         template_engine = env.from_string(template_str)
-        functions = cls.acl_resolver.get_allowed_functions(ctx)
+        functions = cls.get_globals(ctx)
         # assign global function
         return template_engine.render(**functions, **payload, this=payload, ctx=ctx)
 
@@ -354,8 +360,8 @@ class PluginManager:
             cls.manager.unregister(existing_plugin, package)
 
     @classmethod
-    def create_ctx(cls, package: str, subject: Subject):
-        return ExecutionContext(subject, package, cls.acl_resolver.enforcer)
+    def create_ctx(cls, package: str, user_id: int, roles: set[str], groups: set[str]):
+        return ExecutionContext(Subject(user_id, roles, groups), package, cls.acl_resolver.enforcer)
 
     @classmethod
     def load_plugin(cls, package: str, override: bool = False):
@@ -420,7 +426,6 @@ class PluginManager:
                 logger.addHandler(self.log_handler)
 
         # replace_existing allow override
-        print("add job", job_scheduler_id)
         self.scheduler.add_job(
             self.run_plugin_job,
             "interval",
