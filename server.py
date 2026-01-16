@@ -8,6 +8,7 @@ from typing import Annotated, Optional
 from fastapi import (
     Depends,
     FastAPI,
+    APIRouter,
     Body,
     HTTPException,
     Response,
@@ -133,7 +134,13 @@ def describe_callable(obj):
     return data
 
 
-app = FastAPI(lifespan=lifespan, dependencies=[Depends(require_auth)])
+api_router = APIRouter(
+    prefix="/api",
+    dependencies=[Depends(require_auth)],
+)
+
+app = FastAPI(lifespan=lifespan)
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -178,12 +185,12 @@ async def websocket_logs_endpoint(websocket: WebSocket, job_id: int):
         manager.disconnect(websocket, scheduler_job_id)
 
 
-@app.get("/plugins")
+@api_router.get("/plugins")
 def plugins(dao: DAOState):
     return dao.get_all_plugins()
 
 
-@app.post("/plugins")
+@api_router.post("/plugins")
 def create_plugin(plugin_manager: PluginManagerState, payload: PluginCreatePayload = Body(...)):
     """
     Create a plugin record and load it into the PluginManager.
@@ -210,7 +217,7 @@ def create_plugin(plugin_manager: PluginManagerState, payload: PluginCreatePaylo
         )
 
 
-@app.post("/template/{package}")
+@api_router.post("/template/{package}")
 def template(
     plugin_manager: PluginManagerState,
     user: UserState,
@@ -232,7 +239,7 @@ def template(
         )
 
 
-@app.get("/schema/{session_id}/{plugin_id}")
+@api_router.get("/schema/{session_id}/{plugin_id}")
 def schema(
     dao: DAOState,
     plugin_manager: PluginManagerState,
@@ -288,7 +295,7 @@ def schema(
         raise HTTPException(status_code=500, detail=f"Failed to load schema: {str(e)}")
 
 
-@app.post("/activate/{job_id}/{activation}")
+@api_router.post("/ctivate/{job_id}/{activation}")
 def activate_config(plugin_manager: PluginManagerState, job_id: int, activation: bool):
     if activation:
         plugin_manager.activate_job(job_id)
@@ -297,13 +304,13 @@ def activate_config(plugin_manager: PluginManagerState, job_id: int, activation:
     return {"success": True}
 
 
-@app.post("/delete/{job_id}")
+@api_router.post("/delete/{job_id}")
 def delete_job(plugin_manager: PluginManagerState, job_id: int):
     plugin_manager.remove_job(job_id)
     return {"success": True}
 
 
-@app.post("/reload/{package}")
+@api_router.post("/reload/{package}")
 def reload_plugin(plugin_manager: PluginManagerState, package: str):
     try:
         plugin_manager.load_plugin(package, True)
@@ -312,7 +319,7 @@ def reload_plugin(plugin_manager: PluginManagerState, package: str):
         raise HTTPException(status_code=500, detail=f"Failed to reload plugin: {str(e)}")
 
 
-@app.post("/download/{name}")
+@api_router.post("/download/{name}")
 def download_module(
     plugin_manager: PluginManagerState, name: str, payload: DownloadPayload = Body(...)
 ):
@@ -324,7 +331,7 @@ def download_module(
         raise HTTPException(status_code=400, detail=f"Failed to download module: {str(e)}")
 
 
-@app.put("/install/{package}")
+@api_router.put("/install/{package}")
 def install_module(plugin_manager: PluginManagerState, package: str):
     try:
         plugin = plugin_manager.get_plugin_instance(package)
@@ -334,7 +341,7 @@ def install_module(plugin_manager: PluginManagerState, package: str):
         raise HTTPException(status_code=500, detail=f"Failed to install plugin: {str(e)}")
 
 
-@app.put("/uninstall/{package}")
+@api_router.put("/uninstall/{package}")
 def uninstall_module(plugin_manager: PluginManagerState, package: str):
     try:
         plugin = plugin_manager.get_plugin_instance(package)
@@ -344,7 +351,7 @@ def uninstall_module(plugin_manager: PluginManagerState, package: str):
         raise HTTPException(status_code=500, detail=f"Failed to uninstall plugin: {str(e)}")
 
 
-@app.delete("/plugins/{plugin_id}")
+@api_router.delete("/plugins/{plugin_id}")
 def delete_plugin(plugin_manager: PluginManagerState, plugin_id: int):
     """
     Delete a plugin from the database and unload it from memory.
@@ -359,7 +366,7 @@ def delete_plugin(plugin_manager: PluginManagerState, plugin_id: int):
         raise HTTPException(status_code=500, detail=f"Failed to delete plugin: {str(e)}")
 
 
-@app.post("/config/{job_id}")
+@api_router.post("/config/{job_id}")
 def update_config(
     dao: DAOState,
     plugin_manager: PluginManagerState,
@@ -410,7 +417,7 @@ def update_config(
         raise HTTPException(status_code=500, detail=f"Failed to update config: {str(e)}")
 
 
-@app.get("/api/logs/{job_id}")
+@api_router.get("/logs/{job_id}")
 def search_logs(
     log_service: LogServiceState,
     job_id: int,
@@ -442,7 +449,7 @@ def search_logs(
         raise HTTPException(status_code=500, detail=f"Failed to search logs: {str(e)}")
 
 
-@app.get("/api/logs/{job_id}/signals")
+@api_router.get("/logs/{job_id}/signals")
 def search_logs_with_following(
     log_service: LogServiceState,
     job_id: int,
@@ -467,7 +474,7 @@ def search_logs_with_following(
         )
 
 
-@app.post("/api/logs/{job_id}/clear")
+@api_router.post("/logs/{job_id}/clear")
 def clear_logs(log_service: LogServiceState, job_id: int):
     scheduler_job_id = PluginManager.get_job_scheduler_id(job_id)
     result = log_service.clear_logs(scheduler_job_id)
@@ -476,8 +483,9 @@ def clear_logs(log_service: LogServiceState, job_id: int):
     return result
 
 
-# static site
+app.include_router(api_router)
 
+# static site
 if settings.static_files:
     app.mount(
         "/",

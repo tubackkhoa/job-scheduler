@@ -1,4 +1,4 @@
-from fastapi import Request, Depends, HTTPException, status
+from fastapi import Request, HTTPException, status, Depends
 from fastapi.security import HTTPBasicCredentials, HTTPBasic
 from datetime import datetime, timedelta
 from typing import Set
@@ -33,10 +33,6 @@ USERS: list[User] = [
     ),
 ]
 
-PUBLIC_PATHS = {
-    "/login",
-    "/health",
-}
 
 security = HTTPBasic()
 
@@ -45,8 +41,6 @@ def require_auth(
     request: Request,
     credentials: HTTPBasicCredentials = Depends(security),
 ):
-    if request.url.path in PUBLIC_PATHS:
-        return None
 
     user = next((u for u in USERS if u.username == credentials.username), None)
     if not user or not secrets.compare_digest(credentials.password, user.password):
