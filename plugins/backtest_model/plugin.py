@@ -1,9 +1,11 @@
 import logging
 import pluggy
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 import pandas as pd
 from jinja2 import Environment, BaseLoader
+
+from enforcer import ExecutionContext
 from .data import (
     compute_accumulated_pnl,
     compute_performance_kpis,
@@ -180,7 +182,7 @@ class Plugin:
 
     @hookimpl
     @classmethod
-    def schema(cls):
+    def schema(cls, ctx: Optional[ExecutionContext] = None):
         return Config.model_json_schema()
 
     @hookimpl
@@ -190,7 +192,7 @@ class Plugin:
 
     @hookimpl
     @classmethod
-    def config(cls, json=None):
+    def config(cls, json=None, ctx: Optional[ExecutionContext] = None):
         return Config.model_validate(json or {})
 
     @hookimpl

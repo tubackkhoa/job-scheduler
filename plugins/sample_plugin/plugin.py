@@ -9,6 +9,7 @@ from datetime import datetime
 from jinja2 import DictLoader, Environment
 from enforcer import ExecutionContext, require
 from plugins import ui_schema
+from plugins.schema import SecureBaseModel, SecureField
 
 from .data import JSON_TPL, SQL_TPL, YAML_TPL, MD_TPL, countries, tolist
 
@@ -62,7 +63,7 @@ class DynamicCode(BaseModel):
     )
 
 
-class Config(BaseModel):
+class Config(SecureBaseModel):
 
     dynamic_code: DynamicCode = Field(
         ...,
@@ -105,8 +106,10 @@ class Config(BaseModel):
             }
         ),
     )
-    js_template: str = Field(
+    js_template: str = SecureField(
         "",
+        read="code_read",
+        write="code_write",
         json_schema_extra=ui_schema({"ui:field": "Template", "type": "js"}),
     )
     sql_id: int = Field(
@@ -200,19 +203,21 @@ class Plugin:
 
     @hookimpl
     @classmethod
-    def schema(cls):
-        return Config.model_json_schema()
+    def schema(cls, ctx: ExecutionContext = None):
+        return Config.model_json_schema(ctx=ctx)
 
     @hookimpl
     @classmethod
-    def config(cls, json=None):
-        return Config.model_validate(json or {})
+    def config(cls, json=None, ctx: ExecutionContext = None):
+        return Config.model_validate_secure(json or {}, ctx)
 
     @hookimpl
     @classmethod
     def roles(cls):
         return {
             "fetch_data": {"data", "admin"},
+            "code_read": {"admin"},
+            "code_write": {"admin"},
         }
 
     @hookimpl

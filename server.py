@@ -266,7 +266,7 @@ def schema(
             ctx = plugin_manager.create_ctx(plugin_item.package, user.id, user.roles)
             globals = {**plugin_manager.get_globals(ctx), **env.globals}
             return {
-                "schema": plugin.schema(),
+                "schema": plugin.schema(ctx),
                 "jobs": jobs,
                 "env": {
                     "globals": {name: describe_callable(value) for name, value in globals.items()},
@@ -363,6 +363,7 @@ def delete_plugin(plugin_manager: PluginManagerState, plugin_id: int):
 def update_config(
     dao: DAOState,
     plugin_manager: PluginManagerState,
+    user: UserState,
     job_id: int,
     payload: ConfigPayload = Body(...),
 ):
@@ -389,7 +390,8 @@ def update_config(
         plugin = plugin_manager.get_plugin_instance(plugin_item.package)
         if not plugin:
             raise HTTPException(status_code=404, detail="Plugin not found")
-        config = plugin.config(payload.config)
+        ctx = plugin_manager.create_ctx(plugin_item.package, user.id, user.roles)
+        config = plugin.config(payload.config, ctx)
         if job_id == 0:
             plugin_manager.add_job(
                 session_id,

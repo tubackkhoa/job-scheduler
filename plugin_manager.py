@@ -138,10 +138,12 @@ class PluginSpec:
     def env(cls) -> Environment: ...
 
     @hookspec
-    def schema(cls) -> dict[str, Any]: ...
+    def schema(cls, ctx: Optional[ExecutionContext] = None) -> dict[str, Any]: ...
 
     @hookspec
-    def config(cls, json: Optional[dict[str, Any]] = None) -> BaseModel: ...
+    def config(
+        cls, json: Optional[dict[str, Any]] = None, ctx: Optional[ExecutionContext] = None
+    ) -> BaseModel: ...
 
     @hookspec
     async def run(
@@ -326,7 +328,7 @@ class PluginManager:
         return template_engine.render(**functions, **payload, this=payload, ctx=ctx)
 
     @classmethod
-    def run_plugin_job(cls, package: str, job_id: int):
+    def run_plugin_job(cls, package: str, job_id: int, user_id: int, roles: set[str]):
         """
         Wrapper to run a plugin's 'run' method asynchronously,
         fetching config from the active job for the user/plugin.
@@ -342,7 +344,10 @@ class PluginManager:
             # No active job means no config to run this plugin instance for this user
             return None
 
-        config = plugin.config(json.loads(job_config))
+        # user_id, roles is from login
+        ctx = cls.create_ctx(package, user_id, roles)
+
+        config = plugin.config(json.loads(job_config), ctx)
 
         job_scheduler_id = cls.get_job_scheduler_id(job_id)
 
@@ -354,7 +359,7 @@ class PluginManager:
             logger.setLevel(logging.INFO)
 
         try:
-            render_function = partial(cls.render, plugin.roles())
+            render_function = partial(cls.render, ctx)
             retval = asyncio.run(plugin.run(config, logger, render_function))
             # logger.info(f"Job executed successfully (return value: {retval})")
             return retval
@@ -438,7 +443,8 @@ class PluginManager:
             self.run_plugin_job,
             "interval",
             seconds=plugin.interval,
-            args=[plugin.package, job_id],
+            # TODO: get user_id, and roles from database, the user of course owning the job
+            args=[plugin.package, job_id, 0, "admin"],
             next_run_time=undefined if active else None,
             id=job_scheduler_id,
             name=job_scheduler_id,
