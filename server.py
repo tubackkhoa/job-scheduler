@@ -30,6 +30,7 @@ from models import (
 )
 
 from plugin_manager import PROJECT_NAME, PluginManager
+from plugins.schema import SecureBaseModel
 from schemas import ConfigPayload, DownloadPayload, PluginCreatePayload, Settings, TemplatePayload
 from ws_manager import WSConnectionManager
 import os
@@ -293,7 +294,7 @@ def schema(
                 raw = job["config"]
                 # pass validate, but restrict return
                 config = plugin.config(json.loads(raw) if isinstance(raw, str) else raw)
-                config._ctx = ctx
+                SecureBaseModel.bind_ctx(config, ctx)
                 job["config"] = config.model_dump()
 
             # Built-in Jinja tags are provided by extensions
