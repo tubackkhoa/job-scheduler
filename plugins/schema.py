@@ -1,6 +1,5 @@
 from typing import Any, Literal, TypedDict, List, cast, Optional
-from pydantic import Field, ConfigDict, BaseModel
-
+from pydantic import Field, ConfigDict, BaseModel, PrivateAttr
 from enforcer import ExecutionContext
 
 UIWidget = Literal[
@@ -88,51 +87,30 @@ class SecureBaseModel(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid")
-    __slots__ = ("_ctx",)
-
-    # ---------------------
-    # Internal helpers
-    # ---------------------
-
-    @classmethod
-    def _extra(cls, field) -> dict:
-        return field.json_schema_extra or {}
-
-    @classmethod
-    def _read_perm(cls, field, ctx: ExecutionContext) -> str | None:
-        perm = cls._extra(field).get("read")
-        return perm and f"{ctx.package}.{perm}"
-
-    @classmethod
-    def _write_perm(cls, field, ctx: ExecutionContext) -> str | None:
-        perm = cls._extra(field).get("write")
-        return perm and f"{ctx.package}.{perm}"
-
-    @staticmethod
-    def _allowed(perm: str, ctx: ExecutionContext) -> bool:
-        return ctx.is_admin() or ctx.allowed(perm)
-
-    def _get_ctx(self):
-        return getattr(self, "_ctx", None)
+    _ctx: Optional[ExecutionContext] = PrivateAttr(default=None)
 
     # ---------------------
     # Secure attribute access
     # ---------------------
 
-    def __getattribute__(self, name: str):
-        if name.startswith("_"):
-            return super().__getattribute__(name)
-
+    def __getattr__(self, name: str):
         value = super().__getattribute__(name)
-        fields = super().__getattribute__("model_fields")
 
-        if name in fields:
-            ctx = self._get_ctx()
-            if ctx is not None:
-                field = fields[name]
-                perm = self._read_perm(field, ctx)
-                if perm and not self._allowed(perm, ctx):
-                    raise PermissionError(f"Read denied for field '{name}'")
+        ctx = self._ctx
+        if ctx is None:
+            return value
+
+        field = self.model_fields.get(name)
+        if field is None:
+            return value
+
+        extra = field.json_schema_extra
+        if not extra:
+            return value
+
+        perm_key = extra.get("read")
+        if perm_key and not ctx.is_admin() and not ctx.allowed(f"{ctx.package}.{perm_key}"):
+            raise PermissionError(f"Read denied for field '{name}'")
 
         return value
 
@@ -141,11 +119,12 @@ class SecureBaseModel(BaseModel):
     # ---------------------
 
     def model_dump(self, **kwargs) -> dict[str, Any]:
-        ctx: ExecutionContext = self._get_ctx()
+        ctx = self._ctx
         if ctx is None:
             return super().model_dump(**kwargs)
 
-        allowed = set()
+        allowed: set[str] = set()
+        is_admin = ctx.is_admin()
 
         for name, field in self.model_fields.items():
             extra = field.json_schema_extra
@@ -155,10 +134,11 @@ class SecureBaseModel(BaseModel):
                 allowed.add(name)
                 continue
 
-            # ⬅️ SecureField → enforce read permission
-            perm = extra.get("read") and f"{ctx.package}.{perm}"
-            if perm is None or self._allowed(perm, ctx):
-                allowed.add(name)
+            perm_key = extra.get("read")
+            if perm_key and not is_admin and not ctx.allowed(f"{ctx.package}.{perm_key}"):
+                continue
+
+            allowed.add(name)
 
         include = kwargs.pop("include", None)
         if include is not None:
@@ -166,22 +146,21 @@ class SecureBaseModel(BaseModel):
 
         return super().model_dump(include=allowed, **kwargs)
 
-    # model_dump_json automatically inherits model_dump
-    # ---------------------
-
     # ---------------------
     # Secure schema (explicit ctx)
     # ---------------------
 
     @classmethod
-    def model_json_schema(cls, **kwargs):
-        ctx: ExecutionContext = kwargs.pop("ctx", None)
+    def model_json_schema_secure(
+        cls,
+        ctx: ExecutionContext,
+        **kwargs,
+    ) -> dict[str, Any]:
+        # Base schema from Pydantic
         schema = super().model_json_schema(**kwargs)
 
-        if ctx is None:
-            return schema
-
-        properties = {}
+        properties: dict[str, Any] = {}
+        is_admin = ctx.is_admin()
 
         for name, prop in schema.get("properties", {}).items():
             field = cls.model_fields.get(name)
@@ -189,15 +168,15 @@ class SecureBaseModel(BaseModel):
                 continue
 
             extra = field.json_schema_extra
-
-            # ⬅️ Not a SecureField → always include
             if not extra:
                 properties[name] = prop
                 continue
 
-            perm = cls._read_perm(field, ctx)
-            if perm is None or cls._allowed(perm, ctx):
-                properties[name] = prop
+            perm_key = extra.get("read")
+            if perm_key and not is_admin and not ctx.allowed(f"{ctx.package}.{perm_key}"):
+                continue
+
+            properties[name] = prop
 
         schema["properties"] = properties
         return schema
@@ -207,15 +186,28 @@ class SecureBaseModel(BaseModel):
     # ---------------------
 
     @classmethod
-    def model_validate_secure(cls, data: Any, ctx):
-        # Enforce write permissions first
-        for field in cls.model_fields.values():
-            if perm := cls._write_perm(field, ctx):
-                ctx.require(perm)
+    def model_validate_secure(
+        cls,
+        obj: Any,
+        ctx: ExecutionContext,
+        **kwargs,
+    ):
 
-        instance = cls.model_validate(data)
+        # Enforce write permissions
+        if isinstance(obj, dict):
+            is_admin = ctx.is_admin()
+            for name, field in cls.model_fields.items():
+                if name in obj:
+                    extra = field.json_schema_extra
+                    if not extra:
+                        continue
+                    perm_key = extra.get("write")
+                    if perm_key and not is_admin:
+                        ctx.require(f"{ctx.package}.{perm_key}")
 
-        # ⬅️ ctx is attached HERE (instance-scoped)
+        # Delegate to Pydantic
+        instance = super().model_validate(obj, **kwargs)
+
+        # Attach ctx (instance-scoped)
         object.__setattr__(instance, "_ctx", ctx)
-
         return instance

@@ -39,10 +39,6 @@ class ExecutionContext:
         return ADMIN_ROLE in self.user.roles
 
     def require(self, permission: str):
-        # ✅ Admin short-circuit (policy-based, wildcard-aware)
-        if self.is_admin():
-            return
-
         if not self.allowed(permission):
             raise PermissionError(f"Permission denied: {permission}")
 

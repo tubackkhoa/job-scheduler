@@ -204,7 +204,7 @@ class Plugin:
     @hookimpl
     @classmethod
     def schema(cls, ctx: ExecutionContext):
-        return Config.model_json_schema(ctx=ctx)
+        return Config.model_json_schema_secure(ctx)
 
     @hookimpl
     @classmethod
