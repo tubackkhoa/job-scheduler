@@ -14,7 +14,8 @@ from apscheduler.util import undefined
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from jinja2 import Environment
 from acl_resolver import ACLResolver
-from enforcer import ExecutionContext, Subject
+from auth import User
+from enforcer import ADMIN_ROLE, ExecutionContext
 from casbin.enforcer import Enforcer
 from models import DAO, Plugin
 import zipfile
@@ -273,16 +274,17 @@ class PluginManager:
     @classmethod
     def register_plugin_permissions(cls, package: str, plugin_cls: PluginSpec):
         try:
-            roles = plugin_cls.roles()
-            if not isinstance(roles, dict):
+            mapping = plugin_cls.roles()
+            if not isinstance(mapping, dict):
                 return
 
             enforcer = cls.acl_resolver.enforcer
-            for permission_key, actions in roles.items():
+            for permission_key, roles in mapping.items():
                 permission = f"{package}.{permission_key}"
-
                 for role in roles:
-                    enforcer.add_policy(f"role:{role}", permission)
+                    # make sure not override by mistake in plugin, even we have make permission non-conflict
+                    if role != ADMIN_ROLE and not enforcer.has_policy(role, permission):
+                        enforcer.add_policy(role, permission)
 
         except Exception as ex:
             scheduler_logger.exception(
@@ -328,7 +330,7 @@ class PluginManager:
         return template_engine.render(**functions, **payload, this=payload, ctx=ctx)
 
     @classmethod
-    def run_plugin_job(cls, package: str, job_id: int, user_id: int, roles: set[str]):
+    def run_plugin_job(cls, package: str, job_id: int, user: User):
         """
         Wrapper to run a plugin's 'run' method asynchronously,
         fetching config from the active job for the user/plugin.
@@ -344,8 +346,8 @@ class PluginManager:
             # No active job means no config to run this plugin instance for this user
             return None
 
-        # user_id, roles is from login
-        ctx = cls.create_ctx(package, user_id, roles)
+        # user from login
+        ctx = cls.create_ctx(package, user)
 
         config = plugin.config(json.loads(job_config), ctx)
 
@@ -373,8 +375,8 @@ class PluginManager:
             cls.manager.unregister(existing_plugin, package)
 
     @classmethod
-    def create_ctx(cls, package: str, user_id: int, roles: set[str]):
-        return ExecutionContext(Subject(user_id, roles), package, cls.acl_resolver.enforcer)
+    def create_ctx(cls, package: str, user: User):
+        return ExecutionContext(user, package, cls.acl_resolver.enforcer)
 
     @classmethod
     def load_plugin(cls, package: str, override: bool = False):
@@ -444,7 +446,7 @@ class PluginManager:
             "interval",
             seconds=plugin.interval,
             # TODO: get user_id, and roles from database, the user of course owning the job
-            args=[plugin.package, job_id, 0, "admin"],
+            args=[plugin.package, job_id, User(0, {ADMIN_ROLE})],
             next_run_time=undefined if active else None,
             id=job_scheduler_id,
             name=job_scheduler_id,

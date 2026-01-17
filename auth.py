@@ -12,23 +12,26 @@ SYSTEM_ROLES = {"admin"}
 @dataclass(frozen=True)
 class User:
     id: int
+    roles: frozenset[str]
+
+
+@dataclass(frozen=True)
+class UserData:
+    user: User
     username: str
     password: str
-    roles: set[str]
 
 
-USERS: list[User] = [
-    User(
-        1,
+USERS: list[UserData] = [
+    UserData(
+        User(1, {"admin"}),
         "thanhtu",
         "admin",
-        {"admin"},
     ),
-    User(
-        2,
+    UserData(
+        User(2, {"user"}),
         "cuongnv",
         "admin",
-        {"user"},
     ),
 ]
 
@@ -50,7 +53,7 @@ def require_auth(
         )
 
     # attach user to request
-    request.state.user = user
+    request.state.user = user.user
 
 
 def get_user(request: Request) -> User:

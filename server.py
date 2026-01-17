@@ -191,6 +191,15 @@ async def websocket_logs_endpoint(websocket: WebSocket, job_id: int):
         manager.disconnect(websocket, scheduler_job_id)
 
 
+# TODO: need checking for api based on ctx as well
+@api_router.get("/authorization/state")
+def auth_state(plugin_manager: PluginManagerState, user: UserState):
+    return {
+        "policy": plugin_manager.acl_resolver.enforcer.get_policy(),
+        "user": user,
+    }
+
+
 @api_router.get("/plugins")
 def plugins(dao: DAOState):
     return dao.get_all_plugins()
@@ -235,7 +244,7 @@ def template(
     if plugin_instance is None:
         return template_str
     try:
-        ctx = plugin_manager.create_ctx(package, user.id, user.roles)
+        ctx = plugin_manager.create_ctx(package, user)
         result = plugin_manager.render(ctx, template_str, plugin_instance.env(), payload.params)
         return Response(content=result, media_type="text/plain")
     except Exception as e:
@@ -276,7 +285,7 @@ def schema(
 
             # Built-in Jinja tags are provided by extensions
             env = plugin.env()
-            ctx = plugin_manager.create_ctx(plugin_item.package, user.id, user.roles)
+            ctx = plugin_manager.create_ctx(plugin_item.package, user)
             globals = {**plugin_manager.get_globals(ctx), **env.globals}
             return {
                 "schema": plugin.schema(ctx),
@@ -403,7 +412,7 @@ def update_config(
         plugin = plugin_manager.get_plugin_instance(plugin_item.package)
         if not plugin:
             raise HTTPException(status_code=404, detail="Plugin not found")
-        ctx = plugin_manager.create_ctx(plugin_item.package, user.id, user.roles)
+        ctx = plugin_manager.create_ctx(plugin_item.package, user)
         config = plugin.config(payload.config, ctx)
         if job_id == 0:
             plugin_manager.add_job(

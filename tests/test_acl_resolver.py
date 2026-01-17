@@ -49,7 +49,7 @@ def acl_resolver(dao, adapter):
 def make_ctx(allowed_permissions: set[str], is_admin: bool = False) -> ExecutionContext:
     ctx = MagicMock(spec=ExecutionContext)
 
-    def allowed(permission: str, action: str = "execute") -> bool:
+    def allowed(permission: str) -> bool:
         return permission in allowed_permissions
 
     ctx.allowed.side_effect = allowed

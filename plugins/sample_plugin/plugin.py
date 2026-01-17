@@ -163,7 +163,7 @@ class MyClass:
 
 @require("fetch_data")
 def fetch_data(ctx: ExecutionContext):
-    return ctx.subject
+    return ctx.user
 
 
 class Plugin:

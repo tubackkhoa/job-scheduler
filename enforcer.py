@@ -8,42 +8,23 @@ from jinja2 import pass_context
 from dataclasses import dataclass
 from typing import Literal, Optional, Set, TypedDict
 
+from auth import User
 
-@dataclass(frozen=True)
-class Subject:
-    user_id: str
-    roles: frozenset[str]
-
-    def __init__(
-        self,
-        user_id: str,
-        roles: Optional[Set[str]] = None,
-    ):
-        object.__setattr__(self, "user_id", user_id)
-        object.__setattr__(
-            self,
-            "roles",
-            frozenset(f"role:{r}" for r in roles or ()),
-        )
+ADMIN_ROLE = "admin"
 
 
 class ExecutionContext:
-    __slots__ = ("subject", "package", "_user", "_allowed")
+    __slots__ = ("user", "package", "_allowed")
 
-    def __init__(self, subject: Subject, package: str, enforcer: Enforcer):
-        object.__setattr__(self, "subject", subject)
+    def __init__(self, user: User, package: str, enforcer: Enforcer):
+        object.__setattr__(self, "user", user)
         object.__setattr__(self, "package", package)
-        object.__setattr__(self, "_user", f"user:{subject.user_id}")
 
-        object.__setattr__(
-            self,
-            "_allowed",
-            lambda permission: enforcer.enforce(
-                self._user,
-                permission,
-                self.subject,
-            ),
-        )
+        # preven closure access and change later, user is frozen already
+        def _allowed(permission: str, _call=enforcer.enforce):
+            return _call(user.id, permission, user.roles)
+
+        object.__setattr__(self, "_allowed", _allowed)
 
     def __setattr__(self, name, value):
         # 🔒 block mutation after initialization
@@ -55,7 +36,7 @@ class ExecutionContext:
         return self._allowed(permission)
 
     def is_admin(self):
-        return self.allowed("system.admin")
+        return ADMIN_ROLE in self.user.roles
 
     def require(self, permission: str):
         # ✅ Admin short-circuit (policy-based, wildcard-aware)
@@ -69,8 +50,8 @@ class ExecutionContext:
 # -----------------------------
 # Casbin helper function
 # -----------------------------
-def has_role(subject: Subject, role: str) -> bool:
-    return role in subject.roles
+def has_role(roles: set[str], role: str) -> bool:
+    return role in roles
 
 
 # -----------------------------
@@ -89,8 +70,8 @@ def create_enforcer(adapter: Optional[Adapter] = None) -> Enforcer:
         enforcer.load_policy()
 
     enforcer.add_policy(
-        "role:admin",
-        "system.admin",
+        ADMIN_ROLE,
+        "*",
     )
 
     return enforcer
