@@ -161,7 +161,7 @@ class Plugin:
 
     @hookimpl
     @classmethod
-    def schema(cls):
+    def schema(cls, ctx):
         return Config.model_json_schema()
 
     @hookimpl

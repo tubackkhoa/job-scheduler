@@ -203,12 +203,12 @@ class Plugin:
 
     @hookimpl
     @classmethod
-    def schema(cls, ctx: ExecutionContext = None):
+    def schema(cls, ctx: ExecutionContext):
         return Config.model_json_schema(ctx=ctx)
 
     @hookimpl
     @classmethod
-    def config(cls, json=None, ctx: ExecutionContext = None):
+    def config(cls, json, ctx: ExecutionContext):
         return Config.model_validate_secure(json or {}, ctx)
 
     @hookimpl
