@@ -182,7 +182,7 @@ class Plugin:
 
     @hookimpl
     @classmethod
-    def schema(cls, ctx: Optional[ExecutionContext] = None):
+    def schema(cls, ctx: ExecutionContext):
         return Config.model_json_schema()
 
     @hookimpl
