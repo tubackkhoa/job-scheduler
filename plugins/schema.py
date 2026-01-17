@@ -1,5 +1,5 @@
 from typing import Any, Literal, TypedDict, List, cast, Optional
-from pydantic import Field, ConfigDict, BaseModel, PrivateAttr
+from pydantic import Field, BaseModel, PrivateAttr
 from enforcer import ExecutionContext
 
 UIWidget = Literal[
@@ -86,7 +86,6 @@ class SecureBaseModel(BaseModel):
     - schema NEVER reads instance state
     """
 
-    model_config = ConfigDict(extra="forbid")
     _ctx: Optional[ExecutionContext] = PrivateAttr(default=None)
 
     # ---------------------
@@ -96,7 +95,7 @@ class SecureBaseModel(BaseModel):
     def __getattr__(self, name: str):
         value = super().__getattribute__(name)
 
-        ctx = self._ctx
+        ctx = getattr(self, "_ctx", None)
         if ctx is None:
             return value
 
@@ -119,7 +118,7 @@ class SecureBaseModel(BaseModel):
     # ---------------------
 
     def model_dump(self, **kwargs) -> dict[str, Any]:
-        ctx = self._ctx
+        ctx = getattr(self, "_ctx", None)
         if ctx is None:
             return super().model_dump(**kwargs)
 
@@ -151,13 +150,16 @@ class SecureBaseModel(BaseModel):
     # ---------------------
 
     @classmethod
-    def model_json_schema_secure(
+    def model_json_schema(
         cls,
         ctx: ExecutionContext,
         **kwargs,
     ) -> dict[str, Any]:
         # Base schema from Pydantic
         schema = super().model_json_schema(**kwargs)
+
+        if ctx is None:
+            return schema
 
         properties: dict[str, Any] = {}
         is_admin = ctx.is_admin()
@@ -186,12 +188,14 @@ class SecureBaseModel(BaseModel):
     # ---------------------
 
     @classmethod
-    def model_validate_secure(
+    def model_validate(
         cls,
         obj: Any,
         ctx: ExecutionContext,
         **kwargs,
     ):
+        if ctx is None:
+            return super().model_validate(obj, **kwargs)
 
         # Enforce write permissions
         if isinstance(obj, dict):

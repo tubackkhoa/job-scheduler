@@ -1,3 +1,4 @@
+import json
 from acl_resolver import ACLResolver
 from auth import User, get_user, require_auth
 from enforcer import Adapter
@@ -267,9 +268,14 @@ def schema(
         raise HTTPException(status_code=404, detail="Plugin not found")
 
     try:
+        ctx = plugin_manager.create_ctx(plugin_item.package, user)
         plugin = plugin_manager.get_plugin_instance(plugin_item.package)
+
         if plugin != None:
-            jobs = dao.get_jobs_by_plugin_and_session(plugin_id, session_id)
+            jobs = [
+                job.to_dict() for job in dao.get_jobs_by_plugin_and_session(plugin_id, session_id)
+            ]
+
             if len(jobs) == 0:
                 # add empty config so that when saving it will be new job
                 jobs.append(
@@ -277,15 +283,21 @@ def schema(
                         active=False,
                         description="",
                         id=0,
-                        config=plugin.config().model_dump_json(),
+                        config=plugin.config(),
                         plugin_id=plugin_id,
                         session_id=session_id,
-                    )
+                    ).to_dict()
                 )
+
+            for job in jobs:
+                raw = job["config"]
+                # pass validate, but restrict return
+                config = plugin.config(json.loads(raw) if isinstance(raw, str) else raw)
+                config._ctx = ctx
+                job["config"] = config.model_dump()
 
             # Built-in Jinja tags are provided by extensions
             env = plugin.env()
-            ctx = plugin_manager.create_ctx(plugin_item.package, user)
             globals = {**plugin_manager.get_globals(ctx), **env.globals}
             return {
                 "schema": plugin.schema(ctx),

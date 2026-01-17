@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 import pluggy
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
-from typing import Any, Callable, List
+from typing import Any, Callable, List, Optional
 import sqlglot
 from datetime import datetime
 from jinja2 import DictLoader, Environment
@@ -66,7 +66,7 @@ class DynamicCode(BaseModel):
 class Config(SecureBaseModel):
 
     dynamic_code: DynamicCode = Field(
-        ...,
+        default_factory=DynamicCode,
         json_schema_extra=ui_schema({"ui:options": {"size": 12, "section": True}}),
     )
 
@@ -204,12 +204,12 @@ class Plugin:
     @hookimpl
     @classmethod
     def schema(cls, ctx: ExecutionContext):
-        return Config.model_json_schema_secure(ctx)
+        return Config.model_json_schema(ctx)
 
     @hookimpl
     @classmethod
-    def config(cls, json, ctx: ExecutionContext):
-        return Config.model_validate_secure(json or {}, ctx)
+    def config(cls, json, ctx: ExecutionContext = None):
+        return Config.model_validate(json or {}, ctx)
 
     @hookimpl
     @classmethod
