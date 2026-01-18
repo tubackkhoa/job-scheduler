@@ -1,6 +1,5 @@
 from collections import defaultdict
-from types import MappingProxyType
-from typing import Callable, Iterable, Optional, Dict
+from typing import Callable, Optional
 from dataclasses import dataclass
 from enforcer import Adapter, ExecutionContext, Function, create_enforcer, PermissionMap
 
