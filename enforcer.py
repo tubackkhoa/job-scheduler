@@ -7,14 +7,24 @@ from functools import wraps
 from jinja2 import pass_context
 from jinja2.runtime import Context
 from dataclasses import dataclass
-from typing import Callable, Literal, Optional, Set, Tuple, TypedDict, Union, Any
+from typing import (
+    Callable,
+    Literal,
+    Optional,
+    Protocol,
+    Set,
+    Tuple,
+    TypedDict,
+    Union,
+    Any,
+    runtime_checkable,
+)
 
 from auth import User
 
 ADMIN_ROLE = "admin"
 USER_ROLE = "user"
 GlobalPermissions = Literal["plugin", "job", "field"]
-Function = Callable[..., Any]
 PERMISSION_KEYS: set[GlobalPermissions] = {"plugin", "job", "field"}
 
 POLICIES = [
@@ -22,6 +32,14 @@ POLICIES = [
     [USER_ROLE, "job"],
     [USER_ROLE, "field"],
 ]
+
+
+@runtime_checkable
+class Function(Protocol):
+    __permission__: GlobalPermissions
+    __acl_name__: str
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any: ...
 
 
 @dataclass(frozen=True)
@@ -101,14 +119,9 @@ def global_permission(permission_key: GlobalPermissions, *, name: Optional[str] 
     """
 
     def decorator(fn: Function) -> Function:
-        acl_name = name or fn.__name__
-
         # Attach metadata
         fn.__permission__ = permission_key
-        fn.__acl_item__ = ACLItem(
-            name=acl_name,
-            fn=fn,
-        )
+        fn.__acl_name__ = name or fn.__name__
 
         return fn
 

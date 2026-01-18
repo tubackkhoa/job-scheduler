@@ -1,19 +1,18 @@
 from collections import defaultdict
 from typing import Callable, Optional
 from dataclasses import dataclass
-from enforcer import Adapter, ExecutionContext, Function, create_enforcer, PermissionMap
+from enforcer import ACLItem, Adapter, ExecutionContext, Function, create_enforcer, PermissionMap
 
 
 class ACLResolver:
     def __init__(
         self,
         adapter: Optional[Adapter] = None,
-        permission_map: Optional[PermissionMap] = None,
     ):
         self.enforcer = create_enforcer(adapter)
-        self.permission_map = permission_map or defaultdict(set)
+        self.functions: set[Function] = set()
 
-    def update_from_objects(self, *objects: object):
+    def add_functions(self, *objects: object):
         """
         Scan objects (modules, instances, classes) for @permission-decorated callables.
         """
@@ -32,7 +31,7 @@ class ACLResolver:
         Add callable to ACL if it has permission metadata.
         """
         if callable(fn) and hasattr(fn, "__permission__"):
-            self.permission_map[fn.__permission__].add(fn.__acl_item__)
+            self.functions.add(fn)
 
     def get_allowed_functions(self, ctx: ExecutionContext) -> dict[str, Function]:
         allowed: dict[str, Function] = {}
@@ -41,10 +40,10 @@ class ACLResolver:
         is_admin = ctx.is_admin()
 
         # permission map can be update on the fly
-        for permission, targets in self.permission_map.items():
-            if not is_admin and not ctx.allowed(permission):
+        for fn in self.functions:
+            if not is_admin and not ctx.allowed(fn.__permission__):
                 continue
-            for item in targets:
-                allowed[item.name] = item.fn
+            # add to globals environment
+            allowed[fn.__acl_name__] = fn
 
         return allowed
