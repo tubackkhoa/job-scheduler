@@ -1,47 +1,40 @@
-from functools import partial
-import json
-from acl_resolver import ACLResolver
-from auth import User, get_user, require_auth
-from enforcer import Adapter
-from models import DAO
 import asyncio
 import inspect
+import json
+import logging
+import os
+from functools import partial
 from typing import Annotated, Optional
+
+import uvloop
 from fastapi import (
-    Depends,
-    FastAPI,
     APIRouter,
     Body,
+    Depends,
+    FastAPI,
     HTTPException,
-    Response,
     Request,
+    Response,
     WebSocket,
     WebSocketDisconnect,
 )
 from fastapi.concurrency import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
-import logging
-
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine
+
+from acl_resolver import ACLResolver
+from auth import User, get_user, require_auth
+from enforcer import Adapter
 from log_handler import JobLogHandler
 from log_service import LogService
-from models import (
-    Job,
-)
-from utils import (
-    list_trade_models,
-    create_trade_model,
-    deactivate_trade_model,
-)
+from models import DAO, Job
 from plugin_manager import PROJECT_NAME, PluginManager
 from plugins.schema import SecureBaseModel
 from schemas import ConfigPayload, DownloadPayload, PluginCreatePayload, Settings, TemplatePayload
+from utils import create_trade_model, deactivate_trade_model, list_trade_models
 from utils.job import JobUtil
 from ws_manager import WSConnectionManager
-import os
-import uvloop
-
 
 # Configure logging to show INFO and above messages
 logging.basicConfig(level=logging.DEBUG, handlers=[logging.NullHandler()])
