@@ -1,10 +1,10 @@
-from enum import Enum
 import os
+from enum import Enum
 from typing import Optional
 
 import httpx
 
-from enforcer import global_permission
+from enforcer import ExecutionContext, global_permission
 
 
 class ModelType(str, Enum):
@@ -44,6 +44,7 @@ def _get_api_config(
 
 @global_permission("job")
 def list_trade_models(
+    ctx: ExecutionContext,
     env: str = "production",
     api_url: Optional[str] = None,
     api_key: Optional[str] = None,
@@ -86,6 +87,7 @@ def list_trade_models(
 
 @global_permission("job")
 def create_trade_model(
+    ctx: ExecutionContext,
     payload: dict,
     api_url: Optional[str] = None,
     api_key: Optional[str] = None,
@@ -138,6 +140,7 @@ def create_trade_model(
 
 @global_permission("job")
 def deactivate_trade_model(
+    ctx: ExecutionContext,
     key: str,
     api_url: Optional[str] = None,
     api_key: Optional[str] = None,

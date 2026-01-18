@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from functools import wraps
-from typing import Any, Literal, Optional, Protocol, runtime_checkable
+from typing import Any, Callable, Literal, Optional, Protocol, runtime_checkable
 
 from casbin.enforcer import Enforcer
 from casbin.fast_enforcer import FastEnforcer
@@ -87,18 +87,43 @@ def create_enforcer(adapter: Optional[Adapter] = None) -> Enforcer:
     return enforcer
 
 
+def _with_execution_policy(
+    fn: Callable, permission_key: GlobalPermissions | str, global_scope: bool = False
+) -> Callable:
+    @pass_context
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        # Locate Jinja Context
+        for idx, arg in enumerate(args):
+            if isinstance(arg, ExecutionContext):
+                ctx = arg
+                break
+            if isinstance(arg, Context):
+                try:
+                    ctx = arg["ctx"]
+                except KeyError as e:
+                    raise RuntimeError("ExecutionContext (ctx) is required") from e
+                # Replace Jinja Context with ExecutionContext
+                args = tuple(ctx if i == idx else arg for i, arg in enumerate(args))
+                break
+        else:
+            print(fn, args, kwargs)
+            raise RuntimeError("ExecutionContext or Jinja Context is required")
+
+        if permission_key:
+            permission = permission_key if global_scope else f"{ctx.package}:{permission_key}"
+            ctx.require(permission)
+
+        return fn(*args, **kwargs)
+
+    return wrapper
+
+
 # declarative, static
-def global_permission(permission_key: GlobalPermissions, *, name: Optional[str] = None):
-    """
-    Declarative permission decorator.
-
-    - Attaches permission metadata
-    - Does NOT enforce access
-    - Does NOT wrap the function
-    """
-
+def global_permission(permission_key: GlobalPermissions, name: Optional[str] = None):
     def decorator(fn: Function) -> Function:
-        # Attach metadata
+        fn = _with_execution_policy(fn, permission_key, True)
+
         fn.__permission__ = permission_key
         fn.__acl_name__ = name or fn.__name__
 
@@ -107,37 +132,9 @@ def global_permission(permission_key: GlobalPermissions, *, name: Optional[str] 
     return decorator
 
 
-# require_permission: runtime enforcement
-def require_permission(permission_key: Optional[str] = None):
-    def decorator(fn):
-        @wraps(fn)
-        @pass_context
-        def wrapper(*args, **kwargs):
-            # Locate Jinja Context in args
-            for idx, arg in enumerate(args):
-                if isinstance(arg, Context):
-                    jinja_ctx = arg
-                    break
-            else:
-                raise RuntimeError("Jinja Context is required")
-
-            # Extract ExecutionContext
-            try:
-                ctx: ExecutionContext = jinja_ctx["ctx"]
-            except KeyError as e:
-                raise RuntimeError("ExecutionContext (ctx) is required") from e
-
-            # Replace Jinja Context with ExecutionContext
-            args = list(args)
-            args[idx] = ctx
-
-            # Optional permission check, with : to avoid name collision
-            if permission_key:
-                ctx.require(f"{ctx.package}:{permission_key}")
-
-            return fn(*args, **kwargs)
-
-        wrapper.__permission__ = permission_key
-        return wrapper
+# job_permission: runtime enforcement
+def job_permission(permission_key: Optional[str] = None):
+    def decorator(fn: Callable) -> Callable:
+        return _with_execution_policy(fn, permission_key)
 
     return decorator

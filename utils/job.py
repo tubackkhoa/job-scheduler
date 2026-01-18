@@ -1,6 +1,7 @@
-from functools import partial
 import json
-from enforcer import ExecutionContext, global_permission, require_permission
+from functools import partial
+
+from enforcer import ExecutionContext, global_permission, job_permission
 from models import DAO
 from plugin_manager import PluginManager
 from plugins.schema import SecureBaseModel
@@ -12,7 +13,6 @@ class JobUtil:
         self.dao = dao
 
     @global_permission("job")
-    @require_permission()
     def get_config(
         self,
         ctx: ExecutionContext,

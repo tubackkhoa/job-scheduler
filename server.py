@@ -7,6 +7,7 @@ from functools import partial
 from typing import Annotated, Optional
 
 import uvloop
+from acl_resolver import ACLResolver
 from fastapi import (
     APIRouter,
     Body,
@@ -23,9 +24,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine
 
-from acl_resolver import ACLResolver
 from auth import User, get_user, require_auth
-from enforcer import Adapter
+from enforcer import Adapter, create_enforcer
 from log_handler import JobLogHandler
 from log_service import LogService
 from models import DAO, Job
@@ -94,9 +94,9 @@ async def lifespan(app: FastAPI):
 
     job_util = JobUtil(dao)
     # update global acl_resolver
-    PluginManager.acl_resolver = ACLResolver(adapter)
+    PluginManager.enforcer = create_enforcer(adapter)
     #  update permission
-    PluginManager.acl_resolver.add_functions(
+    for fn in (
         dao.get_all_plugins,
         dao.apply_value_version_all_jobs,
         dao.get_jobs_by_plugin_and_session,
@@ -108,7 +108,8 @@ async def lifespan(app: FastAPI):
         create_trade_model,
         deactivate_trade_model,
         list_trade_models,
-    )
+    ):
+        PluginManager.functions[fn.__acl_name__] = fn
 
     # create plugin_instance
     plugin_manager = PluginManager(
@@ -212,14 +213,18 @@ async def websocket_logs_endpoint(websocket: WebSocket, job_id: int):
 @api_router.get("/authorization/state")
 def auth_state(plugin_manager: PluginManagerState, user: UserState):
     return {
-        "policy": plugin_manager.acl_resolver.enforcer.get_policy(),
+        "policy": plugin_manager.enforcer.get_policy(),
         "user": user,
     }
 
 
 @api_router.get("/plugins")
-def plugins(dao: DAOState):
-    return dao.get_all_plugins()
+def plugins(
+    dao: DAOState,
+    user: UserState,
+):
+    ctx = PluginManager.create_ctx(user)
+    return dao.get_all_plugins(ctx)
 
 
 @api_router.post("/plugins")
@@ -261,7 +266,7 @@ def template(
     if plugin_instance is None:
         return template_str
     try:
-        ctx = plugin_manager.create_ctx(package, user)
+        ctx = plugin_manager.create_ctx(user, package)
         result = plugin_manager.render(ctx, template_str, plugin_instance.env(), payload.params)
         return Response(content=result, media_type="text/plain")
     except Exception as e:
@@ -284,12 +289,13 @@ def schema(
         raise HTTPException(status_code=404, detail="Plugin not found")
 
     try:
-        ctx = plugin_manager.create_ctx(plugin_item.package, user)
+        ctx = plugin_manager.create_ctx(user, plugin_item.package)
         plugin = plugin_manager.get_plugin_instance(plugin_item.package)
 
         if plugin != None:
             jobs = [
-                job.to_dict() for job in dao.get_jobs_by_plugin_and_session(plugin_id, session_id)
+                job.to_dict()
+                for job in dao.get_jobs_by_plugin_and_session(ctx, plugin_id, session_id)
             ]
 
             if len(jobs) == 0:
@@ -314,7 +320,7 @@ def schema(
 
             # Built-in Jinja tags are provided by extensions
             env = plugin.env()
-            globals = {**plugin_manager.get_globals(ctx), **env.globals}
+            globals = {**plugin_manager.functions, **env.globals}
             return {
                 "schema": plugin.schema(ctx),
                 "jobs": jobs,
@@ -440,7 +446,7 @@ def update_config(
         plugin = plugin_manager.get_plugin_instance(plugin_item.package)
         if not plugin:
             raise HTTPException(status_code=404, detail="Plugin not found")
-        ctx = plugin_manager.create_ctx(plugin_item.package, user)
+        ctx = plugin_manager.create_ctx(user, plugin_item.package)
         config = plugin.config(payload.config, ctx)
         if job_id == 0:
             plugin_manager.add_job(

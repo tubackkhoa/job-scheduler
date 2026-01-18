@@ -23,7 +23,7 @@ from pydantic import BaseModel
 
 from acl_resolver import ACLResolver
 from auth import User
-from enforcer import ADMIN_ROLE, PERMISSION_KEYS, ExecutionContext
+from enforcer import ADMIN_ROLE, PERMISSION_KEYS, ExecutionContext, Function
 from models import DAO, Plugin
 
 PROJECT_NAME = "job-scheduler"
@@ -187,7 +187,8 @@ class PluginManager:
     #     finally:
     #         lock.release()
 
-    acl_resolver: Optional[ACLResolver] = None
+    enforcer: Optional[Enforcer] = None
+    functions: dict[str, Function] = {}
     # static pluggy manager, so that all pluginmanager share the same plugins
     manager = pluggy.PluginManager(PROJECT_NAME)
     manager.add_hookspecs(PluginSpec)
@@ -219,7 +220,8 @@ class PluginManager:
         Useful for initial load or after a restart.
         """
         # Register all plugins from the database
-        all_plugins = self.dao.get_all_plugins()
+        ctx = self.create_ctx(User(0, {ADMIN_ROLE}))
+        all_plugins = self.dao.get_all_plugins(ctx)
         look_up = {}
         for plugin in all_plugins:
             print(f"Loading plugin: {plugin.package}")
@@ -280,7 +282,7 @@ class PluginManager:
             if not isinstance(mapping, dict):
                 return
 
-            enforcer = cls.acl_resolver.enforcer
+            enforcer = cls.enforcer
             for permission_key, roles in mapping.items():
                 # with : to avoid name collision
                 permission = f"{package}:{permission_key}"
@@ -322,15 +324,10 @@ class PluginManager:
         return cls.manager.get_plugin(package)
 
     @classmethod
-    def get_globals(cls, ctx: ExecutionContext) -> dict[str, Callable]:
-        return cls.acl_resolver.get_allowed_functions(ctx)
-
-    @classmethod
     def render(cls, ctx: ExecutionContext, template_str: str, env: Environment, payload: dict):
         template_engine = env.from_string(template_str)
-        functions = cls.get_globals(ctx)
         # assign global function
-        return template_engine.render(**functions, **payload, this=payload, ctx=ctx)
+        return template_engine.render(**cls.functions, **payload, this=payload, ctx=ctx)
 
     @classmethod
     def run_plugin_job(cls, package: str, job_id: int, user: User):
@@ -350,7 +347,7 @@ class PluginManager:
             return None
 
         # user from login
-        ctx = cls.create_ctx(package, user)
+        ctx = cls.create_ctx(user, package)
 
         config = plugin.config(json.loads(job_config), ctx)
 
@@ -378,8 +375,8 @@ class PluginManager:
             cls.manager.unregister(existing_plugin, package)
 
     @classmethod
-    def create_ctx(cls, package: str, user: User):
-        return ExecutionContext(user, package, cls.acl_resolver.enforcer)
+    def create_ctx(cls, user: User, package: Optional[str] = None):
+        return ExecutionContext(user, package, cls.enforcer)
 
     @classmethod
     def load_plugin(cls, package: str, override: bool = False):
