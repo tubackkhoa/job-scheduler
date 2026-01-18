@@ -33,7 +33,7 @@ class Function(Protocol):
 class ExecutionContext:
     __slots__ = ("user", "package", "_allowed")
 
-    def __init__(self, user: User, package: str, enforcer: Enforcer):
+    def __init__(self, user: User, package: Optional[str], enforcer: Enforcer):
         object.__setattr__(self, "user", user)
         object.__setattr__(self, "package", package)
 
@@ -99,16 +99,13 @@ def _with_execution_policy(
                 ctx = arg
                 break
             if isinstance(arg, Context):
-                try:
-                    ctx = arg["ctx"]
-                except KeyError as e:
-                    raise RuntimeError("ExecutionContext (ctx) is required") from e
+                ctx = arg["ctx"]
                 # Replace Jinja Context with ExecutionContext
                 args = tuple(ctx if i == idx else arg for i, arg in enumerate(args))
                 break
-        else:
-            print(fn, args, kwargs)
-            raise RuntimeError("ExecutionContext or Jinja Context is required")
+
+        if not ctx:
+            raise RuntimeError("ExecutionContext is required")
 
         if permission_key:
             permission = permission_key if global_scope else f"{ctx.package}:{permission_key}"

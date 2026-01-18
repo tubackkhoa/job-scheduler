@@ -21,7 +21,6 @@ from casbin.enforcer import Enforcer
 from jinja2 import Environment
 from pydantic import BaseModel
 
-from acl_resolver import ACLResolver
 from auth import User
 from enforcer import ADMIN_ROLE, PERMISSION_KEYS, ExecutionContext, Function
 from models import DAO, Plugin

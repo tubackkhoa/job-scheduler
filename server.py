@@ -7,7 +7,6 @@ from functools import partial
 from typing import Annotated, Optional
 
 import uvloop
-from acl_resolver import ACLResolver
 from fastapi import (
     APIRouter,
     Body,
@@ -93,7 +92,6 @@ async def lifespan(app: FastAPI):
         )
 
     job_util = JobUtil(dao)
-    # update global acl_resolver
     PluginManager.enforcer = create_enforcer(adapter)
     #  update permission
     for fn in (
