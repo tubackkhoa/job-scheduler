@@ -9,36 +9,74 @@ from enforcer import ExecutionContext
 
 
 # --------------------
-# Fixtures
+# Permission sentinels (NO enums assumed)
 # --------------------
 
+JOB_PERMISSION = object()
+FIELD_PERMISSION = object()
 
-@pytest.fixture
-def dao():
-    dao = MagicMock()
-    dao.get_all_plugins = MagicMock(name="get_all_plugins")
-    dao.apply_value_version_all_jobs = MagicMock()
-    dao.get_jobs_by_plugin_and_session = MagicMock()
-    dao.create_value_version = MagicMock()
-    dao.get_value_version = MagicMock()
-    dao.get_value_versions = MagicMock()
-    dao.update_value_version = MagicMock()
-    return dao
+
+# --------------------
+# Fixtures
+# --------------------
 
 
 @pytest.fixture
 def adapter():
     fd, path = tempfile.mkstemp()
     os.close(fd)
-
     yield FileAdapter(path)
-
     os.remove(path)
 
 
+# --------------------
+# Dummy ACL target functions
+# --------------------
+
+
+def apply_value_version_all_jobs():
+    pass
+
+
+def create_value_version():
+    pass
+
+
+def get_value_version():
+    pass
+
+
+def get_value_versions():
+    pass
+
+
+def update_value_version():
+    pass
+
+
+# --------------------
+# Permission map
+# --------------------
+
+
 @pytest.fixture
-def acl_resolver(dao, adapter):
-    return ACLResolver(dao=dao, adapter=adapter)
+def permission_map():
+    return {
+        JOB_PERMISSION: {
+            apply_value_version_all_jobs,
+        },
+        FIELD_PERMISSION: {
+            create_value_version,
+            get_value_version,
+            get_value_versions,
+            update_value_version,
+        },
+    }
+
+
+@pytest.fixture
+def acl_resolver(permission_map, adapter):
+    return ACLResolver(permission_map=permission_map, adapter=adapter)
 
 
 # --------------------
@@ -46,13 +84,9 @@ def acl_resolver(dao, adapter):
 # --------------------
 
 
-def make_ctx(allowed_permissions: set[str], is_admin: bool = False) -> ExecutionContext:
+def make_ctx(allowed_permissions: set, is_admin: bool = False) -> ExecutionContext:
     ctx = MagicMock(spec=ExecutionContext)
-
-    def allowed(permission: str) -> bool:
-        return permission in allowed_permissions
-
-    ctx.allowed.side_effect = allowed
+    ctx.allowed.side_effect = lambda p: p in allowed_permissions
     ctx.is_admin.return_value = is_admin
     return ctx
 
@@ -64,7 +98,6 @@ def make_ctx(allowed_permissions: set[str], is_admin: bool = False) -> Execution
 
 def test_admin_has_all_permissions(acl_resolver):
     ctx = make_ctx(set(), is_admin=True)
-
     allowed = acl_resolver.get_allowed_functions(ctx)
 
     assert "apply_value_version_all_jobs" in allowed
@@ -75,8 +108,7 @@ def test_admin_has_all_permissions(acl_resolver):
 
 
 def test_job_permissions(acl_resolver):
-    ctx = make_ctx({"job"})
-
+    ctx = make_ctx({JOB_PERMISSION})
     allowed = acl_resolver.get_allowed_functions(ctx)
 
     assert "apply_value_version_all_jobs" in allowed
@@ -84,8 +116,7 @@ def test_job_permissions(acl_resolver):
 
 
 def test_field_permissions(acl_resolver):
-    ctx = make_ctx({"field"})
-
+    ctx = make_ctx({FIELD_PERMISSION})
     allowed = acl_resolver.get_allowed_functions(ctx)
 
     assert "create_value_version" in allowed
@@ -96,16 +127,14 @@ def test_field_permissions(acl_resolver):
 
 
 def test_unknown_permission_gets_nothing(acl_resolver):
-    ctx = make_ctx({"unknown"})
-
+    ctx = make_ctx({object()})
     allowed = acl_resolver.get_allowed_functions(ctx)
 
     assert allowed == {}
 
 
 def test_multiple_permissions_merge(acl_resolver):
-    ctx = make_ctx({"job", "field"})
-
+    ctx = make_ctx({JOB_PERMISSION, FIELD_PERMISSION})
     allowed = acl_resolver.get_allowed_functions(ctx)
 
     assert "apply_value_version_all_jobs" in allowed
@@ -114,7 +143,6 @@ def test_multiple_permissions_merge(acl_resolver):
 
 def test_allowed_functions_are_callable(acl_resolver):
     ctx = make_ctx(set(), is_admin=True)
-
     allowed = acl_resolver.get_allowed_functions(ctx)
 
     for name, fn in allowed.items():

@@ -108,7 +108,7 @@ class SecureBaseModel(BaseModel):
             return value
 
         perm_key = extra.get("read")
-        if perm_key and not ctx.is_admin() and not ctx.allowed(f"{ctx.package}.{perm_key}"):
+        if perm_key and not ctx.is_admin() and not ctx.allowed(f"{ctx.package}:{perm_key}"):
             raise PermissionError(f"Read denied for field '{name}'")
 
         return value
@@ -134,7 +134,7 @@ class SecureBaseModel(BaseModel):
                 continue
 
             perm_key = extra.get("read")
-            if perm_key and not is_admin and not ctx.allowed(f"{ctx.package}.{perm_key}"):
+            if perm_key and not is_admin and not ctx.allowed(f"{ctx.package}:{perm_key}"):
                 continue
 
             allowed.add(name)
@@ -179,7 +179,7 @@ class SecureBaseModel(BaseModel):
                 continue
 
             perm_key = extra.get("read")
-            if perm_key and not is_admin and not ctx.allowed(f"{ctx.package}.{perm_key}"):
+            if perm_key and not is_admin and not ctx.allowed(f"{ctx.package}:{perm_key}"):
                 continue
 
             properties[name] = prop
@@ -211,7 +211,7 @@ class SecureBaseModel(BaseModel):
                         continue
                     perm_key = extra.get("write")
                     if perm_key and not is_admin:
-                        ctx.require(f"{ctx.package}.{perm_key}")
+                        ctx.require(f"{ctx.package}:{perm_key}")
 
         # Delegate to Pydantic
         instance = super().model_validate(obj, **kwargs)

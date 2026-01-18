@@ -280,11 +280,8 @@ class PluginManager:
 
             enforcer = cls.acl_resolver.enforcer
             for permission_key, roles in mapping.items():
-                permission = (
-                    permission_key
-                    if permission_key in PERMISSION_KEYS
-                    else f"{package}.{permission_key}"
-                )
+                # with : to avoid name collision
+                permission = f"{package}:{permission_key}"
                 for role in roles:
                     # make sure not override by mistake in plugin, even we have make permission non-conflict
                     if role != ADMIN_ROLE and not enforcer.has_policy(role, permission):

@@ -15,7 +15,7 @@ ADMIN_ROLE = "admin"
 USER_ROLE = "user"
 GlobalPermissions = Literal["plugin", "job", "field"]
 Function = Callable[..., Any]
-GlobalItem = Function | tuple[str, Function]
+GlobalItem = Union[Function, tuple[str, Function]]
 PERMISSION_KEYS: set[GlobalPermissions] = {"plugin", "job", "field"}
 
 POLICIES = [
@@ -106,14 +106,9 @@ def require(permission_key: Optional[str] = None):
             args = list(args)
             args[idx] = ctx
 
-            # Optional permission check
+            # Optional permission check, with : to avoid name collision
             if permission_key:
-                permission = (
-                    permission_key
-                    if permission_key in PERMISSION_KEYS
-                    else f"{ctx.package}.{permission_key}"
-                )
-                ctx.require(permission)
+                ctx.require(f"{ctx.package}:{permission_key}")
 
             return fn(*args, **kwargs)
 
