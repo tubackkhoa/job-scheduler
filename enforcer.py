@@ -74,7 +74,7 @@ def has_role(roles: set[str], role: str) -> bool:
 
 def create_enforcer(adapter: Optional[Adapter] = None) -> Enforcer:
 
-    enforcer = FastEnforcer("model.conf", adapter)
+    enforcer = FastEnforcer("enforcer.conf", adapter)
 
     enforcer.enable_auto_save(False)
     enforcer.add_function("has_role", has_role)
