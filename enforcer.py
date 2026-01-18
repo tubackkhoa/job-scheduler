@@ -42,15 +42,6 @@ class Function(Protocol):
     def __call__(self, *args: Any, **kwargs: Any) -> Any: ...
 
 
-@dataclass(frozen=True)
-class ACLItem:
-    name: str
-    fn: Function
-
-
-PermissionMap = dict[GlobalPermissions, set[ACLItem]]
-
-
 class ExecutionContext:
     __slots__ = ("user", "package", "_allowed")
 

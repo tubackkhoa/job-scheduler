@@ -1,7 +1,5 @@
-from collections import defaultdict
-from typing import Callable, Optional
-from dataclasses import dataclass
-from enforcer import ACLItem, Adapter, ExecutionContext, Function, create_enforcer, PermissionMap
+from typing import Optional
+from enforcer import Adapter, ExecutionContext, Function, create_enforcer
 
 
 class ACLResolver:
@@ -12,25 +10,13 @@ class ACLResolver:
         self.enforcer = create_enforcer(adapter)
         self.functions: set[Function] = set()
 
-    def add_functions(self, *objects: object):
+    def add_functions(self, *objects: Function):
         """
         Scan objects (modules, instances, classes) for @permission-decorated callables.
         """
-        for obj in objects:
-            # 1️⃣ Direct callable
-            if callable(obj):
-                self._maybe_add_callable(obj)
-                continue
-
-            # 2️⃣ Scan object attributes
-            for attr in vars(obj).values():
-                self._maybe_add_callable(attr)
-
-    def _maybe_add_callable(self, fn: object) -> None:
-        """
-        Add callable to ACL if it has permission metadata.
-        """
-        if callable(fn) and hasattr(fn, "__permission__"):
+        for fn in objects:
+            if not hasattr(fn, "__permission__"):
+                raise ValueError(f"{fn.__name__} is missing @permission decorator")
             self.functions.add(fn)
 
     def get_allowed_functions(self, ctx: ExecutionContext) -> dict[str, Function]:

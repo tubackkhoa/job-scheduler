@@ -104,7 +104,17 @@ async def lifespan(app: FastAPI):
     PluginManager.acl_resolver = ACLResolver(adapter)
     #  update permission
     PluginManager.acl_resolver.add_functions(
-        dao, job_util, create_trade_model, deactivate_trade_model, list_trade_models
+        dao.get_all_plugins,
+        dao.apply_value_version_all_jobs,
+        dao.get_jobs_by_plugin_and_session,
+        dao.create_value_version,
+        dao.get_value_version,
+        dao.get_value_versions,
+        dao.update_value_version,
+        job_util.get_config,
+        create_trade_model,
+        deactivate_trade_model,
+        list_trade_models,
     )
 
     # create plugin_instance
