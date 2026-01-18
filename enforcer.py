@@ -5,12 +5,24 @@ from casbin.persist import Adapter
 from casbin.enforcer import Enforcer
 from functools import wraps
 from jinja2 import pass_context
+from jinja2.runtime import Context
 from dataclasses import dataclass
-from typing import Literal, Optional, Set, TypedDict
+from typing import Callable, Literal, Optional, Set, Tuple, TypedDict, Union, Any
 
 from auth import User
 
 ADMIN_ROLE = "admin"
+USER_ROLE = "user"
+GlobalPermissions = Literal["plugin", "job", "field"]
+Function = Callable[..., Any]
+GlobalItem = Function | tuple[str, Function]
+PERMISSION_KEYS: set[GlobalPermissions] = {"plugin", "job", "field"}
+
+POLICIES = [
+    [ADMIN_ROLE, "*"],
+    [USER_ROLE, "job"],
+    [USER_ROLE, "field"],
+]
 
 
 class ExecutionContext:
@@ -65,43 +77,46 @@ def create_enforcer(adapter: Optional[Adapter] = None) -> Enforcer:
     if enforcer.adapter:
         enforcer.load_policy()
 
-    enforcer.add_policy(
-        ADMIN_ROLE,
-        "*",
-    )
+    enforcer.add_policies(POLICIES)
 
     return enforcer
 
 
-# -----------------------------
-# Security model
-# -----------------------------
-
-
-# -----------------------------
-# Decorator
-# -----------------------------
-
-
-def require(permission_key: str):
+# require must always pass ctx so that it can handle in more detail, but permission is optional to check
+def require(permission_key: Optional[str] = None):
     def decorator(fn):
-        sig = inspect.signature(fn)
-        accepts_ctx = "ctx" in sig.parameters
-
         @wraps(fn)
         @pass_context
-        def wrapper(jinja_ctx, *args, **kwargs):
-            ctx: ExecutionContext = jinja_ctx.get("ctx")
-            if ctx is None:
-                raise RuntimeError("ExecutionContext (ctx) is required")
-            permission = f"{ctx.package}.{permission_key}"
-            ctx.require(permission)
+        def wrapper(*args, **kwargs):
+            # Locate Jinja Context in args
+            for idx, arg in enumerate(args):
+                if isinstance(arg, Context):
+                    jinja_ctx = arg
+                    break
+            else:
+                raise RuntimeError("Jinja Context is required")
 
-            if accepts_ctx:
-                kwargs["ctx"] = ctx
+            # Extract ExecutionContext
+            try:
+                ctx: ExecutionContext = jinja_ctx["ctx"]
+            except KeyError as e:
+                raise RuntimeError("ExecutionContext (ctx) is required") from e
+
+            # Replace Jinja Context with ExecutionContext
+            args = list(args)
+            args[idx] = ctx
+
+            # Optional permission check
+            if permission_key:
+                permission = (
+                    permission_key
+                    if permission_key in PERMISSION_KEYS
+                    else f"{ctx.package}.{permission_key}"
+                )
+                ctx.require(permission)
+
             return fn(*args, **kwargs)
 
-        # metadata
         wrapper.__permission__ = permission_key
         return wrapper
 

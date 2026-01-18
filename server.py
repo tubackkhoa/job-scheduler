@@ -1,3 +1,4 @@
+from functools import partial
 import json
 from acl_resolver import ACLResolver
 from auth import User, get_user, require_auth
@@ -28,10 +29,15 @@ from log_service import LogService
 from models import (
     Job,
 )
-
+from utils import (
+    list_trade_models,
+    create_trade_model,
+    deactivate_trade_model,
+)
 from plugin_manager import PROJECT_NAME, PluginManager
 from plugins.schema import SecureBaseModel
 from schemas import ConfigPayload, DownloadPayload, PluginCreatePayload, Settings, TemplatePayload
+from utils.job import JobUtil
 from ws_manager import WSConnectionManager
 import os
 import uvloop
@@ -93,7 +99,28 @@ async def lifespan(app: FastAPI):
             key=f"{PROJECT_NAME}:job_policy",
         )
 
-    PluginManager.acl_resolver = ACLResolver(dao, adapter)
+    job_util = JobUtil(dao)
+
+    PluginManager.acl_resolver = ACLResolver(
+        {
+            "plugin": {dao.get_all_plugins},
+            "job": {
+                dao.apply_value_version_all_jobs,
+                dao.get_jobs_by_plugin_and_session,
+                list_trade_models,
+                create_trade_model,
+                deactivate_trade_model,
+                job_util.get_config,
+            },
+            "field": {
+                dao.create_value_version,
+                dao.get_value_version,
+                dao.get_value_versions,
+                dao.update_value_version,
+            },
+        },
+        adapter,
+    )
 
     # create plugin_instance
     plugin_manager = PluginManager(

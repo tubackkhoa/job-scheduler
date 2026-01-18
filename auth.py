@@ -1,12 +1,9 @@
+from dataclasses import dataclass
 from fastapi import Request, HTTPException, status, Depends
 from fastapi.security import HTTPBasicCredentials, HTTPBasic
 from datetime import datetime, timedelta
 from typing import Set
 import secrets
-
-from enforcer import dataclass
-
-SYSTEM_ROLES = {"admin"}
 
 
 @dataclass(frozen=True)

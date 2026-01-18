@@ -15,7 +15,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from jinja2 import Environment
 from acl_resolver import ACLResolver
 from auth import User
-from enforcer import ADMIN_ROLE, ExecutionContext
+from enforcer import ADMIN_ROLE, ExecutionContext, PERMISSION_KEYS
 from casbin.enforcer import Enforcer
 from models import DAO, Plugin
 import zipfile
@@ -280,7 +280,11 @@ class PluginManager:
 
             enforcer = cls.acl_resolver.enforcer
             for permission_key, roles in mapping.items():
-                permission = f"{package}.{permission_key}"
+                permission = (
+                    permission_key
+                    if permission_key in PERMISSION_KEYS
+                    else f"{package}.{permission_key}"
+                )
                 for role in roles:
                     # make sure not override by mistake in plugin, even we have make permission non-conflict
                     if role != ADMIN_ROLE and not enforcer.has_policy(role, permission):
@@ -319,7 +323,7 @@ class PluginManager:
         return cls.manager.get_plugin(package)
 
     @classmethod
-    def get_globals(cls, ctx: ExecutionContext):
+    def get_globals(cls, ctx: ExecutionContext) -> dict[str, Callable]:
         return cls.acl_resolver.get_allowed_functions(ctx)
 
     @classmethod
