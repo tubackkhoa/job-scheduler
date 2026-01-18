@@ -7,7 +7,7 @@ from typing import Any, Callable, List, Optional
 import sqlglot
 from datetime import datetime
 from jinja2 import DictLoader, Environment
-from enforcer import ExecutionContext, require
+from enforcer import ExecutionContext, require_permission
 from plugins import ui_schema
 from plugins.schema import SecureBaseModel, SecureField
 
@@ -161,7 +161,7 @@ class MyClass:
         return {"fixed": "object", "name": self.name}
 
 
-@require("fetch_data")
+@require_permission("fetch_data")
 def fetch_data(ctx: ExecutionContext):
     return ctx.user
 

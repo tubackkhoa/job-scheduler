@@ -4,6 +4,9 @@ from typing import Optional
 
 import httpx
 
+from enforcer import global_permission
+
+
 class ModelType(str, Enum):
     top10_assets = "top10_assets"
     top5_assets = "top5_assets"
@@ -13,6 +16,7 @@ class ModelType(str, Enum):
 
     def __str__(self):
         return self.value
+
 
 def _is_test_env(env: str) -> bool:
     return env == "uat_testing_multiple_models"
@@ -38,12 +42,13 @@ def _get_api_config(
     return api_url, api_key
 
 
+@global_permission("job")
 def list_trade_models(
     env: str = "production",
     api_url: Optional[str] = None,
     api_key: Optional[str] = None,
     status: str = "active",
-):  
+):
     versions = []
     try:
         url, key = _get_api_config(env, api_url, api_key)
@@ -71,12 +76,15 @@ def list_trade_models(
         else:
             items = result.get("data", []) if isinstance(result, dict) else result
             for item in items:
-                versions.append({"id": item.get("key") or item.get("id"), "name": item.get("key", "")})
+                versions.append(
+                    {"id": item.get("key") or item.get("id"), "name": item.get("key", "")}
+                )
         return {"versions": versions}
     except Exception as e:
-        return {"versions": [{'id': item.value, 'name': item.value} for item in ModelType]}
+        return {"versions": [{"id": item.value, "name": item.value} for item in ModelType]}
 
 
+@global_permission("job")
 def create_trade_model(
     payload: dict,
     api_url: Optional[str] = None,
@@ -85,7 +93,7 @@ def create_trade_model(
 ):
     url, key = _get_api_config(env, api_url, api_key)
     print(payload)
-    
+
     if _is_test_env(env):
         # Test env: POST /api/test-system/model
         headers = {"test-system-api-key": key, "Content-Type": "application/json"}
@@ -114,7 +122,7 @@ def create_trade_model(
         resp.raise_for_status()
         result = resp.json()
         return {"id": result.get("key") or result.get("id") or identity, "name": identity, **result}
-    
+
     # Production: POST /api/trading-models
     payload.setdefault("status", "active")
     resp = httpx.post(
@@ -128,6 +136,7 @@ def create_trade_model(
     return {"id": result.get("key") or result.get("id"), "name": result.get("name", ""), **result}
 
 
+@global_permission("job")
 def deactivate_trade_model(
     key: str,
     api_url: Optional[str] = None,
@@ -135,7 +144,7 @@ def deactivate_trade_model(
     env: str = "production",
 ):
     url, api_key_resolved = _get_api_config(env, api_url, api_key)
-    
+
     if _is_test_env(env):
         # Test env: POST /api/test-system/model/stop
         resp = httpx.post(
@@ -152,6 +161,6 @@ def deactivate_trade_model(
             headers={"quant-api-key": api_key_resolved},
             timeout=30,
         )
-    
+
     resp.raise_for_status()
     return {"success": True, "message": f"Trade model {key} deactivated"}

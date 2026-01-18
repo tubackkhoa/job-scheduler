@@ -15,6 +15,8 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped, Session
 from datetime import datetime
 
+from enforcer import global_permission
+
 
 class Base(DeclarativeBase):
     pass
@@ -180,6 +182,7 @@ class DAO:
             session.commit()
             return job
 
+    @global_permission("job")
     def get_jobs_by_plugin_and_session(self, plugin_id: int, session_id: Optional[int] = None):
         with Session(self.db_engine) as session:
             query = session.query(Job).filter(Job.plugin_id == plugin_id)
@@ -191,6 +194,7 @@ class DAO:
         with Session(self.db_engine) as session:
             return session.get(Job, id)
 
+    @global_permission("plugin")
     def get_all_plugins(self):
         with Session(self.db_engine) as session:
             plugins = session.query(Plugin).all()
@@ -201,6 +205,7 @@ class DAO:
             jobs = session.query(Job).all()
             return jobs
 
+    @global_permission("field")
     def create_value_version(self, payload: dict) -> dict:
         assert "field_id" in payload, "field_id is required"
 
@@ -213,6 +218,7 @@ class DAO:
 
     # ---------- read ----------
 
+    @global_permission("field")
     def get_value_version(self, version_id: int) -> dict:
         with Session(self.db_engine) as session:
             version = session.get(ValueVersion, version_id)
@@ -236,6 +242,7 @@ class DAO:
 
             return version.to_dict()
 
+    @global_permission("field")
     def get_value_versions(
         self,
         field_id: str,
@@ -263,6 +270,7 @@ class DAO:
 
     # ---------- update ----------
 
+    @global_permission("field")
     def update_value_version(self, version_id: int, payload: dict) -> dict:
         with Session(self.db_engine) as session:
             version = session.get(ValueVersion, version_id)
@@ -294,6 +302,7 @@ class DAO:
                 "message": f"SQL version {version_id} deleted",
             }
 
+    @global_permission("job")
     def apply_value_version_all_jobs(self, version_id: int, job_ids: List[int]):
         with Session(self.db_engine) as session:
             version = session.get(ValueVersion, version_id)

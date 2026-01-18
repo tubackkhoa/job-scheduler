@@ -15,7 +15,6 @@ ADMIN_ROLE = "admin"
 USER_ROLE = "user"
 GlobalPermissions = Literal["plugin", "job", "field"]
 Function = Callable[..., Any]
-GlobalItem = Union[Function, tuple[str, Function]]
 PERMISSION_KEYS: set[GlobalPermissions] = {"plugin", "job", "field"}
 
 POLICIES = [
@@ -23,6 +22,15 @@ POLICIES = [
     [USER_ROLE, "job"],
     [USER_ROLE, "field"],
 ]
+
+
+@dataclass(frozen=True)
+class ACLItem:
+    name: str
+    fn: Function
+
+
+PermissionMap = dict[GlobalPermissions, set[ACLItem]]
 
 
 class ExecutionContext:
@@ -82,8 +90,33 @@ def create_enforcer(adapter: Optional[Adapter] = None) -> Enforcer:
     return enforcer
 
 
-# require must always pass ctx so that it can handle in more detail, but permission is optional to check
-def require(permission_key: Optional[str] = None):
+# declarative, static
+def global_permission(permission_key: GlobalPermissions, *, name: Optional[str] = None):
+    """
+    Declarative permission decorator.
+
+    - Attaches permission metadata
+    - Does NOT enforce access
+    - Does NOT wrap the function
+    """
+
+    def decorator(fn: Function) -> Function:
+        acl_name = name or fn.__name__
+
+        # Attach metadata
+        fn.__permission__ = permission_key
+        fn.__acl_item__ = ACLItem(
+            name=acl_name,
+            fn=fn,
+        )
+
+        return fn
+
+    return decorator
+
+
+# require_permission: runtime enforcement
+def require_permission(permission_key: Optional[str] = None):
     def decorator(fn):
         @wraps(fn)
         @pass_context
