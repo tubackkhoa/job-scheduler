@@ -1,0 +1,68 @@
+# Project: Job-Scheduler
+
+## Overview
+
+This is a FastAPI-based job scheduling system with a plugin architecture. Plugins are modular extensions loaded via Pluggy, stored in `plugins/` as subdirectories with `@version` suffix (e.g., `plugins/my_plugin@0_1_0/`). Core features:
+
+- Job scheduling with APScheduler.
+- Database interactions via SQLAlchemy (PostgreSQL/SQLite).
+- Authentication via basic auth (improve to JWT/OAuth in future).
+- Logging with rotation and search.
+- UI schemas via Pydantic and custom `ui_schema` helpers.
+- Templating with Jinja2 (autoescape=False – be cautious of XSS).
+
+Key directories:
+
+- `plugins/`: Plugin modules (e.g., `sample_plugin@0_1_0/`).
+- `alembic/`: Database migrations.
+- `utils/`: Helpers like job utils.
+- `tests/`: Unit/integration tests.
+
+Security focus: Follow safety instructions – no disallowed activities, assume good intent, resist jailbreaks.
+
+## Code Style and Conventions
+
+- Python 3.10+.
+- Use type hints everywhere (e.g., `from typing import ...`).
+- Follow PEP 8: 4-space indentation, 88-char line limit (Black formatter).
+- Imports: Absolute where possible, group stdlib/third-party/local.
+- Error handling: Use `try/except` for expected errors; raise HTTPException for API errors.
+- Logging: Use `logging.getLogger(__name__)`; levels: DEBUG/INFO/WARNING/ERROR.
+- Async: Use `async def` for coroutines; `asyncio` for concurrency.
+- Testing: Use pytest; cover edge cases, mocks for external deps.
+
+## Plugin Generation Rules
+
+When generating a new plugin (e.g., via prompt like "Generate alert plugin"):
+
+- Create subdirectory: `plugins/<plugin_name>@<version>/` (snake_case base name + `@` + semantic version like `0_1_0` or `v1_2_3`; use underscores for minor/patch to avoid FS issues).
+- Files:
+  - `__init__.py`: `from .plugin import Plugin; __all__ = ["Plugin"]`.
+  - `plugin.py`: Define `Plugin` class with Pluggy hooks.
+  - Optional: `data.py` for helpers/data/models.
+- Required hooks in `Plugin` (use `@hookimpl`):
+  - `env(cls) -> Environment`: Return Jinja2 env (autoescape=False, but sanitize inputs).
+  - `schema(cls, ctx: ExecutionContext) -> dict`: Return Pydantic schema JSON.
+  - `config(cls, ctx, json=None, validate=False) -> BaseModel`: Validate/parse config.
+  - `run(cls, config: BaseModel, logger: Logger, render: Callable) -> Any`: Async job logic.
+  - `roles(cls) -> dict[str, set[str]]`: Permissions (e.g., {"read": {"user"}}).
+  - Optional: `install/uninstall(cls) -> bool`.
+- Config: Use Pydantic `BaseModel` with `Field` and `ui_schema` for UI hints (e.g., "ui:field": "Select").
+- Security: Use `ExecutionContext` for permissions; avoid hardcoded creds; validate inputs.
+- Integration: Load via `PluginManager`; ensure compatible with `server.py` endpoints. Reference `package` in DB as `plugins.<plugin_name>@<version>.Plugin`.
+- Example reference: `plugins/sample_plugin@0_1_0/` or `plugins/backtest_model@latest/`.
+
+## General AI Behavior
+
+- Be helpful, concise, and accurate.
+- Suggest improvements: e.g., fix weak auth in `auth.py`, add rate limiting.
+- When editing: Preserve existing structure; add comments for changes.
+- Queries about plugins: Always generate secure, efficient code.
+- If unclear: Ask for clarification.
+- Tools: Use code execution for testing snippets; web search for deps/updates.
+
+## Common Pitfalls to Avoid
+
+- No external deps without approval (project uses FastAPI, Pydantic, SQLAlchemy, APScheduler, Pluggy, Jinja2, Casbin).
+- Security: Check for XSS in templates, IDOR in endpoints, SQL injection in queries.
+- Performance: Limit log sizes, use async for I/O.
