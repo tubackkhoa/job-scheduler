@@ -192,7 +192,7 @@ class SecureBaseModel(BaseModel):
         cls,
         ctx: ExecutionContext,
         obj: Any,
-        valiate: bool,
+        valiate: Optional[bool] = False,
         **kwargs,
     ):
         # do checking
