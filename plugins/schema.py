@@ -194,12 +194,13 @@ class SecureBaseModel(BaseModel):
     @classmethod
     def model_validate(
         cls,
-        ctx: Optional[ExecutionContext],
+        ctx: ExecutionContext,
         obj: Any,
+        valiate: bool,
         **kwargs,
     ):
         # do checking
-        if ctx and not ctx.is_admin():
+        if valiate and not ctx.is_admin():
             # Enforce write permissions
             if isinstance(obj, dict):
 

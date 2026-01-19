@@ -291,10 +291,9 @@ def schema(
         plugin = plugin_manager.get_plugin_instance(plugin_item.package)
 
         if plugin != None:
-            jobs = [
-                job.to_dict()
-                for job in dao.get_jobs_by_plugin_and_session(ctx, plugin_id, session_id)
-            ]
+            jobs = dao.get_jobs_by_plugin_and_session(ctx, plugin_id, session_id)
+            for job in jobs:
+                job.config = plugin.config(ctx, job.config).model_dump()
 
             if len(jobs) == 0:
                 # add empty config so that when saving it will be new job
@@ -303,25 +302,18 @@ def schema(
                         active=False,
                         description="",
                         id=0,
-                        config=plugin.config(None),
+                        config=plugin.config(ctx).model_dump(),
                         plugin_id=plugin_id,
                         session_id=session_id,
                     ).to_dict()
                 )
-
-            for job in jobs:
-                raw = job["config"]
-                # pass validate, but restrict return
-                config = plugin.config(None, raw)
-                SecureBaseModel.bind_ctx(config, ctx)
-                job["config"] = config.model_dump()
 
             # Built-in Jinja tags are provided by extensions
             env = plugin.env()
             globals = {**plugin_manager.functions, **env.globals}
             return {
                 "schema": plugin.schema(ctx),
-                "jobs": jobs,
+                "jobs": [job.to_dict() for job in jobs],
                 "env": {
                     "globals": {name: describe_callable(value) for name, value in globals.items()},
                     "filters": {
@@ -445,7 +437,8 @@ def update_config(
         if not plugin:
             raise HTTPException(status_code=404, detail="Plugin not found")
         ctx = plugin_manager.create_ctx(user, plugin_item.package)
-        config = plugin.config(ctx, payload.config)
+        # validate before saving
+        config = plugin.config(ctx, payload.config, True)
         if job_id == 0:
             plugin_manager.add_job(
                 session_id,

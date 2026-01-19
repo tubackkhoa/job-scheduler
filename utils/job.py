@@ -4,7 +4,6 @@ from functools import partial
 from enforcer import ExecutionContext, global_permission, job_permission
 from models import DAO
 from plugin_manager import PluginManager
-from plugins.schema import SecureBaseModel
 
 
 class JobUtil:
@@ -27,6 +26,5 @@ class JobUtil:
         plugin = PluginManager.get_plugin_instance(plugin_item.package)
         if not plugin:
             return {}
-        config = plugin.config(None, job.config)
-        SecureBaseModel.bind_ctx(config, ctx)
+        config = plugin.config(ctx, job.config)
         return config.model_dump()

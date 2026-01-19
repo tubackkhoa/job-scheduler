@@ -208,8 +208,8 @@ class Plugin:
 
     @hookimpl
     @classmethod
-    def config(cls, json, ctx: ExecutionContext = None):
-        return Config.model_validate(json or {}, ctx)
+    def config(cls, ctx: ExecutionContext, json: Any, validate: Optional[bool] = False):
+        return Config.model_validate(ctx, json or {}, validate)
 
     @hookimpl
     @classmethod

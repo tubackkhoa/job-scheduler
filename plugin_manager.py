@@ -24,7 +24,6 @@ from pydantic import BaseModel
 from auth import User
 from enforcer import ADMIN_ROLE, PERMISSION_KEYS, ExecutionContext, Function
 from models import DAO, Plugin
-from plugins.schema import SecureBaseModel
 
 
 PROJECT_NAME = "job-scheduler"
@@ -147,7 +146,10 @@ class PluginSpec:
     # using ctx as optional so that we do not need to validate every time we call this, then bind_ctx later for access
     @hookspec
     def config(
-        cls, ctx: Optional[ExecutionContext], json: Optional[dict[str, Any]] = None
+        cls,
+        ctx: ExecutionContext,
+        json: Optional[dict[str, Any]] = None,
+        validate: Optional[bool] = False,
     ) -> BaseModel: ...
 
     @hookspec
@@ -352,9 +354,8 @@ class PluginManager:
         # user from login
         ctx = cls.create_ctx(user, package)
 
-        # do not validate because already save from db, just bind ctx later
-        config = plugin.config(None, job_config)
-        SecureBaseModel.bind_ctx(config, ctx)
+        # do not validate because already save from db
+        config = plugin.config(ctx, job_config)
 
         job_scheduler_id = cls.get_job_scheduler_id(job_id)
 
