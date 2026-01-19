@@ -106,6 +106,14 @@ class LogIndexer:
         # Rebuild the FTS index to keep it consistent after deletes
         self.rebuild_fts_index()
 
+    def get_log_count(self, job_id: int) -> int:
+        """Get total number of logs for a specific job."""
+        result = self.db.execute(
+            "SELECT COUNT(*) FROM logs WHERE job_id = ?",
+            (job_id,)
+        ).fetchone()
+        return result[0] if result else 0
+
     def insert_log(
         self,
         job_id: int,
