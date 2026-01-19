@@ -143,7 +143,6 @@ class PluginSpec:
     @hookspec
     def schema(cls, ctx: ExecutionContext) -> dict[str, Any]: ...
 
-    # using ctx as optional so that we do not need to validate every time we call this, then bind_ctx later for access
     @hookspec
     def config(
         cls,

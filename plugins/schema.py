@@ -149,10 +149,6 @@ class SecureBaseModel(BaseModel):
     # Secure schema (explicit ctx)
     # ---------------------
 
-    @staticmethod
-    def bind_ctx(instance: BaseModel, ctx: ExecutionContext):
-        object.__setattr__(instance, "_ctx", ctx)
-
     @classmethod
     def model_json_schema(
         cls,
@@ -217,5 +213,6 @@ class SecureBaseModel(BaseModel):
         instance = super().model_validate(obj, **kwargs)
 
         # Attach ctx (instance-scoped)
-        cls.bind_ctx(instance, ctx)
+        object.__setattr__(instance, "_ctx", ctx)
+
         return instance
