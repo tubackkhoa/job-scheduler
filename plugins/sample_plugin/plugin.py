@@ -99,9 +99,10 @@ class Config(SecureBaseModel):
             {
                 "ui:field": "Select",
                 "ui:options": {"size": 6, "multiple": True},
-                "ui:expr": (
-                    "{ default: {{ get_cities_by_country(country) }} }",
-                    ["country"],  # dependency paths, can be many, eg : ["abc"], ["abc", "def"]
+                "default": [],  # to know type
+                "ui:expr:default": (
+                    "{{ get_cities_by_country(country) }}",
+                    ["country"],  # dependency paths, can be many, eg : ["abc", "def"]
                 ),
             }
         ),
