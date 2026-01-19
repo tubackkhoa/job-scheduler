@@ -24,6 +24,8 @@ from pydantic import BaseModel
 from auth import User
 from enforcer import ADMIN_ROLE, PERMISSION_KEYS, ExecutionContext, Function
 from models import DAO, Plugin
+from plugins.schema import SecureBaseModel
+
 
 PROJECT_NAME = "job-scheduler"
 
@@ -144,12 +146,13 @@ class PluginSpec:
 
     @hookspec
     def config(
-        cls, json: Optional[dict[str, Any]] = None, ctx: Optional[ExecutionContext] = None
+        cls, ctx: Optional[ExecutionContext], json: Optional[dict[str, Any]] = None
     ) -> BaseModel: ...
 
     @hookspec
     async def run(
         cls,
+        ctx: ExecutionContext,
         config: BaseModel,
         logger: logging.Logger,
         render: Callable[[str, Environment, dict], Any],
@@ -348,7 +351,9 @@ class PluginManager:
         # user from login
         ctx = cls.create_ctx(user, package)
 
-        config = plugin.config(json.loads(job_config), ctx)
+        # do not validate because already save from db, just bind ctx later
+        config = plugin.config(None, job_config)
+        SecureBaseModel.bind_ctx(config, ctx)
 
         job_scheduler_id = cls.get_job_scheduler_id(job_id)
 
@@ -361,7 +366,7 @@ class PluginManager:
 
         try:
             render_function = partial(cls.render, ctx)
-            retval = asyncio.run(plugin.run(config, logger, render_function))
+            retval = asyncio.run(plugin.run(ctx, config, logger, render_function))
             # logger.info(f"Job executed successfully (return value: {retval})")
             return retval
         except Exception as e:

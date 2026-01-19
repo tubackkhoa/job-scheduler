@@ -1,19 +1,21 @@
 import json
-from typing import Dict, List, Optional
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 from sqlalchemy import (
+    JSON,
     Boolean,
+    CheckConstraint,
+    DateTime,
     Engine,
     Integer,
+    Sequence,
     String,
     Text,
-    CheckConstraint,
     select,
     text,
-    Sequence,
-    DateTime,
 )
-from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped, Session
-from datetime import datetime
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from enforcer import ExecutionContext, global_permission
 
@@ -53,7 +55,7 @@ class Job(Base):
     session_id: Mapped[int] = mapped_column(Integer, nullable=False)
     plugin_id: Mapped[int] = mapped_column(Integer, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
-    config: Mapped[str] = mapped_column(Text, nullable=True)
+    config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
 
     def to_dict(self):
@@ -94,7 +96,7 @@ class ValueVersion(Base):
 
 
 class DAO:
-    job_config_cache: Dict[int, str] = {}
+    job_config_cache: Dict[int, Dict[str, Any]] = {}
 
     def __init__(self, db_engine: Engine):
         self.db_engine = db_engine
@@ -123,7 +125,7 @@ class DAO:
         self,
         session_id: int,
         plugin_id: int,
-        config: str,
+        config: Dict[str, Any],
         description: Optional[str] = None,
     ):
         with Session(self.db_engine) as session:
@@ -143,7 +145,7 @@ class DAO:
         DAO.job_config_cache[job.id] = config
         return job_id
 
-    def update_job(self, id: int, config: str, description: Optional[str] = None):
+    def update_job(self, id: int, config: Dict[str, Any], description: Optional[str] = None):
         with Session(self.db_engine) as session:
             job = session.get(Job, id)
             if job:
@@ -329,9 +331,7 @@ class DAO:
                 job = session.get(Job, job_id)
                 if not job:
                     continue
-                config = json.loads(job.config) if job.config else {}
-                config[field_name] = int(version_id)
-                job.config = json.dumps(config)
+                job.config[field_name] = int(version_id)
                 self.job_config_cache[job.id] = job.config
                 updated_count += 1
 

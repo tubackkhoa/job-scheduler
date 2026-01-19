@@ -36,7 +36,7 @@ def create_data(engine: Engine, session_ids: list[int] = [1, 2], plugin_data=PLU
                 job = Job(
                     session_id=session_id,
                     plugin_id=plugin_row.id,  # Use actual inserted plugin ID
-                    config=default_config.model_dump_json(),
+                    config=default_config.model_dump(),
                     active=True,
                     description=f"{plugin_item['description']} version 0.{plugin_ind}",
                 )

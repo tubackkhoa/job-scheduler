@@ -27,6 +27,6 @@ class JobUtil:
         plugin = PluginManager.get_plugin_instance(plugin_item.package)
         if not plugin:
             return {}
-        config = plugin.config(json.loads(job.config))
+        config = plugin.config(None, job.config)
         SecureBaseModel.bind_ctx(config, ctx)
         return config.model_dump()

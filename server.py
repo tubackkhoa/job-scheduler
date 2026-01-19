@@ -303,7 +303,7 @@ def schema(
                         active=False,
                         description="",
                         id=0,
-                        config=plugin.config(),
+                        config=plugin.config(None),
                         plugin_id=plugin_id,
                         session_id=session_id,
                     ).to_dict()
@@ -312,7 +312,7 @@ def schema(
             for job in jobs:
                 raw = job["config"]
                 # pass validate, but restrict return
-                config = plugin.config(json.loads(raw) if isinstance(raw, str) else raw)
+                config = plugin.config(None, raw)
                 SecureBaseModel.bind_ctx(config, ctx)
                 job["config"] = config.model_dump()
 
@@ -445,16 +445,16 @@ def update_config(
         if not plugin:
             raise HTTPException(status_code=404, detail="Plugin not found")
         ctx = plugin_manager.create_ctx(user, plugin_item.package)
-        config = plugin.config(payload.config, ctx)
+        config = plugin.config(ctx, payload.config)
         if job_id == 0:
             plugin_manager.add_job(
                 session_id,
                 plugin_id,
-                config.model_dump_json(),
+                config.model_dump(),
                 payload.description,
             )
         else:
-            dao.update_job(job_id, config.model_dump_json(), payload.description)
+            dao.update_job(job_id, config.model_dump(), payload.description)
 
         return config
     except HTTPException:
