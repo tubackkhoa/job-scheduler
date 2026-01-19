@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from functools import wraps
-from typing import Any, Callable, Literal, Optional, Protocol, runtime_checkable
+from typing import Any, Callable, Literal, Optional, ParamSpec, Protocol, TypeVar, runtime_checkable
 
 from casbin.enforcer import Enforcer
 from casbin.fast_enforcer import FastEnforcer
@@ -22,12 +22,16 @@ POLICIES = [
 ]
 
 
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
 @runtime_checkable
-class Function(Protocol):
+class PermissionedFunction(Protocol[P, R]):
     __permission__: GlobalPermissions
     __acl_name__: str
 
-    def __call__(self, *args: Any, **kwargs: Any) -> Any: ...
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R: ...
 
 
 class ExecutionContext:
@@ -88,8 +92,8 @@ def create_enforcer(adapter: Optional[Adapter] = None) -> Enforcer:
 
 
 def _with_execution_policy(
-    fn: Callable, permission_key: GlobalPermissions | str, global_scope: bool = False
-) -> Callable:
+    fn: Callable[P, R], permission_key: GlobalPermissions | str, global_scope: bool = False
+) -> Callable[P, R]:
     @pass_context
     @wraps(fn)
     def wrapper(*args, **kwargs):
@@ -117,8 +121,10 @@ def _with_execution_policy(
 
 
 # declarative, static
-def global_permission(permission_key: GlobalPermissions, name: Optional[str] = None):
-    def decorator(fn: Function) -> Function:
+def global_permission(
+    permission_key: GlobalPermissions, name: Optional[str] = None
+) -> Callable[[Callable[P, R]], PermissionedFunction[P, R]]:
+    def decorator(fn: Callable[P, R]) -> PermissionedFunction[P, R]:
         fn = _with_execution_policy(fn, permission_key, True)
 
         fn.__permission__ = permission_key
@@ -131,7 +137,7 @@ def global_permission(permission_key: GlobalPermissions, name: Optional[str] = N
 
 # job_permission: runtime enforcement
 def job_permission(permission_key: Optional[str] = None):
-    def decorator(fn: Callable) -> Callable:
+    def decorator(fn: Callable):
         return _with_execution_policy(fn, permission_key)
 
     return decorator

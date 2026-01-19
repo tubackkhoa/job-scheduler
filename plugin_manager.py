@@ -22,7 +22,7 @@ from jinja2 import Environment
 from pydantic import BaseModel
 
 from auth import User
-from enforcer import ADMIN_ROLE, PERMISSION_KEYS, ExecutionContext, Function
+from enforcer import ADMIN_ROLE, PERMISSION_KEYS, ExecutionContext, PermissionedFunction
 from models import DAO, Plugin
 
 
@@ -192,7 +192,7 @@ class PluginManager:
     #         lock.release()
 
     enforcer: Optional[Enforcer] = None
-    functions: dict[str, Function] = {}
+    functions: dict[str, PermissionedFunction] = {}
     # static pluggy manager, so that all pluginmanager share the same plugins
     manager = pluggy.PluginManager(PROJECT_NAME)
     manager.add_hookspecs(PluginSpec)
