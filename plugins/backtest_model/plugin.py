@@ -1,7 +1,7 @@
 import logging
 import pluggy
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Any, List, Optional
 import pandas as pd
 from jinja2 import Environment, BaseLoader
 
@@ -192,8 +192,13 @@ class Plugin:
 
     @hookimpl
     @classmethod
-    def config(cls, json=None, ctx: Optional[ExecutionContext] = None):
-        return Config.model_validate(json or {})
+    def config(
+        cls,
+        ctx: ExecutionContext,
+        json: Optional[dict[str, Any]] = None,
+        validate: Optional[bool] = False,
+    ):
+        return Config.model_validate(json)
 
     @hookimpl
     @classmethod
