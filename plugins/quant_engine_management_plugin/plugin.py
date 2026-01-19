@@ -166,8 +166,12 @@ class Plugin:
 
     @hookimpl
     @classmethod
-    def config(cls, json=None):
-        return Config.model_validate(json or {})
+    def config(
+        cls,
+        json: Optional[dict[str, Any]] = None,
+        validate: Optional[bool] = False,
+    ):
+        return Config.model_validate(json)
 
     @hookimpl
     @classmethod
