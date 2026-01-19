@@ -168,10 +168,11 @@ class Plugin:
     @classmethod
     def config(
         cls,
+        ctx: ExecutionContext,
         json: Optional[dict[str, Any]] = None,
         validate: Optional[bool] = False,
     ):
-        return Config.model_validate(json)
+        return Config.model_validate(json or {})
 
     @hookimpl
     @classmethod

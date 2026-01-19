@@ -305,7 +305,7 @@ def schema(
                         config=plugin.config(ctx).model_dump(),
                         plugin_id=plugin_id,
                         session_id=session_id,
-                    ).to_dict()
+                    )
                 )
 
             # Built-in Jinja tags are provided by extensions

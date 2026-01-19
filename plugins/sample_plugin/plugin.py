@@ -214,7 +214,7 @@ class Plugin:
         json: Optional[dict[str, Any]] = None,
         validate: Optional[bool] = False,
     ):
-        return Config.model_validate(ctx, json, validate)
+        return Config.model_validate(ctx, json or {}, validate)
 
     @hookimpl
     @classmethod
