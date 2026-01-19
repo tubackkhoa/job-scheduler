@@ -61,20 +61,20 @@ class Config(BaseModel):
         }),
     )
 
-    plugin_id: int = Field(
-        0,
-        title="Choose plugin",
-        json_schema_extra=ui_schema(
-            {
-                "ui:field": "Select",
-                "ui:options": {"size": 6, "id": "id", "title": "package"},
-                "ui:expr": (
-                    """{ default: {{ get_all_plugins() | tolist("id", "package") }} }""",
-                    [],
-                ),
-            }
-        ),
-    )
+    # plugin_id: int = Field(
+    #     0,
+    #     title="Choose plugin",
+    #     json_schema_extra=ui_schema(
+    #         {
+    #             "ui:field": "Select",
+    #             "ui:options": {"size": 6, "id": "id", "title": "package"},
+    #             "ui:expr": (
+    #                 """{ default: {{ get_all_plugins() | tolist("id", "package") }} }""",
+    #                 [],
+    #             ),
+    #         }
+    #     ),
+    # )
 
 
 def get_running_models(base_url: str, api_key: str) -> List[Dict[str, Any]]:
