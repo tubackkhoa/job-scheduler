@@ -50,7 +50,7 @@ When generating a new plugin (e.g., via prompt like "Generate alert plugin"):
 - Config: Use Pydantic `BaseModel` with `Field` and `ui_schema` for UI hints (e.g., "ui:field": "Select").
 - Security: Use `ExecutionContext` for permissions; avoid hardcoded creds; validate inputs.
 - Integration: Load via `PluginManager`; ensure compatible with `server.py` endpoints. Reference `package` in DB as `plugins.<plugin_name>@<version>.Plugin`.
-- Example reference: `plugins/sample_plugin@0_1_0/` or `plugins/backtest_model@latest/`.
+- Example reference: `plugins/sample_plugin` or `plugins/backtest_model`.
 
 ## General AI Behavior
 
