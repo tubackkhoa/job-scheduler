@@ -319,13 +319,9 @@ def schema(
                     "filters": {
                         name: describe_callable(value) for name, value in env.filters.items()
                     },
-                    "tests": sorted(env.tests.keys()),
-                    "tags": sorted(
-                        set(
-                            tag
-                            for ext in env.extensions.values()
-                            for tag in getattr(ext, "tags", [])
-                        )
+                    "tests": env.tests.keys(),
+                    "tags": set(
+                        tag for ext in env.extensions.values() for tag in getattr(ext, "tags", [])
                     ),
                 },
             }
