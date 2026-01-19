@@ -206,6 +206,11 @@ class DAO:
             jobs = session.query(Job).all()
             return jobs
 
+    def get_all_jobs_by_plugin(self, plugin_id: int):
+        with Session(self.db_engine) as session:
+            jobs = session.query(Job).filter(Job.plugin_id == plugin_id).all()
+            return jobs
+
     def create_value_version(self, payload: dict) -> dict:
         assert "field_id" in payload, "field_id is required"
 
