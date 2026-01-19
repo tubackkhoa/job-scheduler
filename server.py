@@ -313,7 +313,7 @@ def schema(
             globals = {**plugin_manager.functions, **env.globals}
             return {
                 "schema": plugin.schema(ctx),
-                "jobs": [job.to_dict() for job in jobs],
+                "jobs": jobs,
                 "env": {
                     "globals": {name: describe_callable(value) for name, value in globals.items()},
                     "filters": {
