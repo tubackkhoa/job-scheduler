@@ -3,7 +3,6 @@ import pluggy
 from pydantic import BaseModel, Field
 from typing import Any, List, Optional
 import pandas as pd
-from jinja2 import Environment, BaseLoader
 
 from enforcer import ExecutionContext
 from .data import (
@@ -163,17 +162,15 @@ class Config(BaseModel):
 
 
 class Plugin:
-    _env = Environment(loader=BaseLoader(), autoescape=False)
-    _env.globals.update(
-        {
-            "DataFrame": pd.DataFrame,
-            "create_signals": create_signals_for_backtest,
-            "compute_performance_kpis": compute_performance_kpis,
-            "compute_accumulated_pnl": compute_accumulated_pnl,
-            "generate_pnl_chart_data": generate_pnl_chart_data,
-            "generate_ohlcv_chart_data": generate_ohlcv_chart_data,
-        }
-    )
+
+    _env = {
+        "DataFrame": pd.DataFrame,
+        "create_signals": create_signals_for_backtest,
+        "compute_performance_kpis": compute_performance_kpis,
+        "compute_accumulated_pnl": compute_accumulated_pnl,
+        "generate_pnl_chart_data": generate_pnl_chart_data,
+        "generate_ohlcv_chart_data": generate_ohlcv_chart_data,
+    }
 
     @hookimpl
     @classmethod

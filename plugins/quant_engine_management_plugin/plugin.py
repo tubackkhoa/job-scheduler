@@ -2,11 +2,9 @@ from enum import Enum
 from typing import Callable, Any, Optional
 import logging
 from pydantic import BaseModel
-from pydantic import BaseModel, Field, ValidationInfo, field_validator
+from pydantic import BaseModel, Field
 from enforcer import ExecutionContext
 from plugins import ui_schema
-from jinja2.loaders import DictLoader
-from jinja2.environment import Environment
 from pathlib import Path
 import pluggy
 
@@ -135,12 +133,7 @@ class Config(BaseModel):
 
 class Plugin:
 
-    _env = Environment(
-        loader=DictLoader({"base": "{% block content %}{% endblock %}"}),
-        autoescape=False,
-        trim_blocks=True,
-        lstrip_blocks=True,
-    )
+    _env = {}
 
     @hookimpl
     @classmethod
@@ -149,7 +142,7 @@ class Plugin:
 
     @hookimpl
     @classmethod
-    def env(cls) -> Environment:
+    def env(cls):
         return cls._env
 
     @hookimpl
@@ -175,6 +168,9 @@ class Plugin:
     @hookimpl
     @classmethod
     async def run(
-        cls, config: Config, logger: logging.Logger, render: Callable[[str, Environment, dict], Any]
+        cls,
+        config: Config,
+        logger: logging.Logger,
+        render: Callable[[ExecutionContext, str, dict], Any],
     ):
         return True
