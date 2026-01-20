@@ -80,20 +80,33 @@ class LogService:
         return files
 
     def _count_total_lines(self, job_id: str) -> int:
-        """Count total lines across all log files (rotated and current) for a job."""
+        """Count total lines across all log files (rotated and current) for a job.
+        
+        Optimized: counts newlines instead of parsing full content.
+        """
         total_lines = 0
         
-        # Count lines in rotated files
+        # Count lines in rotated files (gzipped)
         rotated_files = self._get_rotated_files(job_id)
         for rotated_file in rotated_files:
-            entries = self._read_log_file(rotated_file)
-            total_lines += len(entries)
+            try:
+                if rotated_file.suffix == ".gz":
+                    with gzip.open(rotated_file, "rt", encoding="utf-8") as f:
+                        total_lines += sum(1 for _ in f)
+                else:
+                    with open(rotated_file, "r", encoding="utf-8") as f:
+                        total_lines += sum(1 for _ in f)
+            except Exception:
+                pass  # Skip corrupted files
         
         # Count lines in current file
         current_file = self._get_log_file(job_id)
         if current_file.exists():
-            entries = self._read_log_file(current_file)
-            total_lines += len(entries)
+            try:
+                with open(current_file, "r", encoding="utf-8") as f:
+                    total_lines += sum(1 for _ in f)
+            except Exception:
+                pass
         
         return total_lines
 
@@ -129,7 +142,11 @@ class LogService:
         return current_file  # Return path for new file
 
     def _trim_old_logs(self, job_id: str, keep_lines: int):
-        """Trim old logs by keeping only the latest keep_lines entries."""
+        """Trim old logs by keeping only the latest keep_lines entries.
+        
+        After trimming, the recent logs are kept in the main current file
+        so that API fetch can access them directly.
+        """
         # Read all log entries from all files (oldest to newest)
         all_entries = []
         
@@ -155,12 +172,10 @@ class LogService:
         if current_file.exists():
             current_file.unlink()
         
-        # Re-create compressed file with trimmed logs
+        # Write trimmed logs back to the MAIN current file (not compressed)
+        # This ensures API can fetch recent logs directly
         if all_entries:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            rotated_file = current_file.parent / f"{current_file.stem}.{timestamp}.log.gz"
-            
-            with gzip.open(rotated_file, "wt", encoding="utf-8") as f:
+            with open(current_file, "w", encoding="utf-8") as f:
                 for entry in all_entries:
                     log_line = f"{entry['timestamp']} [{entry['level']}] {entry['message']}\n"
                     f.write(log_line)
