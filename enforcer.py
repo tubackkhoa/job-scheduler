@@ -156,9 +156,18 @@ def job_permission(permission_key: Optional[str] = None):
 def bind_class_registry(*objects: object):
     # bind permission, because method instance only know at runtime
     for obj in objects:
-        for fn in obj.__class__.__dict__.values():
-            fn_name = getattr(fn, "__name__", None)
-            if not fn_name or not fn_name in GLOBAL_PERMISSION_REGISTRY:
-                continue
+        cls = obj.__class__
+        # cache name of method and name assign in jinja
+        pairs = getattr(cls, "_permissioned_method_pairs", set())
+        if len(pairs) == 0:
+            pairs = set()
+            for name, fn in obj.__class__.__dict__.items():
+                fn_name = getattr(fn, "__name__", None)
+                if not fn_name or not fn_name in GLOBAL_PERMISSION_REGISTRY:
+                    continue
+                pairs.add((name, fn_name))
+            setattr(cls, "_permissioned_method_pairs", pairs)
+
+        for name, fn_name in pairs:
             # re-bound instance for jinja environment
-            GLOBAL_PERMISSION_REGISTRY[fn_name] = MethodType(fn, obj)
+            GLOBAL_PERMISSION_REGISTRY[fn_name] = MethodType(getattr(obj, name), obj)
