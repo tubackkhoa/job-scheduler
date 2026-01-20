@@ -116,13 +116,13 @@ def _with_execution_policy(
     @wraps(fn)
     def wrapper(*args, **kwargs):
         # Locate Jinja Context
-        ctx, args = _resolve_ctx(args)
+        ctx, new_args = _resolve_ctx(args)
 
         if permission_key:
             permission = permission_key if global_scope else f"{ctx.package}:{permission_key}"
             ctx.require(permission)
 
-        return fn(*args, **kwargs)
+        return fn(*new_args, **kwargs)
 
     return wrapper
 
@@ -150,7 +150,9 @@ def global_permission(
 
 
 # job_permission: runtime enforcement
-def job_permission(permission_key: Optional[str] = None):
+def job_permission(
+    permission_key: Optional[str] = None,
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
     def decorator(fn: Callable):
         return _with_execution_policy(fn, permission_key)
 
