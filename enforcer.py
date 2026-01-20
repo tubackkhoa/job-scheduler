@@ -137,7 +137,7 @@ def global_permission(
         wrapped = _with_execution_policy(fn, permission_key, True)
 
         # only register when it is pure function, other wise please assign obj
-        if isinstance(fn, FunctionType):
+        if not "." in fn.__qualname__:
             # register into GLOBAL_PERMISSION_REGISTRY for globals
             if key in GLOBAL_PERMISSION_REGISTRY:
                 raise RuntimeError(f"Duplicate permission name: {key}")
