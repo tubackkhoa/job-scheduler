@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from typing import Any, Callable, List, Dict
 from jinja2 import Environment, DictLoader
 from sqlalchemy import create_engine
+from typing import Optional
 
 from plugins import ui_schema
 from log_service import LogService
@@ -90,6 +91,33 @@ def get_running_models(base_url: str, api_key: str) -> List[Dict[str, Any]]:
         return []
 
 
+def fetch_positions_with_pnl(base_url: str, api_key: str, start_time: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Fetch positions from API with PNL data.
+    
+    Args:
+        base_url: API base URL
+        api_key: API key for authentication
+        start_time: Start time in ISO format (e.g., '2026-01-01T00:00:00Z')
+    
+    Returns:
+        List of positions with symbol, direction, pnl, entryTime, modelKey
+    """
+    url = f"{base_url}/api/test-system/models/positions"
+    headers = {"test-system-api-key": api_key, "accept": "application/json"}
+    
+    try:
+        if start_time:
+            response = httpx.get(url, headers=headers, params={"startTime": start_time}, timeout=30.0)
+        else:
+            response = httpx.get(url, headers=headers, timeout=30.0)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("positions", []) if data.get("ok") else []
+    except Exception as e:
+        print(f"Error fetching positions: {e}")
+        return []
+
+
 def format_pnl_table(models: List[Dict[str, Any]]) -> pd.DataFrame:
     """Format PNL data as DataFrame with color-coded icons for PNL values."""
     if not models:
@@ -100,17 +128,18 @@ def format_pnl_table(models: List[Dict[str, Any]]) -> pd.DataFrame:
     df = df[['modelName', 'identity', 'totalPnl', 'status']].copy()
     df.columns = ['Model', 'Identity', 'PNL', 'Status']
     
-    # Format PNL with icons: green up arrow for positive, red down arrow for negative/zero
-    def format_pnl_with_icon(x):
+    # Format PNL with colored arrows and numbers (HTML)
+    def format_pnl_with_color(x):
         if pd.notna(x):
-            formatted = f"{x:+.4f}"
             if x > 0:
-                return f"🟢 {formatted}"
+                # Green arrow and number for profit
+                return f"<span style='color: #28a745;'>↗ +${x:.4f}</span>"
             else:
-                return f"🔴 {formatted}"
-        return "0.0000"
+                # Red arrow and number for loss or zero
+                return f"<span style='color: #dc3545;'>↘ ${x:.4f}</span>"
+        return "$0"
     
-    df['PNL'] = df['PNL'].apply(format_pnl_with_icon)
+    df['PNL'] = df['PNL'].apply(format_pnl_with_color)
     
     df = df.fillna('N/A')    
     return df
@@ -187,7 +216,7 @@ def extract_signals_from_job(job_id: int, keyword: str) -> pd.DataFrame:
     try:
         scheduler_id = f"job-scheduler.job.{job_id}"
         result = logger.search_logs_with_following(
-            job_id=scheduler_id, keyword=keyword, n_following=2, limit=100,
+            job_id=scheduler_id, keyword=keyword, n_following=2, limit=50,
             sort="desc",
         )
         
@@ -242,23 +271,14 @@ def extract_signals_from_job(job_id: int, keyword: str) -> pd.DataFrame:
                 is_gated = gated_flag == '1' or gated_flag == '1.0' or gated_flag == 'True'
                 
                 if new_mu > 0:
-                    icon = "🟢"
                     direction = "LONG"
                 elif new_mu < 0:
-                    icon = "🔴"
                     direction = "SHORT"
                 else:
-                    icon = "⚪"
                     direction = "NONE"
-                
-                if is_gated:
-                    signal = f"~~{base_asset}~~ {icon}"
-                else:
-                    signal = f"{base_asset} {icon}"
                 
                 all_table_data.append({
                     'pred_time': pred_time,
-                    'signal': signal,
                     'base_asset': base_asset,
                     'direction': direction,
                     'new_mu': new_mu,
@@ -344,6 +364,79 @@ def get_signal_comparison(config: Config) -> pd.DataFrame:
         
         if combined_df.empty:
             return pd.DataFrame({"message": ["No valid timestamps found."]})
+        
+        min_pred_time = combined_df['pred_time'].min()
+        start_time_iso = min_pred_time.isoformat() + 'Z'
+        
+        positions = fetch_positions_with_pnl(
+            config.webhook_url,
+            config.webhook_api_key,
+            start_time_iso
+        )        
+        # Create a mapping of (symbol, direction, modelKey, pred_time_hour) -> pnl
+        # Need to convert BUY/SELL to LONG/SHORT and match by hourly time window
+        pnl_map = {}
+        for pos in positions:
+            symbol = pos.get('symbol', '')
+            model_key = pos.get('modelKey', '')
+            entry_time_str = pos.get('entryTime', '')
+            pnl = pos.get('pnl', 0) or 0
+            
+            # Parse entryTime and round to hour
+            try:
+                from datetime import datetime
+                entry_time = pd.to_datetime(entry_time_str)
+                # Round to hour: 2026-01-20T09:00:21.405Z -> 2026-01-20 09:00:00
+                entry_hour = entry_time.floor('h')
+                entry_hour_naive = entry_hour.tz_localize(None) if entry_hour.tz is not None else entry_hour
+                entry_hour_iso = entry_hour_naive.isoformat()
+                
+                key = (symbol, model_key, entry_hour_iso)
+                pnl_map[key] = pnl
+            except:
+                continue
+        print(pnl_map)
+        # Map PNL to each signal
+        def format_signal_with_pnl(row):
+            symbol = row['base_asset']
+            direction = row['direction']
+            identity = row['_identity']
+            is_gated = row['is_gated']
+            pred_time = row['pred_time']
+            
+            pred_hour = pred_time.floor('h')
+            # Convert to naive datetime (remove timezone) then to ISO string
+            pred_hour_naive = pred_hour.tz_localize(None) if pred_hour.tz is not None else pred_hour
+            pred_hour_iso = pred_hour_naive.isoformat()
+            
+            # Get PNL from positions API
+            pnl = pnl_map.get((symbol, identity, pred_hour_iso), 0)
+            
+            # Color for symbol based on direction
+            if direction == "LONG":
+                symbol_colored = f"<span style='color: #28a745; font-weight: bold;'>{symbol}</span>"  # Green
+            elif direction == "SHORT":
+                symbol_colored = f"<span style='color: #dc3545; font-weight: bold;'>{symbol}</span>"  # Red
+            else:
+                symbol_colored = f"**{symbol}**"
+            
+            # PNL with colored arrow
+            if pnl > 0:
+                # Green arrow and number for profit
+                pnl_str = f"<span style='color: #28a745;'>↗ +${pnl:.5f}</span>"
+            elif pnl < 0:
+                # Red arrow and number for loss
+                pnl_str = f"<span style='color: #dc3545;'>↘ ${pnl:.5f}</span>"
+            else:
+                pnl_str = "$0"
+            
+            # Format: Symbol Direction PNL
+            if is_gated:
+                return f"~~{symbol_colored}~~ {pnl_str}"
+            else:
+                return f"{symbol_colored} {pnl_str}"
+        
+        combined_df['signal'] = combined_df.apply(format_signal_with_pnl, axis=1)
 
         pivot = combined_df.pivot_table(
             index=['pred_time', 'base_asset'],
@@ -356,8 +449,8 @@ def get_signal_comparison(config: Config) -> pd.DataFrame:
         
         pivot = pivot.sort_index(level='pred_time', ascending=False)
         
-        if len(pivot) > 50:
-            pivot = pivot.head(50)
+        # if len(pivot) > 50:
+        #     pivot = pivot.head(50)
         
         pivot = pivot.reset_index()
         
