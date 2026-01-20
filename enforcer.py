@@ -160,7 +160,7 @@ def _apply_permissions(obj, decorator, *names):
 
 
 def global_permissions(obj: object, permission_key: GlobalPermissions, *names: str | Callable):
-    _apply_permissions(obj, lambda fn: global_permission(permission_key, fn.__name__)(fn), *names)
+    _apply_permissions(obj, global_permission(permission_key), *names)
 
 
 def job_permissions(obj: object, permission_key: Optional[str] = None, *names: str | Callable):
