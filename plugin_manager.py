@@ -1,7 +1,6 @@
 import asyncio
 import glob
 import importlib
-import json
 import logging
 import os
 import shutil
@@ -9,10 +8,9 @@ import subprocess
 import sys
 import tarfile
 import zipfile
-from ast import Tuple
 from ctypes import ArgumentError
 from functools import partial
-from typing import Any, Callable, Optional, Set
+from typing import Any, Callable, Optional
 
 import pluggy
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -25,9 +23,7 @@ from auth import User
 from enforcer import (
     ADMIN_ROLE,
     GLOBAL_PERMISSION_REGISTRY,
-    PERMISSION_KEYS,
     ExecutionContext,
-    PermissionedFunction,
 )
 from models import DAO, Plugin
 
@@ -229,7 +225,7 @@ class PluginManager:
         Useful for initial load or after a restart.
         """
         # Register all plugins from the database
-        ctx = self.create_ctx(User(0, {ADMIN_ROLE}))
+        ctx = self.create_ctx(User(0, frozenset({ADMIN_ROLE})))
         all_plugins = self.dao.get_all_plugins(ctx)
         look_up = {}
         for plugin in all_plugins:
@@ -290,7 +286,7 @@ class PluginManager:
             mapping = plugin_cls.roles()
             if not isinstance(mapping, dict):
                 return
-
+            assert cls.enforcer
             enforcer = cls.enforcer
             for permission_key, roles in mapping.items():
                 # with : to avoid name collision
@@ -303,7 +299,7 @@ class PluginManager:
         except Exception as ex:
             scheduler_logger.exception(
                 "Failed to register plugin permissions",
-                extra={"package": package, "plugin": plugin_cls.__name__},
+                extra={"package": package},
             )
 
     @staticmethod
@@ -388,6 +384,7 @@ class PluginManager:
 
     @classmethod
     def create_ctx(cls, user: User, package: Optional[str] = None):
+        assert cls.enforcer
         return ExecutionContext(user, package, cls.enforcer)
 
     @classmethod
@@ -404,6 +401,7 @@ class PluginManager:
             try:
                 module = importlib.import_module(module_path)
                 plugin = getattr(module, class_name)
+                assert plugin
                 cls.manager.register(plugin, package)
             except Exception as e:
                 # show error to terminal to check but keep running
@@ -424,7 +422,7 @@ class PluginManager:
         self,
         session_id: int,
         plugin_id: int,
-        config: str,
+        config: dict[str, Any],
         description: Optional[str] = None,
     ):
         job_id = self.dao.add_job(session_id, plugin_id, config, description)
@@ -458,7 +456,7 @@ class PluginManager:
             "interval",
             seconds=plugin.interval,
             # TODO: get user_id, and roles from database, the user of course owning the job
-            args=[plugin.package, job_id, User(0, {ADMIN_ROLE})],
+            args=[plugin.package, job_id, User(0, frozenset({ADMIN_ROLE}))],
             next_run_time=undefined if active else None,
             id=job_scheduler_id,
             name=job_scheduler_id,

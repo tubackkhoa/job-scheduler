@@ -1,10 +1,8 @@
 import asyncio
 import inspect
-import json
 import logging
 import os
-from functools import partial
-from types import MappingProxyType
+
 from typing import Annotated, Optional
 
 import uvloop
@@ -27,7 +25,6 @@ from sqlalchemy import create_engine
 from auth import User, get_user, require_auth
 from enforcer import (
     GLOBAL_PERMISSION_REGISTRY,
-    Adapter,
     create_enforcer,
     freeze_permission_registry,
 )
@@ -35,9 +32,7 @@ from log_handler import JobLogHandler
 from log_service import LogService
 from models import DAO, Job
 from plugin_manager import PROJECT_NAME, PluginManager
-from plugins.schema import SecureBaseModel
 from schemas import ConfigPayload, DownloadPayload, PluginCreatePayload, Settings, TemplatePayload
-from utils import create_trade_model, deactivate_trade_model, list_trade_models
 from utils.job import JobUtil
 from ws_manager import WSConnectionManager
 
@@ -93,7 +88,7 @@ async def lifespan(app: FastAPI):
         adapter = Adapter(
             host=settings.redis_host,
             port=settings.redis_port,
-            db=settings.redis_db,
+            db=settings.redis_db or 0,
             key=f"{PROJECT_NAME}:job_policy",
         )
 
@@ -203,10 +198,11 @@ async def websocket_logs_endpoint(websocket: WebSocket, job_id: int):
 # TODO: need checking for api based on ctx as well
 @api_router.get("/authorization/state")
 def auth_state(plugin_manager: PluginManagerState, user: UserState):
-    return {
-        "policy": plugin_manager.enforcer.get_policy(),
-        "user": user,
-    }
+    if plugin_manager.enforcer:
+        return {
+            "policy": plugin_manager.enforcer.get_policy(),
+            "user": user,
+        }
 
 
 @api_router.get("/plugins")

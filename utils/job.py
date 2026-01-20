@@ -1,7 +1,4 @@
-import json
-from functools import partial
-
-from enforcer import ExecutionContext, global_permission, job_permission
+from enforcer import ExecutionContext, global_permission, global_permissions
 from models import DAO
 from plugin_manager import PluginManager
 
@@ -10,8 +7,9 @@ class JobUtil:
 
     def __init__(self, dao: DAO):
         self.dao = dao
+        # bind permission, because method instance only know at runtime
+        global_permissions(self, "job", self.get_config)
 
-    @global_permission("job")
     def get_config(
         self,
         ctx: ExecutionContext,

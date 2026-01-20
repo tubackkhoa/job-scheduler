@@ -24,25 +24,17 @@ POLICIES = [
 
 
 P = ParamSpec("P")
-R = TypeVar("R")
+R = TypeVar("R", covariant=True)
 
 
-@runtime_checkable
-class PermissionedFunction(Protocol[P, R]):
-    __permission__: GlobalPermissions
-    __acl_name__: str
-
-    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R: ...
-
-
-GLOBAL_PERMISSION_REGISTRY: dict[str, PermissionedFunction] = {}
+GLOBAL_PERMISSION_REGISTRY: dict[str, Callable] = {}
 
 
 # make GLOBAL_PERMISSION_REGISTRY frozen, other module can only access reference so can not change it later
 def freeze_permission_registry():
     global GLOBAL_PERMISSION_REGISTRY
     if not isinstance(GLOBAL_PERMISSION_REGISTRY, MappingProxyType):
-        GLOBAL_PERMISSION_REGISTRY = MappingProxyType(GLOBAL_PERMISSION_REGISTRY)
+        GLOBAL_PERMISSION_REGISTRY = MappingProxyType(GLOBAL_PERMISSION_REGISTRY)  # type: ignore
 
 
 class ExecutionContext:
@@ -102,24 +94,25 @@ def create_enforcer(adapter: Optional[Adapter] = None) -> Enforcer:
     return enforcer
 
 
+def _resolve_ctx(args):
+    for i, arg in enumerate(args):
+        if isinstance(arg, ExecutionContext):
+            return arg, args
+        if isinstance(arg, Context):
+            ctx = arg["ctx"]
+            args = tuple(ctx if j == i else a for j, a in enumerate(args))
+            return ctx, args
+    raise RuntimeError("ExecutionContext is required")
+
+
 def _with_execution_policy(
-    fn: Callable[P, R], permission_key: GlobalPermissions | str, global_scope: bool = False
+    fn: Callable[P, R], permission_key: GlobalPermissions | str | None, global_scope: bool = False
 ) -> Callable[P, R]:
     @pass_context
     @wraps(fn)
     def wrapper(*args, **kwargs):
         # Locate Jinja Context
-        for idx, arg in enumerate(args):
-            if isinstance(arg, ExecutionContext):
-                ctx = arg
-                break
-            if isinstance(arg, Context):
-                ctx = arg["ctx"]
-                # Replace Jinja Context with ExecutionContext
-                args = tuple(ctx if i == idx else arg for i, arg in enumerate(args))
-                break
-        else:
-            raise RuntimeError("ExecutionContext is required")
+        ctx, args = _resolve_ctx(args)
 
         if permission_key:
             permission = permission_key if global_scope else f"{ctx.package}:{permission_key}"
@@ -133,11 +126,10 @@ def _with_execution_policy(
 # declarative, static
 def global_permission(
     permission_key: GlobalPermissions, name: Optional[str] = None
-) -> Callable[[Callable[P, R]], PermissionedFunction[P, R]]:
-    def decorator(fn: Callable[P, R]) -> PermissionedFunction[P, R]:
-        fn = _with_execution_policy(fn, permission_key, True)
-
-        fn.__permission__ = permission_key
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
+    def decorator(fn: Callable[P, R]) -> Callable[P, R]:
+        wrapped = _with_execution_policy(fn, permission_key, True)
+        wrapped.__permission__ = permission_key
 
         # register into GLOBAL_PERMISSION_REGISTRY for globals
         key = name or fn.__name__
@@ -145,9 +137,9 @@ def global_permission(
         if key in GLOBAL_PERMISSION_REGISTRY:
             raise RuntimeError(f"Duplicate permission name: {key}")
 
-        GLOBAL_PERMISSION_REGISTRY[key] = fn
+        GLOBAL_PERMISSION_REGISTRY[key] = wrapped
 
-        return fn
+        return wrapped
 
     return decorator
 
@@ -158,3 +150,18 @@ def job_permission(permission_key: Optional[str] = None):
         return _with_execution_policy(fn, permission_key)
 
     return decorator
+
+
+def _apply_permissions(obj, decorator, *names):
+    for name in names:
+        attr = getattr(obj, name) if isinstance(name, str) else name
+        key = name if isinstance(name, str) else attr.__name__
+        setattr(obj, key, decorator(attr))
+
+
+def global_permissions(obj: object, permission_key: GlobalPermissions, *names: str | Callable):
+    _apply_permissions(obj, lambda fn: global_permission(permission_key, fn.__name__)(fn), *names)
+
+
+def job_permissions(obj: object, permission_key: Optional[str] = None, *names: str | Callable):
+    _apply_permissions(obj, job_permission(permission_key), *names)
