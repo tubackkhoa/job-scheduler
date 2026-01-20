@@ -395,7 +395,6 @@ def get_signal_comparison(config: Config) -> pd.DataFrame:
                 pnl_map[key] = pnl
             except:
                 continue
-        print(pnl_map)
         # Map PNL to each signal
         def format_signal_with_pnl(row):
             symbol = row['base_asset']
