@@ -61,7 +61,7 @@ class Renderer:
     def update(cls):
         cls._sandbox.globals.update(GLOBAL_PERMISSION_REGISTRY)
         cls._globals_doc = {
-            name: describe_callable(value) for name, value in cls._sandbox.globals.items()
+            name: describe_callable(value) for name, value in GLOBAL_PERMISSION_REGISTRY.items()
         }
         cls._compile.cache_clear()
 
