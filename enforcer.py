@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from functools import wraps
+from types import MappingProxyType
 from typing import Any, Callable, Literal, Optional, ParamSpec, Protocol, TypeVar, runtime_checkable
 
 from casbin.enforcer import Enforcer
@@ -32,6 +33,15 @@ class PermissionedFunction(Protocol[P, R]):
     __acl_name__: str
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R: ...
+
+
+GLOBAL_PERMISSION_REGISTRY: dict[str, PermissionedFunction] = {}
+
+
+# make GLOBAL_PERMISSION_REGISTRY frozen, other module can only access reference so can not change it later
+def freeze_permission_registry():
+    global GLOBAL_PERMISSION_REGISTRY
+    GLOBAL_PERMISSION_REGISTRY = MappingProxyType(GLOBAL_PERMISSION_REGISTRY)
 
 
 class ExecutionContext:
@@ -128,7 +138,14 @@ def global_permission(
         fn = _with_execution_policy(fn, permission_key, True)
 
         fn.__permission__ = permission_key
-        fn.__acl_name__ = name or fn.__name__
+
+        # register into GLOBAL_PERMISSION_REGISTRY for globals
+        key = name or fn.__name__
+
+        if key in GLOBAL_PERMISSION_REGISTRY:
+            raise RuntimeError(f"Duplicate permission name: {key}")
+        print("register", key)
+        GLOBAL_PERMISSION_REGISTRY[key] = fn
 
         return fn
 

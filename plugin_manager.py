@@ -22,9 +22,14 @@ from jinja2 import Environment
 from pydantic import BaseModel
 
 from auth import User
-from enforcer import ADMIN_ROLE, PERMISSION_KEYS, ExecutionContext, PermissionedFunction
+from enforcer import (
+    ADMIN_ROLE,
+    GLOBAL_PERMISSION_REGISTRY,
+    PERMISSION_KEYS,
+    ExecutionContext,
+    PermissionedFunction,
+)
 from models import DAO, Plugin
-
 
 PROJECT_NAME = "job-scheduler"
 
@@ -192,7 +197,7 @@ class PluginManager:
     #         lock.release()
 
     enforcer: Optional[Enforcer] = None
-    functions: dict[str, PermissionedFunction] = {}
+
     # static pluggy manager, so that all pluginmanager share the same plugins
     manager = pluggy.PluginManager(PROJECT_NAME)
     manager.add_hookspecs(PluginSpec)
@@ -331,7 +336,9 @@ class PluginManager:
     def render(cls, ctx: ExecutionContext, template_str: str, env: Environment, payload: dict):
         template_engine = env.from_string(template_str)
         # assign global function
-        return template_engine.render(**cls.functions, **payload, this=payload, ctx=ctx)
+        return template_engine.render(
+            **GLOBAL_PERMISSION_REGISTRY, **payload, this=payload, ctx=ctx
+        )
 
     @classmethod
     def run_plugin_job(cls, package: str, job_id: int, user: User):

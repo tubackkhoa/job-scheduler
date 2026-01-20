@@ -4,6 +4,7 @@ import json
 import logging
 import os
 from functools import partial
+from types import MappingProxyType
 from typing import Annotated, Optional
 
 import uvloop
@@ -24,7 +25,12 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine
 
 from auth import User, get_user, require_auth
-from enforcer import Adapter, create_enforcer
+from enforcer import (
+    GLOBAL_PERMISSION_REGISTRY,
+    Adapter,
+    create_enforcer,
+    freeze_permission_registry,
+)
 from log_handler import JobLogHandler
 from log_service import LogService
 from models import DAO, Job
@@ -93,21 +99,8 @@ async def lifespan(app: FastAPI):
 
     job_util = JobUtil(dao)
     PluginManager.enforcer = create_enforcer(adapter)
-    #  update permission
-    for fn in (
-        dao.get_all_plugins,
-        dao.apply_value_version_all_jobs,
-        dao.get_jobs_by_plugin_and_session,
-        dao.create_value_version,
-        dao.get_value_version,
-        dao.get_value_versions,
-        dao.update_value_version,
-        job_util.get_config,
-        create_trade_model,
-        deactivate_trade_model,
-        list_trade_models,
-    ):
-        PluginManager.functions[fn.__acl_name__] = fn
+    # prevent calling global registry in other plugin, so that we can mistake assign global permission for roles created by a plugin
+    freeze_permission_registry()
 
     # create plugin_instance
     plugin_manager = PluginManager(
@@ -310,7 +303,7 @@ def schema(
 
             # Built-in Jinja tags are provided by extensions
             env = plugin.env()
-            globals = {**plugin_manager.functions, **env.globals}
+            globals = {**GLOBAL_PERMISSION_REGISTRY, **env.globals}
             return {
                 "schema": plugin.schema(ctx),
                 "jobs": jobs,
