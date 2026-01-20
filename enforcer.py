@@ -40,13 +40,18 @@ def freeze_permission_registry():
 class ExecutionContext:
     __slots__ = ("user", "package", "_allowed")
 
-    def __init__(self, user: User, package: Optional[str], enforcer: Enforcer):
+    def __init__(
+        self,
+        user: User,
+        package: Optional[str],
+        enforce: Optional[Callable[[int, str, frozenset[str]], bool]],
+    ):
         object.__setattr__(self, "user", user)
         object.__setattr__(self, "package", package)
 
         # preven closure access and change later, user is frozen already
-        def _allowed(permission: str, _call=enforcer.enforce):
-            return _call(user.id, permission, user.roles)
+        def _allowed(permission: str, _call=enforce):
+            return True if _call is None else _call(user.id, permission, user.roles)
 
         object.__setattr__(self, "_allowed", _allowed)
 

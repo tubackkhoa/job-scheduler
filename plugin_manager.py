@@ -282,11 +282,12 @@ class PluginManager:
 
     @classmethod
     def register_plugin_permissions(cls, package: str, plugin_cls: PluginSpec):
+        if not cls.enforcer:
+            return
         try:
             mapping = plugin_cls.roles()
             if not isinstance(mapping, dict):
                 return
-            assert cls.enforcer
             enforcer = cls.enforcer
             for permission_key, roles in mapping.items():
                 # with : to avoid name collision
@@ -384,8 +385,7 @@ class PluginManager:
 
     @classmethod
     def create_ctx(cls, user: User, package: Optional[str] = None):
-        assert cls.enforcer
-        return ExecutionContext(user, package, cls.enforcer)
+        return ExecutionContext(user, package, cls.enforcer.enforce if cls.enforcer else None)
 
     @classmethod
     def load_plugin(cls, package: str, override: bool = False):
