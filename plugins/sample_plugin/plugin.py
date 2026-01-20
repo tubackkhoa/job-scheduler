@@ -2,16 +2,15 @@ import json
 import logging
 from pathlib import Path
 import pluggy
-from pydantic import BaseModel, Field, ValidationInfo, field_validator
-from typing import Any, Callable, List, Optional
-import sqlglot
+from pydantic import BaseModel, Field, field_validator
+from typing import Any, Callable, Concatenate, List, Optional, ParamSpec
 from datetime import datetime
-from jinja2 import DictLoader, Environment
+from jinja2 import Environment
 from enforcer import ExecutionContext, job_permission
 from plugins import ui_schema
 from plugins.schema import SecureBaseModel, SecureField
 
-from .data import JSON_TPL, SQL_TPL, YAML_TPL, MD_TPL, countries, tolist
+from .data import JSON_TPL, SQL_TPL, YAML_TPL, MD_TPL, countries
 
 
 PROJECT_NAME = "alpha-miner"
@@ -66,7 +65,7 @@ class DynamicCode(BaseModel):
 class Config(SecureBaseModel):
 
     dynamic_code: DynamicCode = Field(
-        default_factory=DynamicCode,
+        default_factory=DynamicCode,  # type: ignore
         json_schema_extra=ui_schema({"ui:options": {"size": 12, "section": True}}),
     )
 
@@ -140,17 +139,6 @@ class Config(SecureBaseModel):
         json_schema_extra=ui_schema({"ui:field": "Template", "type": "markdown"}),
     )
 
-    @field_validator("sql", mode="after")
-    @classmethod
-    def validate_sql(cls, sql: str, info: ValidationInfo):
-        """Validate raw_sql using sqlglot for DuckDB SQL syntax."""
-        try:
-            template_engine = Plugin.env().from_string(sql)
-            sqlglot.parse_one(template_engine.render(**info.data))
-            return sql
-        except Exception as e:
-            raise ValueError(f"Error validating SQL: {str(e)}")
-
 
 class MyClass:
     def __init__(self, name):
@@ -167,30 +155,18 @@ def fetch_data(ctx: ExecutionContext):
     return ctx.user
 
 
+P = ParamSpec("P")
+
+
 class Plugin:
 
-    _env = Environment(
-        loader=DictLoader({"base": "{% block content %}{% endblock %}"}),
-        autoescape=False,
-        trim_blocks=True,
-        lstrip_blocks=True,
-    )
-
-    _env.globals.update(
-        {
-            "datetime": datetime,
-            "fetch_data": fetch_data,
-            "MyClass": MyClass,
-            "get_users": lambda: ["tupt", "cuongnv"],
-            "get_cities_by_country": lambda country_name: countries.get(country_name, []),
-        }
-    )
-
-    _env.filters["in_clause"] = lambda values: (
-        "()" if not values else "(" + ",".join(repr(v) for v in values) + ")"
-    )
-
-    _env.filters["tolist"] = tolist
+    _env = {
+        "datetime": datetime,
+        "fetch_data": fetch_data,
+        "MyClass": MyClass,
+        "get_users": lambda: ["tupt", "cuongnv"],
+        "get_cities_by_country": lambda country_name: countries.get(country_name, []),
+    }
 
     @hookimpl
     @classmethod
@@ -199,7 +175,7 @@ class Plugin:
 
     @hookimpl
     @classmethod
-    def env(cls) -> Environment:
+    def env(cls) -> dict[str, Any]:
         return cls._env
 
     @hookimpl
@@ -229,12 +205,22 @@ class Plugin:
     @hookimpl
     @classmethod
     async def run(
-        cls, config: Config, logger: logging.Logger, render: Callable[[str, Environment, dict], Any]
+        cls,
+        ctx: ExecutionContext,
+        config: Config,
+        logger: logging.Logger,
+        render: Callable[..., Any],
     ):
-        version = json.loads(
-            render("{{ get_value_version(id) | tojson }}", cls._env, {"id": config.sql_id})
+        version = render(
+            ctx,
+            "{{ dao.get_value_version(id).value }}",
+            **config.model_dump(),
+            **cls._env,
+            id=config.sql_id,
         )
-        logger.info(version["value"])
+
+        print(version)
+
         # for i in range(10):
         #     logger.info(f"Running step {i}")
         #     await asyncio.sleep(0.5)

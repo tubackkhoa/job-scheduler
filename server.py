@@ -1,5 +1,4 @@
 import asyncio
-import inspect
 import logging
 import os
 
@@ -100,6 +99,8 @@ async def lifespan(app: FastAPI):
     # bind_class_registry(dao, job_util)
     GLOBAL_PERMISSION_REGISTRY.update({"dao": dao, "util": job_util})
     freeze_permission_registry()
+    # reload from global
+    Renderer.update()
 
     # create plugin_instance
     plugin_manager = PluginManager(
@@ -126,29 +127,6 @@ async def lifespan(app: FastAPI):
     # Immediate hard exit after 1 second for cleaning up
     await asyncio.sleep(1)
     os._exit(0)
-
-
-def describe_callable(obj):
-    """Extract documentation and signature for a callable or object."""
-
-    data = {}
-
-    if callable(obj):
-        data["type"] = "function"
-        data["doc"] = inspect.getdoc(obj)
-        try:
-            data["signature"] = str(inspect.signature(obj))
-        except (ValueError, TypeError):
-            data["signature"] = None
-    else:
-        data["type"] = "variable"
-        try:
-            cls = obj if isinstance(obj, type) else type(obj)
-            data["doc"] = f"{cls.__module__}.{cls.__qualname__}"
-        except Exception:
-            data["doc"] = str(obj)
-
-    return data
 
 
 api_router = APIRouter(
@@ -261,7 +239,8 @@ def template(
         return template_str
     try:
         ctx = plugin_manager.create_ctx(user, package)
-        result = Renderer.render(ctx, template_str, plugin_instance.env(), payload.params)
+        # env will be extra to make sure params can not override
+        result = Renderer.render(ctx, template_str, payload.params, **plugin_instance.env())
         return Response(content=result, media_type="text/plain")
     except Exception as e:
         raise HTTPException(
@@ -304,28 +283,17 @@ def schema(
                 )
 
             # Built-in Jinja tags are provided by extensions
-            env = plugin.env()
-            globals = {**GLOBAL_PERMISSION_REGISTRY, **env.globals}
             return {
                 "schema": plugin.schema(ctx),
                 "jobs": jobs,
-                "env": {
-                    "globals": {name: describe_callable(value) for name, value in globals.items()},
-                    "filters": {
-                        name: describe_callable(value) for name, value in env.filters.items()
-                    },
-                    "tests": tuple(env.tests.keys()),
-                    "tags": set(
-                        tag for ext in env.extensions.values() for tag in getattr(ext, "tags", [])
-                    ),
-                },
+                "env": Renderer.get_doc(plugin.env()),
             }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load schema: {str(e)}")
 
 
-@api_router.post("/ctivate/{job_id}/{activation}")
+@api_router.post("/activate/{job_id}/{activation}")
 def activate_config(plugin_manager: PluginManagerState, job_id: int, activation: bool):
     if activation:
         plugin_manager.activate_job(job_id)

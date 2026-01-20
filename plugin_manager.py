@@ -2,14 +2,13 @@ import asyncio
 import importlib
 import logging
 import sys
-from functools import partial
-from typing import Any, Callable, Optional
+
+from typing import Any, Callable, Concatenate, Optional
 
 import pluggy
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.util import undefined
 from casbin.enforcer import Enforcer
-from jinja2 import Environment
 from pydantic import BaseModel
 
 from auth import User
@@ -31,7 +30,7 @@ scheduler_logger.addHandler(logging.StreamHandler())
 class PluginSpec:
 
     @hookspec
-    def env(cls) -> Environment: ...
+    def env(cls) -> dict[str, Any]: ...
 
     @hookspec
     def schema(cls, ctx: ExecutionContext) -> dict[str, Any]: ...
@@ -50,7 +49,10 @@ class PluginSpec:
         ctx: ExecutionContext,
         config: BaseModel,
         logger: logging.Logger,
-        render: Callable[[str, Environment, dict], Any],
+        render: Callable[
+            Concatenate[ExecutionContext, str, dict[str, Any], ...],
+            Any,
+        ],
     ) -> Any: ...
 
     @hookspec
@@ -131,6 +133,10 @@ class PluginManager:
 
         all_jobs = self.dao.get_all_jobs()
         for job in all_jobs:
+            # Populate job config cache so jobs can run after restart
+            if job.config:
+                DAO.job_config_cache[job.id] = job.config
+
             self.add_job_instance(job.id, job.active, look_up[job.plugin_id])
 
     def start(self):
@@ -222,8 +228,8 @@ class PluginManager:
             logger.setLevel(logging.INFO)
 
         try:
-            render_function = partial(Renderer.render, ctx)
-            retval = asyncio.run(plugin.run(ctx, config, logger, render_function))
+
+            retval = asyncio.run(plugin.run(ctx, config, logger, Renderer.render))
             # logger.info(f"Job executed successfully (return value: {retval})")
             return retval
         except Exception as e:
