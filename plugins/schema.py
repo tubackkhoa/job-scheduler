@@ -50,7 +50,7 @@ JSONUISchema = TypedDict(
 )
 
 
-def ui_schema(extra: JSONUISchema) -> dict:
+def ui_schema(extra: JSONUISchema | dict) -> dict:
     return cast(dict, extra)
 
 
