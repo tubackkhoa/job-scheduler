@@ -12,7 +12,6 @@ from fastapi import (
     Depends,
     FastAPI,
     HTTPException,
-    Request,
     Response,
     WebSocket,
     WebSocketDisconnect,
@@ -44,17 +43,8 @@ asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 manager = WSConnectionManager()
 
-
-def get_plugin_manager(request: Request):
-    return request.app.state.plugin_manager
-
-
-def get_log_service(request: Request):
-    return request.app.state.log_service
-
-
-PluginManagerState = Annotated[PluginManager, Depends(get_plugin_manager)]
-LogServiceState = Annotated[LogService, Depends(get_log_service)]
+PluginManagerState = Annotated[PluginManager, Depends(lambda r: r.app.state.plugin_manager)]
+LogServiceState = Annotated[LogService, Depends(lambda r: r.app.state.log_service)]
 UserState = Annotated[User, Depends(get_user)]
 
 settings = Settings()
