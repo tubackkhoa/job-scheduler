@@ -55,7 +55,6 @@ def app_state(attr: str):
 
 PluginManagerState = Annotated[PluginManager, Depends(app_state("plugin_manager"))]
 LogServiceState = Annotated[LogService, Depends(app_state("log_service"))]
-DAOState = Annotated[DAO, Depends(app_state("dao"))]
 UserState = Annotated[User, Depends(get_user)]
 
 settings = Settings()
@@ -92,7 +91,7 @@ async def lifespan(app: FastAPI):
             db=settings.redis_db or 0,
             key=f"{PROJECT_NAME}:job_policy",
         )
-
+    # static enforcer
     PluginManager.enforcer = create_enforcer(adapter)
     # prevent calling global registry in other plugin, so that we can mistake assign global permission for roles created by a plugin
     job_util = JobUtil(dao)
@@ -165,13 +164,13 @@ app.add_middleware(
 
 
 @app.get("/health")
-def health_check(dao: DAOState, plugin_manager: PluginManagerState):
+def health_check(plugin_manager: PluginManagerState):
 
     from sqlalchemy import text
 
     try:
         # Check database connection
-        with dao.db_engine.connect() as conn:
+        with plugin_manager.dao.db_engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         return {
             "status": "healthy",
@@ -210,11 +209,11 @@ def auth_state(plugin_manager: PluginManagerState, user: UserState):
 
 @api_router.get("/plugins")
 def plugins(
-    dao: DAOState,
+    plugin_manager: PluginManagerState,
     user: UserState,
 ):
     ctx = PluginManager.create_ctx(user)
-    return dao.get_all_plugins(ctx)
+    return plugin_manager.dao.get_all_plugins(ctx)
 
 
 @api_router.post("/plugins")
@@ -268,13 +267,12 @@ def template(
 
 @api_router.get("/schema/{session_id}/{plugin_id}")
 def schema(
-    dao: DAOState,
     plugin_manager: PluginManagerState,
     user: UserState,
     session_id: int,
     plugin_id: int,
 ):
-    plugin_item = dao.get_plugin(plugin_id)
+    plugin_item = plugin_manager.dao.get_plugin(plugin_id)
     if not plugin_item:
         raise HTTPException(status_code=404, detail="Plugin not found")
 
@@ -283,7 +281,7 @@ def schema(
         plugin = plugin_manager.get_plugin_instance(plugin_item.package)
 
         if plugin != None:
-            jobs = dao.get_jobs_by_plugin_and_session(ctx, plugin_id, session_id)
+            jobs = plugin_manager.dao.get_jobs_by_plugin_and_session(ctx, plugin_id, session_id)
             for job in jobs:
                 job.config = plugin.config(ctx, job.config).model_dump()
 
@@ -395,7 +393,6 @@ def delete_plugin(plugin_manager: PluginManagerState, plugin_id: int):
 
 @api_router.post("/config/{job_id}")
 def update_config(
-    dao: DAOState,
     plugin_manager: PluginManagerState,
     user: UserState,
     job_id: int,
@@ -413,12 +410,12 @@ def update_config(
             plugin_id = payload.plugin_id
             session_id = payload.session_id
         else:
-            job_item = dao.get_job(job_id)
+            job_item = plugin_manager.dao.get_job(job_id)
             if not job_item:
                 raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
             plugin_id = job_item.plugin_id
 
-        plugin_item = dao.get_plugin(plugin_id)
+        plugin_item = plugin_manager.dao.get_plugin(plugin_id)
         if not plugin_item:
             raise HTTPException(status_code=404, detail=f"Plugin {plugin_id} not found")
         plugin = plugin_manager.get_plugin_instance(plugin_item.package)
@@ -435,7 +432,7 @@ def update_config(
                 payload.description,
             )
         else:
-            dao.update_job(job_id, config.model_dump(), payload.description)
+            plugin_manager.dao.update_job(job_id, config.model_dump(), payload.description)
 
         return config
     except HTTPException:
