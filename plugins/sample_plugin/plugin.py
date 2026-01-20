@@ -212,7 +212,7 @@ class Plugin:
         version = render(
             ctx,
             "{{ dao.get_value_version(id).value }}",
-            **config.model_dump(),
+            config.model_dump(),
             **cls._env,
             id=config.sql_id,
         )

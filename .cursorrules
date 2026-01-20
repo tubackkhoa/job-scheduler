@@ -41,7 +41,7 @@ When generating a new plugin (e.g., via prompt like "Generate alert plugin"):
   - `plugin.py`: Define `Plugin` class with Pluggy hooks.
   - Optional: `data.py` for helpers/data/models.
 - Required hooks in `Plugin` (use `@hookimpl`):
-  - `env(cls) -> Environment`: Return Jinja2 env (autoescape=False, but sanitize inputs).
+  - `env(cls) -> dict[str, Any]`: Return Jinja2 Environment globals.
   - `schema(cls, ctx: ExecutionContext) -> dict`: Return Pydantic schema JSON.
   - `config(cls, ctx, json=None, validate=False) -> BaseModel`: Validate/parse config.
   - `run(cls, config: BaseModel, logger: Logger, render: Callable) -> Any`: Async job logic.
