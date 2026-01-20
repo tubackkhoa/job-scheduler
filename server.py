@@ -45,16 +45,16 @@ asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 manager = WSConnectionManager()
 
 
-# define state transform for app
-def app_state(attr: str):
-    def _dep(request: Request):
-        return getattr(request.app.state, attr)
-
-    return _dep
+def get_plugin_manager(request: Request):
+    return request.app.state.plugin_manager
 
 
-PluginManagerState = Annotated[PluginManager, Depends(app_state("plugin_manager"))]
-LogServiceState = Annotated[LogService, Depends(app_state("log_service"))]
+def get_log_service(request: Request):
+    return request.app.state.log_service
+
+
+PluginManagerState = Annotated[PluginManager, Depends(get_plugin_manager)]
+LogServiceState = Annotated[LogService, Depends(get_log_service)]
 UserState = Annotated[User, Depends(get_user)]
 
 settings = Settings()
