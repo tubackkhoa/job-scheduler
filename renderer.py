@@ -55,29 +55,21 @@ class Renderer:
         }
     )
 
-    _doc = {
-        "filters": {name: describe_callable(value) for name, value in _sandbox.filters.items()},
-        "tests": tuple(_sandbox.tests),
-        "tags": {tag for ext in _sandbox.extensions.values() for tag in getattr(ext, "tags", ())},
-        "globals": {},
-    }
+    _globals_doc = {}
 
     @classmethod
     def update(cls):
         cls._sandbox.globals.update(GLOBAL_PERMISSION_REGISTRY)
-        cls._doc["globals"] = {
+        cls._globals_doc = {
             name: describe_callable(value) for name, value in cls._sandbox.globals.items()
         }
         cls._compile.cache_clear()
 
     @classmethod
-    def get_doc(cls, extra_globals: dict[str, Any]):
+    def get_globals_doc(cls, extra_globals: dict[str, Any]):
         return {
-            **cls._doc,
-            "globals": {
-                **cls._doc["globals"],
-                **{k: describe_callable(v) for k, v in extra_globals.items()},
-            },
+            **cls._globals_doc,
+            **{k: describe_callable(v) for k, v in extra_globals.items()},
         }
 
     @classmethod

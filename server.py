@@ -286,7 +286,7 @@ def schema(
             return {
                 "schema": plugin.schema(ctx),
                 "jobs": jobs,
-                "env": Renderer.get_doc(plugin.env()),
+                "globals": Renderer.get_globals_doc(plugin.env()),
             }
 
     except Exception as e:
