@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from functools import wraps
-from types import MappingProxyType
+from types import MappingProxyType, MethodType
 from typing import Any, Callable, Literal, Optional, ParamSpec, Protocol, TypeVar, runtime_checkable
 
 from casbin.enforcer import Enforcer
@@ -128,14 +128,15 @@ def global_permission(
     permission_key: GlobalPermissions, name: Optional[str] = None
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
     def decorator(fn: Callable[P, R]) -> Callable[P, R]:
-        wrapped = _with_execution_policy(fn, permission_key, True)
-        wrapped.__permission__ = permission_key
 
         # register into GLOBAL_PERMISSION_REGISTRY for globals
         key = name or fn.__name__
 
         if key in GLOBAL_PERMISSION_REGISTRY:
             raise RuntimeError(f"Duplicate permission name: {key}")
+
+        wrapped = _with_execution_policy(fn, permission_key, True)
+        wrapped.__name__ = key
 
         GLOBAL_PERMISSION_REGISTRY[key] = wrapped
 
@@ -152,16 +153,13 @@ def job_permission(permission_key: Optional[str] = None):
     return decorator
 
 
-def _apply_permissions(obj, decorator, *names):
-    for name in names:
-        attr = getattr(obj, name) if isinstance(name, str) else name
-        key = name if isinstance(name, str) else attr.__name__
-        setattr(obj, key, decorator(attr))
-
-
-def global_permissions(obj: object, permission_key: GlobalPermissions, *names: str | Callable):
-    _apply_permissions(obj, global_permission(permission_key), *names)
-
-
-def job_permissions(obj: object, permission_key: Optional[str] = None, *names: str | Callable):
-    _apply_permissions(obj, job_permission(permission_key), *names)
+def bind_class_registry(*objects: object):
+    # bind permission, because method instance only know at runtime
+    for obj in objects:
+        for fn in obj.__class__.__dict__.values():
+            fn_name = getattr(fn, "__name__", None)
+            if not fn_name or not fn_name in GLOBAL_PERMISSION_REGISTRY:
+                continue
+            # re-bound instance for jinja environment
+            fn = GLOBAL_PERMISSION_REGISTRY[fn_name]
+            GLOBAL_PERMISSION_REGISTRY[fn_name] = MethodType(fn, obj)

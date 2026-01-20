@@ -21,12 +21,12 @@ class UserData:
 
 USERS: list[UserData] = [
     UserData(
-        User(1, {"admin"}),
+        User(1, frozenset({"admin"})),
         "thanhtu",
         "admin",
     ),
     UserData(
-        User(2, {"user"}),
+        User(2, frozenset({"user"})),
         "cuongnv",
         "admin",
     ),

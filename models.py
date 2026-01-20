@@ -17,7 +17,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
-from enforcer import ExecutionContext, global_permission, global_permissions
+from enforcer import ExecutionContext, global_permission
 
 
 class Base(DeclarativeBase):
@@ -100,21 +100,6 @@ class DAO:
 
     def __init__(self, db_engine: Engine):
         self.db_engine = db_engine
-        global_permissions(
-            self,
-            "job",
-            self.get_jobs_by_plugin_and_session,
-            self.get_all_plugins,
-            self.apply_value_version_all_jobs,
-        )
-        global_permissions(
-            self,
-            "field",
-            self.create_value_version,
-            self.get_value_version,
-            self.get_value_versions,
-            self.update_value_version,
-        )
 
     def add_plugin(self, package: str, interval: int, description: Optional[str] = None):
         # Insert into DB
@@ -199,6 +184,7 @@ class DAO:
             session.commit()
             return job
 
+    @global_permission("job")
     def get_jobs_by_plugin_and_session(
         self, ctx: ExecutionContext, plugin_id: int, session_id: Optional[int] = None
     ):
@@ -212,6 +198,7 @@ class DAO:
         with Session(self.db_engine) as session:
             return session.get(Job, id)
 
+    @global_permission("job")
     def get_all_plugins(self, ctx: ExecutionContext):
         with Session(self.db_engine) as session:
             plugins = session.query(Plugin).all()
@@ -222,6 +209,7 @@ class DAO:
             jobs = session.query(Job).all()
             return jobs
 
+    @global_permission("field")
     def create_value_version(self, ctx: ExecutionContext, payload: dict) -> dict:
         assert "field_id" in payload, "field_id is required"
 
@@ -233,7 +221,7 @@ class DAO:
             return value_version.to_dict()
 
     # ---------- read ----------
-
+    @global_permission("field")
     def get_value_version(self, ctx: ExecutionContext, version_id: int) -> dict:
         with Session(self.db_engine) as session:
             version = session.get(ValueVersion, version_id)
@@ -257,6 +245,7 @@ class DAO:
 
             return version.to_dict()
 
+    @global_permission("field")
     def get_value_versions(
         self,
         ctx: ExecutionContext,
@@ -284,7 +273,7 @@ class DAO:
             }
 
     # ---------- update ----------
-
+    @global_permission("field")
     def update_value_version(self, ctx: ExecutionContext, version_id: int, payload: dict) -> dict:
         with Session(self.db_engine) as session:
             version = session.get(ValueVersion, version_id)
@@ -316,6 +305,7 @@ class DAO:
                 "message": f"SQL version {version_id} deleted",
             }
 
+    @global_permission("job")
     def apply_value_version_all_jobs(
         self, ctx: ExecutionContext, version_id: int, job_ids: List[int]
     ):

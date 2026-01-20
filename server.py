@@ -25,6 +25,7 @@ from sqlalchemy import create_engine
 from auth import User, get_user, require_auth
 from enforcer import (
     GLOBAL_PERMISSION_REGISTRY,
+    bind_class_registry,
     create_enforcer,
     freeze_permission_registry,
 )
@@ -92,9 +93,11 @@ async def lifespan(app: FastAPI):
             key=f"{PROJECT_NAME}:job_policy",
         )
 
-    job_util = JobUtil(dao)
     PluginManager.enforcer = create_enforcer(adapter)
     # prevent calling global registry in other plugin, so that we can mistake assign global permission for roles created by a plugin
+    job_util = JobUtil(dao)
+    # this is for class binding, only know at instatiate time
+    bind_class_registry(dao, job_util)
     freeze_permission_registry()
 
     # create plugin_instance
