@@ -140,7 +140,10 @@ def describe_callable(obj):
             data["signature"] = None
     else:
         data["type"] = "variable"
-        data["doc"] = str(obj)
+        if hasattr(obj, "__class__"):
+            data["doc"] = f"{obj.__module__}.{obj.__class__.__qualname__}"
+        else:
+            data["doc"] = str(obj)
 
     return data
 
