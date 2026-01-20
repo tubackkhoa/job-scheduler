@@ -32,6 +32,7 @@ from log_handler import JobLogHandler
 from log_service import LogService
 from models import DAO, Job
 from plugin_manager import PROJECT_NAME, PluginManager
+from renderer import Renderer
 from schemas import ConfigPayload, DownloadPayload, PluginCreatePayload, Settings, TemplatePayload
 from utils.job import JobUtil
 from ws_manager import WSConnectionManager
@@ -258,7 +259,7 @@ def template(
         return template_str
     try:
         ctx = plugin_manager.create_ctx(user, package)
-        result = plugin_manager.render(ctx, template_str, plugin_instance.env(), payload.params)
+        result = Renderer.render(ctx, template_str, plugin_instance.env(), payload.params)
         return Response(content=result, media_type="text/plain")
     except Exception as e:
         raise HTTPException(

@@ -26,6 +26,7 @@ from enforcer import (
     ExecutionContext,
 )
 from models import DAO, Plugin
+from renderer import Renderer
 
 PROJECT_NAME = "job-scheduler"
 
@@ -330,14 +331,6 @@ class PluginManager:
         return cls.manager.get_plugin(package)
 
     @classmethod
-    def render(cls, ctx: ExecutionContext, template_str: str, env: Environment, payload: dict):
-        template_engine = env.from_string(template_str)
-        # assign global function
-        return template_engine.render(
-            **GLOBAL_PERMISSION_REGISTRY, **payload, this=payload, ctx=ctx
-        )
-
-    @classmethod
     def run_plugin_job(cls, package: str, job_id: int, user: User):
         """
         Wrapper to run a plugin's 'run' method asynchronously,
@@ -370,7 +363,7 @@ class PluginManager:
             logger.setLevel(logging.INFO)
 
         try:
-            render_function = partial(cls.render, ctx)
+            render_function = partial(Renderer.render, ctx)
             retval = asyncio.run(plugin.run(ctx, config, logger, render_function))
             # logger.info(f"Job executed successfully (return value: {retval})")
             return retval
