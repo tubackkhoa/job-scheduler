@@ -41,7 +41,8 @@ GLOBAL_PERMISSION_REGISTRY: dict[str, PermissionedFunction] = {}
 # make GLOBAL_PERMISSION_REGISTRY frozen, other module can only access reference so can not change it later
 def freeze_permission_registry():
     global GLOBAL_PERMISSION_REGISTRY
-    GLOBAL_PERMISSION_REGISTRY = MappingProxyType(GLOBAL_PERMISSION_REGISTRY)
+    if not isinstance(GLOBAL_PERMISSION_REGISTRY, MappingProxyType):
+        GLOBAL_PERMISSION_REGISTRY = MappingProxyType(GLOBAL_PERMISSION_REGISTRY)
 
 
 class ExecutionContext:
@@ -117,8 +118,7 @@ def _with_execution_policy(
                 # Replace Jinja Context with ExecutionContext
                 args = tuple(ctx if i == idx else arg for i, arg in enumerate(args))
                 break
-
-        if not ctx:
+        else:
             raise RuntimeError("ExecutionContext is required")
 
         if permission_key:
@@ -144,7 +144,7 @@ def global_permission(
 
         if key in GLOBAL_PERMISSION_REGISTRY:
             raise RuntimeError(f"Duplicate permission name: {key}")
-        print("register", key)
+
         GLOBAL_PERMISSION_REGISTRY[key] = fn
 
         return fn

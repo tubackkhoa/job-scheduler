@@ -233,7 +233,7 @@ class PluginManager:
         all_plugins = self.dao.get_all_plugins(ctx)
         look_up = {}
         for plugin in all_plugins:
-            print(f"Loading plugin: {plugin.package}")
+            scheduler_logger.info(f"Loading plugin: {plugin.package}")
             try:
                 self.load_plugin(plugin.package)
             except Exception as e:
