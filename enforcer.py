@@ -161,5 +161,4 @@ def bind_class_registry(*objects: object):
             if not fn_name or not fn_name in GLOBAL_PERMISSION_REGISTRY:
                 continue
             # re-bound instance for jinja environment
-            fn = GLOBAL_PERMISSION_REGISTRY[fn_name]
             GLOBAL_PERMISSION_REGISTRY[fn_name] = MethodType(fn, obj)
