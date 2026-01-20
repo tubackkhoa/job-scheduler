@@ -34,7 +34,7 @@ from models import DAO, Job
 from plugin_manager import PROJECT_NAME, PluginManager, scheduler_logger
 from renderer import Renderer
 from schemas import ConfigPayload, DownloadPayload, PluginCreatePayload, Settings, TemplatePayload
-from utils.file import download_package
+from package_downloader import download_package
 from utils.job import JobUtil
 from ws_manager import WSConnectionManager
 
@@ -142,9 +142,10 @@ def describe_callable(obj):
             data["signature"] = None
     else:
         data["type"] = "variable"
-        if hasattr(obj, "__class__"):
-            data["doc"] = f"{obj.__module__}.{obj.__class__.__qualname__}"
-        else:
+        try:
+            cls = obj if isinstance(obj, type) else type(obj)
+            data["doc"] = f"{cls.__module__}.{cls.__qualname__}"
+        except Exception:
             data["doc"] = str(obj)
 
     return data
