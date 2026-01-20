@@ -115,7 +115,6 @@ async def lifespan(app: FastAPI):
     # store in app state
     app.state.plugin_manager = plugin_manager
     app.state.log_service = log_service
-    app.state.dao = dao
 
     yield
 
