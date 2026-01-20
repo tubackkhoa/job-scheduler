@@ -6,10 +6,6 @@ from jinja2.sandbox import SandboxedEnvironment
 from enforcer import GLOBAL_PERMISSION_REGISTRY, ExecutionContext
 
 
-def pick(d, keys):
-    return {k: d[k] for k in keys if k in d}
-
-
 def tolist(obj: Iterable, *include: str) -> list[dict]:
     if include:
         include_set = set(include)
