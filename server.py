@@ -31,9 +31,10 @@ from enforcer import (
 from log_handler import JobLogHandler
 from log_service import LogService
 from models import DAO, Job
-from plugin_manager import PROJECT_NAME, PluginManager
+from plugin_manager import PROJECT_NAME, PluginManager, scheduler_logger
 from renderer import Renderer
 from schemas import ConfigPayload, DownloadPayload, PluginCreatePayload, Settings, TemplatePayload
+from utils.file import download_package
 from utils.job import JobUtil
 from ws_manager import WSConnectionManager
 
@@ -353,7 +354,9 @@ def download_module(
 ):
     try:
         version_or_vsi = payload.version
-        success = plugin_manager.download_package(name, version_or_vsi)
+        success = download_package(
+            scheduler_logger, plugin_manager.plugin_path, name, version_or_vsi
+        )
         return {"success": success}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to download module: {str(e)}")

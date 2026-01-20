@@ -1,14 +1,7 @@
 import asyncio
-import glob
 import importlib
 import logging
-import os
-import shutil
-import subprocess
 import sys
-import tarfile
-import zipfile
-from ctypes import ArgumentError
 from functools import partial
 from typing import Any, Callable, Optional
 
@@ -22,7 +15,6 @@ from pydantic import BaseModel
 from auth import User
 from enforcer import (
     ADMIN_ROLE,
-    GLOBAL_PERMISSION_REGISTRY,
     ExecutionContext,
 )
 from models import DAO, Plugin
@@ -34,107 +26,6 @@ hookspec = pluggy.HookspecMarker(PROJECT_NAME)
 
 scheduler_logger = logging.getLogger(PROJECT_NAME)
 scheduler_logger.addHandler(logging.StreamHandler())
-
-
-def extract_package_files(target_dir: str) -> bool:
-    # ------------------------------------------------------------
-    # 1️⃣ Find archive
-    # ------------------------------------------------------------
-    archives = (
-        glob.glob(os.path.join(target_dir, "*.whl"))
-        or glob.glob(os.path.join(target_dir, "*.tar.gz"))
-        or glob.glob(os.path.join(target_dir, "*.zip"))
-    )
-
-    if not archives:
-        scheduler_logger.info("No archive found to extract.")
-        return False
-
-    archive_path = archives[0]
-    scheduler_logger.info(f"Extracting archive: {archive_path}")
-
-    # ------------------------------------------------------------
-    # 2️⃣ Extract (KEEP target_dir = name@version)
-    # ------------------------------------------------------------
-    if archive_path.endswith((".whl", ".zip")):
-        with zipfile.ZipFile(archive_path) as zf:
-            zf.extractall(target_dir)
-    else:
-        with tarfile.open(archive_path, "r:gz") as tf:
-            tf.extractall(target_dir)
-
-    os.remove(archive_path)
-
-    # ------------------------------------------------------------
-    # 3️⃣ Remove *.dist-info
-    # ------------------------------------------------------------
-    for dist_info in glob.glob(os.path.join(target_dir, "*.dist-info")):
-        shutil.rmtree(dist_info, ignore_errors=True)
-
-    # ------------------------------------------------------------
-    # 4️⃣ Flatten archive-created single root folder
-    # ------------------------------------------------------------
-    entries = [
-        e
-        for e in os.listdir(target_dir)
-        if e not in ("__pycache__", "src") and not e.endswith(".dist-info")
-    ]
-
-    if len(entries) == 1:
-        inner = os.path.join(target_dir, entries[0])
-        if os.path.isdir(inner):
-            scheduler_logger.info(f"Flattening archive folder: {inner}")
-            for item in os.listdir(inner):
-                shutil.move(
-                    os.path.join(inner, item),
-                    os.path.join(target_dir, item),
-                )
-            os.rmdir(inner)
-
-    # ------------------------------------------------------------
-    # 5️⃣ Handle src/ layout (pip-style)
-    # ------------------------------------------------------------
-    src_dir = os.path.join(target_dir, "src")
-    if os.path.isdir(src_dir):
-        scheduler_logger.info(f"Detected src layout in {target_dir}")
-        for item in os.listdir(src_dir):
-            shutil.move(
-                os.path.join(src_dir, item),
-                os.path.join(target_dir, item),
-            )
-        shutil.rmtree(src_dir)
-
-    # ------------------------------------------------------------
-    # 6️⃣ Hoist single Python package directory
-    # ------------------------------------------------------------
-    subdirs = [
-        d
-        for d in os.listdir(target_dir)
-        if os.path.isdir(os.path.join(target_dir, d)) and d not in ("__pycache__",)
-    ]
-
-    if len(subdirs) == 1:
-        pkg_dir = os.path.join(target_dir, subdirs[0])
-
-        # Heuristic: looks like a Python package
-        if os.path.exists(os.path.join(pkg_dir, "__init__.py")):
-            scheduler_logger.info(f"Hoisting package {pkg_dir} → {target_dir}")
-
-            for item in os.listdir(pkg_dir):
-                dst = os.path.join(target_dir, item)
-                src = os.path.join(pkg_dir, item)
-
-                if os.path.exists(dst):
-                    shutil.rmtree(dst) if os.path.isdir(dst) else os.remove(dst)
-
-                shutil.move(src, dst)
-
-            os.rmdir(pkg_dir)
-
-    scheduler_logger.info(
-        f"Extraction complete (version preserved at {os.path.basename(target_dir)})"
-    )
-    return True
 
 
 class PluginSpec:
@@ -248,38 +139,6 @@ class PluginManager:
     def stop(self):
         if self.scheduler.running:
             self.scheduler.shutdown()
-
-    def download_package(self, name: str, version: str) -> bool:
-        if not version:
-            raise ArgumentError("Please provide a version")
-
-        is_vcs = version.startswith(("git+", "github+"))
-
-        ref = version.rsplit("@", 1)[-1] if is_vcs else version.replace(".", "_")
-        requirement = version if is_vcs else f"{name}=={version}"
-        target_dir = f"{self.plugin_path}/{name}@{ref}"
-
-        os.makedirs(target_dir, exist_ok=True)
-
-        args = [
-            "uv",
-            "pip",
-            "install" if is_vcs else "download",
-            requirement,
-            "--target" if is_vcs else "--dest",
-            target_dir,
-            "--no-deps",
-        ]
-
-        scheduler_logger.info("Downloading into %s ...", target_dir)
-
-        result = subprocess.run(args, capture_output=True, text=True)
-
-        if result.returncode != 0:
-            scheduler_logger.error("Download failed: %s", result.stderr)
-            return False
-
-        return True if is_vcs else extract_package_files(target_dir)
 
     @classmethod
     def register_plugin_permissions(cls, package: str, plugin_cls: PluginSpec):
