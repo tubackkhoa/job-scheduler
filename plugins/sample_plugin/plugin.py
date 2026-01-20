@@ -25,10 +25,10 @@ def ui_schema_binding(field_path: list[str]):
             "ui:field": "Version",
             "model:binding": field_path,
             "model:expr": {
-                "list": "{{ get_value_versions(field_id, search, limit, offset) | tojson }}",
-                "detail": "{{ get_value_version(id) | tojson }}",
-                "create": "{{ create_value_version(payload) | tojson }}",
-                "update": "{{ update_value_version(id, payload) | tojson }}",
+                "list": "{{ dao.get_value_versions(field_id, search, limit, offset) | tojson }}",
+                "detail": "{{ dao.get_value_version(id) | tojson }}",
+                "create": "{{ dao.create_value_version(payload) | tojson }}",
+                "update": "{{ dao.update_value_version(id, payload) | tojson }}",
             },
             "ui:options": {"size": 12},
         }
