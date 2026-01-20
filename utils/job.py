@@ -8,7 +8,7 @@ class JobUtil:
     def __init__(self, dao: DAO):
         self.dao = dao
 
-    @global_permission("job")
+    @global_permission("plugin")
     def get_config(
         self,
         ctx: ExecutionContext,

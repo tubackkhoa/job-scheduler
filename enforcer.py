@@ -1,6 +1,5 @@
-from dataclasses import dataclass
 from functools import wraps
-from types import MappingProxyType, MethodType
+from types import FunctionType, MappingProxyType, MethodType
 from typing import Any, Callable, Literal, Optional, ParamSpec, Protocol, TypeVar, runtime_checkable
 
 from casbin.enforcer import Enforcer
@@ -27,7 +26,7 @@ P = ParamSpec("P")
 R = TypeVar("R", covariant=True)
 
 
-GLOBAL_PERMISSION_REGISTRY: dict[str, Callable] = {}
+GLOBAL_PERMISSION_REGISTRY: dict[str, Callable | object] = {}
 
 
 # make GLOBAL_PERMISSION_REGISTRY frozen, other module can only access reference so can not change it later
@@ -134,16 +133,16 @@ def global_permission(
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
     def decorator(fn: Callable[P, R]) -> Callable[P, R]:
 
-        # register into GLOBAL_PERMISSION_REGISTRY for globals
         key = name or fn.__name__
-
-        if key in GLOBAL_PERMISSION_REGISTRY:
-            raise RuntimeError(f"Duplicate permission name: {key}")
-
         wrapped = _with_execution_policy(fn, permission_key, True)
-        wrapped.__name__ = key
 
-        GLOBAL_PERMISSION_REGISTRY[key] = wrapped
+        # only register when it is pure function, other wise please assign obj
+        if isinstance(fn, FunctionType):
+            # register into GLOBAL_PERMISSION_REGISTRY for globals
+            if key in GLOBAL_PERMISSION_REGISTRY:
+                raise RuntimeError(f"Duplicate permission name: {key}")
+
+            GLOBAL_PERMISSION_REGISTRY[key] = wrapped
 
         return wrapped
 
@@ -156,23 +155,3 @@ def job_permission(permission_key: Optional[str] = None):
         return _with_execution_policy(fn, permission_key)
 
     return decorator
-
-
-def bind_class_registry(*objects: object):
-    # bind permission, because method instance only know at runtime
-    for obj in objects:
-        cls = obj.__class__
-        # cache name of method and name assign in jinja
-        pairs = getattr(cls, "_permissioned_method_pairs", set())
-        if len(pairs) == 0:
-            pairs = set()
-            for name, fn in obj.__class__.__dict__.items():
-                fn_name = getattr(fn, "__name__", None)
-                if not fn_name or not fn_name in GLOBAL_PERMISSION_REGISTRY:
-                    continue
-                pairs.add((name, fn_name))
-            setattr(cls, "_permissioned_method_pairs", pairs)
-
-        for name, fn_name in pairs:
-            # re-bound instance for jinja environment
-            GLOBAL_PERMISSION_REGISTRY[fn_name] = MethodType(getattr(obj, name), obj)
