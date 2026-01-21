@@ -238,15 +238,14 @@ def template(
 
     try:
         plugin_instance = plugin_manager.get_plugin_instance(package)
-        template_str = payload.template
 
-        # fallback to user plugin
+        # fallback to user plugin, usualy plugin package is namespace with dot while plugin template is just name
         if plugin_instance is None:
             plugin_instance = TemplatePlugin(f"{settings.user_plugin_path}/{package}")
 
         ctx = plugin_manager.create_ctx(user, package)
         # env will be extra to make sure params can not override
-        result = Renderer.render(ctx, template_str, payload.params, **plugin_instance.env())
+        result = Renderer.render(ctx, payload.template, payload.params, **plugin_instance.env())
         return Response(content=result, media_type="text/plain")
     except Exception as e:
         raise HTTPException(
