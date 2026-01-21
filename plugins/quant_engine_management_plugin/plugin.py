@@ -21,29 +21,6 @@ def ui_schema_crud(
     deps: list[str] | None = None,
     ui_options: dict | None = None,
 ) -> dict:
-    """
-    Generic CRUD field schema helper with full expression flexibility.
-
-    Args:
-        field_path: Path to the value field (e.g., ["model_type"])
-        crud_exprs: Dict of operation -> jinja expression. Keys: list, detail, create, update, delete
-                   Example: {"list": "j`{{ my_list_func('${field_id}') | tojson }}`"}
-        deps: List of dependency field paths to inject into context (e.g., ["api_url", "api_key"])
-        ui_options: Additional UI options (size, etc.)
-
-    Usage:
-        model_type_id: int = Field(
-            0,
-            json_schema_extra=ui_schema_crud(
-                field_path=["model_type"],
-                crud_exprs={
-                    "list": "j`{{ list_model_types('${field_id}', '${search}', ${api_url}) | tojson }}`",
-                    "create": "j`{{ sync_model_types(${api_url}, ${api_key}) | tojson }}`",
-                },
-                deps=["api_url", "api_key"],
-            ),
-        )
-    """
 
     model_expr = {**(crud_exprs or {})}
 
@@ -87,19 +64,6 @@ class Config(BaseModel):
     )
 
     env: ModelEnv = ModelEnv.staging
-
-    # webhook_test_apikey: str = Field(
-    #     "",
-    #     title="Test API Key",
-    #     json_schema_extra=ui_schema({
-    #         "ui:widget": "password",
-    #         "ui:options": {"size": 6},
-    #         "ui:expr": (
-    #             """{"ui:classNames": '{{ "hidden" if env != "uat_testing_multiple_models" else "" }}', "default": {{ webhook_api_key | tojson if env != "uat_testing_multiple_models" else "" | tojson }}}""",
-    #             ["env", "webhook_api_key"],
-    #         ),
-    #     }),
-    # )
 
     model_type: str = Field(
         "",

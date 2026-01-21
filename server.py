@@ -108,6 +108,7 @@ async def lifespan(app: FastAPI):
         dao,
         log_handler=log_handler,
         module_paths=settings.module_path.split(":") if settings.module_path else None,
+        plugin_path=settings.plugin_path,
     )
 
     # Trade models API functions (no db_engine needed, use api_url/api_key directly)

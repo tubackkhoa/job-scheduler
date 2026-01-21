@@ -1,0 +1,82 @@
+name: hello_plugin
+version: 1
+description: hello_plugin
+roles:
+  run:
+    - user
+    - admin
+
+schema:
+  type: object
+  title: Config
+  properties:
+    webhook_url:
+      type: string
+      title: Webhook URL
+      default: ''
+      ui:options:
+        size: 6
+
+    webhook_api_key:
+      type: string
+      title: Webhook API Key
+      default: ''
+      ui:widget: password
+      ui:options:
+        size: 6
+
+    env:
+      type: string
+      title: Env
+      enum:
+        - staging
+        - production
+        - uat
+        - uat_testing_multiple_models
+      default: staging
+
+    model_type:
+      type: string
+      title: Model Type
+      default: ''
+      ui:field: Dynamic
+      url: |
+        data:application/gzip;base64,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
+      model:binding:
+        - model_type
+      model:expr:
+        list: '{{ list_trade_models(env, webhook_url, webhook_api_key) | tojson }}'
+        create: '{{ create_trade_model(payload, webhook_url, webhook_api_key, env) | tojson }}'
+        delete: '{{ deactivate_trade_model(key, webhook_url, webhook_api_key, env) | tojson }}'
+      model:deps:
+        - webhook_url
+        - webhook_api_key
+        - env
+      ui:options:
+        size: 12
+        createSchema:
+          type: object
+          properties:
+            key:
+              type: string
+              title: Key
+            name:
+              type: string
+              title: Name
+            description:
+              type: string
+              title: Description
+            source:
+              type: string
+              title: Source
+            detail:
+              type: string
+              title: Detail (JSON)
+          required:
+            - key
+            - name
+
+  required: []
+
+env:
+  greeting: Hello

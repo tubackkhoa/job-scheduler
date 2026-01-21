@@ -29,7 +29,8 @@ class TemplatePlugin:
 
     @property
     def description(self):
-        return self.meta["description"]
+        # description is optional
+        return self.meta.get("description", "")
 
     def config(
         self,
