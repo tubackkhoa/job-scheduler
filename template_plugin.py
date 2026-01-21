@@ -17,7 +17,6 @@ class TemplatePlugin:
             self.meta = yaml.safe_load(f)
         with open(f"{plugin_dir}/plugin.j2") as f:
             self.template_str = f.read()
-        print(self.meta, self.template_str)
 
     # ---------------- PluginSpec ----------------
 

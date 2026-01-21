@@ -5,7 +5,6 @@ roles:
   run:
     - user
     - admin
-
 schema:
   type: object
   title: Config
@@ -13,18 +12,16 @@ schema:
     webhook_url:
       type: string
       title: Webhook URL
-      default: ''
+      default: demohottab@hottab.net
       ui:options:
         size: 6
-
     webhook_api_key:
       type: string
       title: Webhook API Key
-      default: ''
+      default: '12345678'
       ui:widget: password
       ui:options:
         size: 6
-
     env:
       type: string
       title: Env
@@ -34,20 +31,22 @@ schema:
         - uat
         - uat_testing_multiple_models
       default: staging
-
     model_type:
       type: string
       title: Model Type
       default: ''
       ui:field: Dynamic
-      url: |
-        data:application/gzip;base64,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
+      url: 'data:application/gzip;base64,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'
       model:binding:
         - model_type
       model:expr:
         list: '{{ list_trade_models(env, webhook_url, webhook_api_key) | tojson }}'
-        create: '{{ create_trade_model(payload, webhook_url, webhook_api_key, env) | tojson }}'
-        delete: '{{ deactivate_trade_model(key, webhook_url, webhook_api_key, env) | tojson }}'
+        create:
+          '{{ create_trade_model(payload, webhook_url, webhook_api_key, env)
+          | tojson }}'
+        delete:
+          '{{ deactivate_trade_model(key, webhook_url, webhook_api_key, env)
+          | tojson }}'
       model:deps:
         - webhook_url
         - webhook_api_key
@@ -75,8 +74,6 @@ schema:
           required:
             - key
             - name
-
   required: []
-
 env:
   greeting: Hello
