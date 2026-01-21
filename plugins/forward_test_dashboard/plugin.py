@@ -119,14 +119,36 @@ def fetch_positions_with_pnl(base_url: str, api_key: str, start_time: Optional[s
 
 
 def format_pnl_table(models: List[Dict[str, Any]]) -> pd.DataFrame:
-    """Format PNL data as DataFrame with color-coded icons for PNL values."""
+    """Format PNL data as DataFrame with color-coded icons for PNL values and job status."""
     if not models:
         return "No running models found."
     
     df = pd.DataFrame(models)
     
-    df = df[['modelName', 'identity', 'totalPnl', 'status']].copy()
-    df.columns = ['Model', 'Identity', 'PNL', 'Status']
+    # Include latestPositionAt in the columns
+    df = df[['modelName', 'identity', 'totalPnl', 'latestPositionAt', 'status']].copy()
+    df.columns = ['Model', 'Identity', 'PNL', 'Last Position', 'Status']
+    
+    # Extract all identities to query jobs efficiently
+    identities = [model.get('identity', '') for model in models if model.get('identity')]
+    
+    # Use optimized query to get only jobs with matching model_keys (PostgreSQL JSON operators)
+    matched_jobs = dao.get_jobs_by_model_keys(identities) if identities else []
+    
+    # Create a mapping of identity -> (job_id, active status)
+    identity_job_map = {}
+    for job in matched_jobs:
+        try:
+            job_config = json.loads(job.config)
+            model_key = job_config.get("model_key")
+            if model_key:
+                identity_job_map[model_key] = {
+                    'job_id': job.id,
+                    'active': job.active,
+                    'description': job.description or 'No description'
+                }
+        except:
+            continue
     
     # Format PNL with colored arrows and numbers (HTML)
     def format_pnl_with_color(x):
@@ -139,7 +161,38 @@ def format_pnl_table(models: List[Dict[str, Any]]) -> pd.DataFrame:
                 return f"<span style='color: #dc3545;'>↘ ${x:.4f}</span>"
         return "$0"
     
+    # Format latestPositionAt to UTC time
+    def format_last_position(x):
+        if pd.isna(x) or x is None or x == '':
+            return "-"
+        try:
+            # Parse the timestamp and convert to UTC
+            dt = pd.to_datetime(x)
+            # Format as UTC string
+            return dt.strftime('%Y-%m-%d %H:%M UTC')
+        except:
+            return str(x)
+    
+    # Format status based on job existence and active status
+    def format_status(row):
+        identity = row['Identity']
+        job_info = identity_job_map.get(identity)
+        
+        if not job_info:
+            # No job found for this identity
+            return "<span style='color: #6c757d;'>⊘ No Job</span>"
+        
+        job_name = job_info['description']
+        is_active = job_info['active']
+        
+        if is_active:
+            return f"<span style='color: #28a745;'>✓ Active ({job_name})</span>"
+        else:
+            return f"<span style='color: #ffc107;'>⏸ Inactive ({job_name})</span>"
+    
     df['PNL'] = df['PNL'].apply(format_pnl_with_color)
+    df['Last Position'] = df['Last Position'].apply(format_last_position)
+    df['Status'] = df.apply(format_status, axis=1)
     
     df = df.fillna('N/A')    
     return df
@@ -312,24 +365,35 @@ def get_signal_comparison(config: Config) -> pd.DataFrame:
         if not models:
             return pd.DataFrame({"message": ["No running models found from API."]})
         
-        all_jobs = dao.get_all_jobs()
+        # Extract identities and use optimized query
+        identities = [model.get("identity", "") for model in models if model.get("identity")]
         
+        # Use optimized query to get only jobs with matching model_keys
+        jobs_list = dao.get_jobs_by_model_keys(identities) if identities else []
+        
+        # Create mapping of identity -> job for quick lookup
+        identity_to_job = {}
+        for job in jobs_list:
+            try:
+                job_config = json.loads(job.config)
+                model_key = job_config.get("model_key")
+                if model_key:
+                    identity_to_job[model_key] = job
+            except:
+                continue
+        
+        # Match models with jobs
         matched_jobs = []
         for model in models:
             identity = model.get("identity", "")
-            for job in all_jobs:
-                try:
-                    job_config = json.loads(job.config)
-                    if job_config.get("model_key") == identity:
-                        matched_jobs.append({
-                            "job_id": job.id,
-                            "model_name": model.get("modelName", ""),
-                            "identity": identity,
-                            "pnl": model.get("totalPnl", 0)
-                        })
-                        break
-                except:
-                    continue
+            job = identity_to_job.get(identity)
+            if job:
+                matched_jobs.append({
+                    "job_id": job.id,
+                    "model_name": model.get("modelName", ""),
+                    "identity": identity,
+                    "pnl": model.get("totalPnl", 0)
+                })
         
         if not matched_jobs:
             return pd.DataFrame({"message": ["No jobs matched with running models."]})

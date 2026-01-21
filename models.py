@@ -206,6 +206,63 @@ class DAO:
             jobs = session.query(Job).all()
             return jobs
 
+    def get_jobs_by_model_keys(self, model_keys: List[str]) -> List[Job]:
+        """Get jobs that have model_key matching any of the provided keys.
+        
+        This uses PostgreSQL JSON operators for efficient filtering at database level.
+        Falls back to Python filtering if the query fails (for non-PostgreSQL databases).
+        
+        Args:
+            model_keys: List of model_key values to filter by
+            
+        Returns:
+            List of Job objects with matching model_key in config
+        """
+        if not model_keys:
+            return []
+        
+        with Session(self.db_engine) as session:
+            try:
+                # Try PostgreSQL JSON operator approach
+                # config::jsonb->>'model_key' extracts the model_key field from JSON
+                result = session.execute(
+                    text("""
+                        SELECT * FROM jobs 
+                        WHERE (config::jsonb->>'model_key') = ANY(:model_keys)
+                    """),
+                    {"model_keys": model_keys}
+                )
+                
+                # Convert result to Job objects
+                jobs = []
+                for row in result:
+                    job = Job(
+                        id=row.id,
+                        session_id=row.session_id,
+                        plugin_id=row.plugin_id,
+                        description=row.description,
+                        config=row.config,
+                        active=row.active
+                    )
+                    jobs.append(job)
+                
+                return jobs
+                
+            except Exception:
+                # Fallback to Python filtering if PostgreSQL JSON operators don't work
+                all_jobs = session.query(Job).all()
+                matching_jobs = []
+                
+                for job in all_jobs:
+                    try:
+                        config = json.loads(job.config) if job.config else {}
+                        if config.get("model_key") in model_keys:
+                            matching_jobs.append(job)
+                    except:
+                        continue
+                
+                return matching_jobs
+
     def get_all_jobs_by_plugin(self, plugin_id: int):
         with Session(self.db_engine) as session:
             jobs = session.query(Job).filter(Job.plugin_id == plugin_id).all()
