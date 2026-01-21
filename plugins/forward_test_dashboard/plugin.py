@@ -408,16 +408,23 @@ def get_signal_comparison(config: Config) -> pd.DataFrame:
             pred_hour_naive = pred_hour.tz_localize(None) if pred_hour.tz is not None else pred_hour
             pred_hour_iso = pred_hour_naive.isoformat()
             
+            # Check if this symbol entered an order (exists in pnl_map)
+            key = (symbol, identity, pred_hour_iso)
+            has_order = key in pnl_map
+            
             # Get PNL from positions API
-            pnl = pnl_map.get((symbol, identity, pred_hour_iso), 0)
+            pnl = pnl_map.get(key, 0)
+            
+            # Add asterisk marker if entered order
+            marker = "*" if has_order else ""
             
             # Color for symbol based on direction
             if direction == "LONG":
-                symbol_colored = f"<span style='color: #28a745; font-weight: bold;'>{symbol}</span>"  # Green
+                symbol_colored = f"<span style='color: #28a745; font-weight: bold;'>{marker}{symbol}</span>"  # Green
             elif direction == "SHORT":
-                symbol_colored = f"<span style='color: #dc3545; font-weight: bold;'>{symbol}</span>"  # Red
+                symbol_colored = f"<span style='color: #dc3545; font-weight: bold;'>{marker}{symbol}</span>"  # Red
             else:
-                symbol_colored = f"**{symbol}**"
+                symbol_colored = f"**{marker}{symbol}**"
             
             # PNL with colored arrow
             if pnl > 0:
