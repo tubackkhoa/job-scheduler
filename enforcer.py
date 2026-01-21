@@ -42,8 +42,8 @@ class ExecutionContext:
     def __init__(
         self,
         user: User,
-        package: Optional[str],
-        enforce: Optional[Callable[[int, str, frozenset[str]], bool]],
+        package: Optional[str] = None,
+        enforce: Optional[Callable[[int, str, frozenset[str]], bool]] = None,
     ):
         object.__setattr__(self, "user", user)
         object.__setattr__(self, "package", package)
