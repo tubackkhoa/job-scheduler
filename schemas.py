@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     # Required fields from your previous error
     db_connection: str = ""
     module_path: Optional[str] = ""
+    plugin_path: str = "plugins"
+    user_plugin_path: str = "plugins"
     static_files: Optional[str] = ""
 
     # Configuration for loading from a .env file

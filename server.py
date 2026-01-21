@@ -34,6 +34,7 @@ from plugin_manager import PROJECT_NAME, PluginManager, scheduler_logger
 from renderer import Renderer
 from schemas import ConfigPayload, DownloadPayload, PluginCreatePayload, Settings, TemplatePayload
 from package_downloader import download_package
+from template_plugin import TemplatePlugin
 from utils.job import JobUtil
 from ws_manager import WSConnectionManager
 
@@ -125,6 +126,7 @@ async def lifespan(app: FastAPI):
         dao,
         log_handler=log_handler,
         module_paths=settings.module_path.split(":") if settings.module_path else None,
+        plugin_path=settings.plugin_path,
     )
 
     # Trade models API functions (no db_engine needed, use api_url/api_key directly)
@@ -505,6 +507,66 @@ def clear_logs(log_service: LogServiceState, job_id: int):
     if not result["success"]:
         raise HTTPException(status_code=500, detail=result["error"])
     return result
+
+
+# support template plugin, install by user
+@api_router.get("/user/template/{package}")
+def template_plugin(plugin_manager: PluginManagerState, user: UserState, package: str):
+    tpl_plugin = TemplatePlugin(f"{settings.user_plugin_path}/{package}")
+    ctx = plugin_manager.create_ctx(user)
+    config = tpl_plugin.config(ctx)
+    return {
+        "schema": tpl_plugin.schema(ctx),
+        "jobs": [
+            Job(
+                active=False,
+                description=tpl_plugin.description,
+                id=0,
+                config=config.model_dump(),
+                plugin_id=package,
+            )
+        ],
+        "globals": Renderer.get_globals_doc(tpl_plugin.env()),
+    }
+
+
+@api_router.post("/user/template/{package}")
+def template_plugin_update(
+    plugin_manager: PluginManagerState,
+    user: UserState,
+    package: str,
+    payload: ConfigPayload = Body(...),
+):
+    try:
+        tpl_plugin = TemplatePlugin(f"{settings.user_plugin_path}/{package}")
+        ctx = plugin_manager.create_ctx(user)
+        tpl_plugin.save(ctx, payload.description, payload.config)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to run template plugin: {str(e)}",
+        )
+
+
+@api_router.post("/user/template/run/{package}")
+def template_plugin_run(
+    plugin_manager: PluginManagerState,
+    user: UserState,
+    package: str,
+    payload=Body(...),
+):
+    try:
+        tpl_plugin = TemplatePlugin(f"{settings.user_plugin_path}/{package}")
+        ctx = plugin_manager.create_ctx(user)
+        config = tpl_plugin.config(ctx, payload)
+        result = tpl_plugin.run(ctx, config)
+        return Response(content=result, media_type="text/plain")
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to run template plugin: {str(e)}",
+        )
 
 
 app.include_router(api_router)
