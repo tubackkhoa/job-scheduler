@@ -207,6 +207,11 @@ class DAO:
         with Session(self.db_engine) as session:
             jobs = session.query(Job).all()
             return jobs
+    
+    def get_all_jobs_by_plugin(self, plugin_id: int):
+        with Session(self.db_engine) as session:
+            jobs = session.query(Job).filter(Job.plugin_id == plugin_id).all()
+            return jobs
 
     @global_permission("field")
     def create_value_version(self, ctx: ExecutionContext, payload: dict) -> dict:
@@ -288,9 +293,87 @@ class DAO:
 
             return version.to_dict()
 
+    # ---------- dependency checking ----------
+
+    def get_jobs_depending_on_field(self, field_id: str, version_id: Optional[int] = None) -> List[dict]:
+        parts = field_id.split(".", 1)
+        if len(parts) != 2:
+            raise Exception(
+                f"Invalid field_id format: {field_id}, expected 'plugin_id.field_name'"
+            )
+        
+        plugin_id_str, field_name = parts
+        plugin_id = int(plugin_id_str)
+        
+        dependent_jobs = []
+        
+        with Session(self.db_engine) as session:
+            jobs = session.query(Job).filter(Job.plugin_id == plugin_id).all()
+            for job in jobs:
+                if not job.config:
+                    continue
+                    
+                try:
+                    config = json.loads(job.config)
+                except json.JSONDecodeError:
+                    continue
+                
+                if field_name in config:
+                    config_value = config[field_name]
+                    
+                    if version_id is None or config_value == version_id:
+                        dependent_jobs.append({
+                            "job_id": job.id,
+                            "description": job.description or "No description",
+                            "config_value": config_value,
+                            "session_id": job.session_id,
+                            "plugin_id": job.plugin_id,
+                            
+                        })
+        
+        return dependent_jobs
+
+    def get_jobs_depending_on_version(self, version_id: int) -> List[dict]:
+        with Session(self.db_engine) as session:
+            version = session.get(ValueVersion, version_id)
+            if not version:
+                raise Exception(f"ValueVersion {version_id} not found")
+            
+            field_id = version.field_id
+        
+        # Use the helper method to find dependent jobs
+        dependent_jobs = self.get_jobs_depending_on_field(field_id, version_id)
+        for job in dependent_jobs:
+            job["field_id"] = field_id
+            job["field_name"] = field_id.split(".", 1)[1]
+        return dependent_jobs
+
     # ---------- delete ----------
 
-    def delete(self, version_id: int) -> dict:
+    def delete_value_version(self, version_id: int) -> dict:
+        dependent_jobs = self.get_jobs_depending_on_version(version_id)
+        
+        updated_job_count = 0
+        if dependent_jobs:
+            field_name = dependent_jobs[0]["field_name"]
+            
+            with Session(self.db_engine) as session:
+                for job_info in dependent_jobs:
+                    job = session.get(Job, job_info["job_id"])
+                    if not job:
+                        continue
+                    
+                    try:
+                        config = json.loads(job.config) if job.config else {}
+                        config[field_name] = 0
+                        job.config = json.dumps(config)
+                        self.job_config_cache[job.id] = job.config
+                        updated_job_count += 1
+                    except json.JSONDecodeError:
+                        continue
+                
+                session.commit()
+        
         with Session(self.db_engine) as session:
             version = session.get(ValueVersion, version_id)
             if not version:
@@ -302,6 +385,7 @@ class DAO:
             return {
                 "success": True,
                 "message": f"SQL version {version_id} deleted",
+                "updated_jobs": updated_job_count,
             }
 
     @global_permission("job")

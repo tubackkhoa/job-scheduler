@@ -19,7 +19,7 @@ class ModelType(str, Enum):
 
 
 def _is_test_env(env: str) -> bool:
-    return env == "uat_testing_multiple_models"
+    return env == "forward_test"
 
 
 def _get_api_config(
@@ -56,22 +56,23 @@ def list_trade_models(
         if _is_test_env(env):
             # Test env: GET /api/test-system/models?status=running
             resp = httpx.get(
-                f"{url}/api/test-system/models",
-                params={"status": "running"},
-                headers={"test-system-api-key": key},
-                timeout=30,
+                f"{url}/api/test-system/models?status=running",
+                headers={"test-system-api-key": key, "Content-Type": "application/json"},
+                timeout=60,
             )
         else:
             resp = httpx.get(
                 f"{url}/api/trading-models",
-                params={"status": status},
-                headers={"Authorization": f"Bearer {key}"},
+                params={"status": "active"},
+                headers={"quant-api-key": key, "Content-Type": "application/json"},
                 timeout=30,
             )
         resp.raise_for_status()
         result = resp.json()
+        print("result: ", result)
         if _is_test_env(env):
             items = result.get("models", [])
+            print("items: ", items)
             for item in items:
                 versions.append({"id": item.get("identity"), "name": item.get("identity", "")})
         else:
