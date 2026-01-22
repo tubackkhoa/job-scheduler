@@ -158,9 +158,6 @@ class SecureBaseModel(BaseModel):
         # Base schema from Pydantic
         schema = super().model_json_schema(**kwargs)
 
-        if ctx is None:
-            return schema
-
         properties: dict[str, Any] = {}
         is_admin = ctx.is_admin()
 
