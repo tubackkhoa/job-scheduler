@@ -1,13 +1,12 @@
-import json
 import logging
+from pathlib import Path
 import pluggy
-from pydantic import BaseModel, Field, ValidationInfo, field_validator
-from typing import Any, Callable, List
-import sqlglot
+from pydantic import BaseModel, Field
+from typing import Any, Callable, List, Optional, ParamSpec
 from datetime import datetime
-from jinja2 import DictLoader, Environment
-
+from enforcer import ExecutionContext, job_permission
 from plugins import ui_schema
+from plugins.schema import SecureBaseModel, SecureField
 
 from .data import JSON_TPL, SQL_TPL, YAML_TPL, MD_TPL, countries
 
@@ -23,23 +22,63 @@ def ui_schema_binding(field_path: list[str]):
             "ui:field": "Version",
             "model:binding": field_path,
             "model:expr": {
-                "list": "{{ get_value_versions(field_id, search, limit, offset) | tojson }}",
-                "detail": "{{ get_value_version(id) | tojson }}",
-                "create": "{{ create_value_version(payload) | tojson }}",
-                "update": "{{ update_value_version(id, payload) | tojson }}",
+                "list": "{{ dao.get_value_versions(field_id, search, limit, offset) | tojson }}",
+                "detail": "{{ dao.get_value_version(id) | tojson }}",
+                "create": "{{ dao.create_value_version(payload) | tojson }}",
+                "update": "{{ dao.update_value_version(id, payload) | tojson }}",
             },
             "ui:options": {"size": 12},
         }
     )
 
 
-class Config(BaseModel):
+class DynamicCode(BaseModel):
+    code: str = Field(
+        "",
+        json_schema_extra=ui_schema(
+            {
+                "ui:field": "Dynamic",
+                "code": Path(__file__).with_name("compile_plugin.js").read_text(),
+                # "url": "CompilePluginComponent.tsx",
+                "ui:options": {
+                    "size": 6,
+                },
+            }
+        ),
+    )
+    dynamic: str = Field(
+        "",
+        json_schema_extra=ui_schema(
+            {
+                "ui:field": "Dynamic",
+                "ui:expr:code": ("{{ dynamic_code.code }}", ["dynamic_code.code"]),
+                "ui:options": {
+                    "size": 6,
+                },
+            }
+        ),
+    )
+
+
+class Config(SecureBaseModel):
+
+    dynamic_code: DynamicCode = Field(
+        default_factory=DynamicCode,  # type: ignore
+        json_schema_extra=ui_schema({"ui:options": {"size": 12, "section": True}}),
+    )
+
     warmup_bars: int = 150
     extra_bars: int = 1
     quote_asset: str = "USDT"
     base_assets: List[str] = Field(
         default_factory=list,
-        json_schema_extra=ui_schema({"ui:field": "MultiSelect", "default": "BTC,ETH,SOL,BNB,LINK"}),
+        json_schema_extra=ui_schema(
+            {
+                "ui:field": "Select",
+                "default": "BTC,ETH,SOL,BNB,LINK",
+                "ui:options": {"multiple": True},
+            }
+        ),
     )
     country: str = Field(
         "USA",
@@ -55,17 +94,20 @@ class Config(BaseModel):
         default_factory=list,
         json_schema_extra=ui_schema(
             {
-                "ui:field": "MultiSelect",
-                "ui:options": {"size": 6},
-                "ui:expr": (
-                    "{ default: {{ get_cities_by_country(country) }} }",
-                    ["country"],  # dependency paths, can be many, eg : ["abc"], ["abc", "def"]
+                "ui:field": "Select",
+                "ui:options": {"size": 6, "multiple": True},
+                "default": [],  # to know type
+                "ui:expr:default": (
+                    "{{ get_cities_by_country(country) }}",
+                    ["country"],  # dependency paths, can be many, eg : ["abc", "def"]
                 ),
             }
         ),
     )
-    js_template: str = Field(
+    js_template: str = SecureField(
         "",
+        read="code_read",
+        write="code_write",
         json_schema_extra=ui_schema({"ui:field": "Template", "type": "js"}),
     )
     sql_id: int = Field(
@@ -95,17 +137,6 @@ class Config(BaseModel):
         json_schema_extra=ui_schema({"ui:field": "Template", "type": "markdown"}),
     )
 
-    @field_validator("sql", mode="after")
-    @classmethod
-    def validate_sql(cls, sql: str, info: ValidationInfo):
-        """Validate raw_sql using sqlglot for DuckDB SQL syntax."""
-        try:
-            template_engine = Plugin.env().from_string(sql)
-            sqlglot.parse_one(template_engine.render(**info.data))
-            return sql
-        except Exception as e:
-            raise ValueError(f"Error validating SQL: {str(e)}")
-
 
 class MyClass:
     def __init__(self, name):
@@ -117,27 +148,23 @@ class MyClass:
         return {"fixed": "object", "name": self.name}
 
 
+@job_permission("fetch_data")
+def fetch_data(ctx: ExecutionContext):
+    return ctx.user
+
+
+P = ParamSpec("P")
+
+
 class Plugin:
 
-    _env = Environment(
-        loader=DictLoader({"base": "{% block content %}{% endblock %}"}),
-        autoescape=False,
-        trim_blocks=True,
-        lstrip_blocks=True,
-    )
-
-    _env.globals.update(
-        {
-            "datetime": datetime,
-            "MyClass": MyClass,
-            "get_users": lambda: ["tupt", "cuongnv"],
-            "get_cities_by_country": lambda country_name: countries.get(country_name, []),
-        }
-    )
-
-    _env.filters["in_clause"] = lambda values: (
-        "()" if not values else "(" + ",".join(repr(v) for v in values) + ")"
-    )
+    _env = {
+        "datetime": datetime,
+        "fetch_data": fetch_data,
+        "MyClass": MyClass,
+        "get_users": lambda: ["tupt", "cuongnv"],
+        "get_cities_by_country": lambda country_name: countries.get(country_name, []),
+    }
 
     @hookimpl
     @classmethod
@@ -146,33 +173,52 @@ class Plugin:
 
     @hookimpl
     @classmethod
-    def env(cls) -> Environment:
+    def env(cls) -> dict[str, Any]:
         return cls._env
 
     @hookimpl
     @classmethod
-    def schema(cls):
-        return Config.model_json_schema()
+    def schema(cls, ctx: ExecutionContext):
+        return Config.model_json_schema(ctx)
 
     @hookimpl
     @classmethod
-    def config(cls, json=None):
-        return Config.model_validate(json or {})
+    def config(
+        cls,
+        ctx: ExecutionContext,
+        json: Optional[dict[str, Any]] = None,
+        validate: Optional[bool] = False,
+    ):
+        return Config.model_validate(ctx, json or {}, validate)
 
     @hookimpl
     @classmethod
     def roles(cls):
-        return {"admin"}
+        return {
+            "fetch_data": {"data", "admin"},
+            "code_read": {"admin"},
+            "code_write": {"admin"},
+        }
 
     @hookimpl
     @classmethod
     async def run(
-        cls, config: Config, logger: logging.Logger, render: Callable[[str, Environment, dict], Any]
+        cls,
+        ctx: ExecutionContext,
+        config: Config,
+        logger: logging.Logger,
+        render: Callable[..., Any],
     ):
-        version = json.loads(
-            render("{{ get_value_version(id) | tojson }}", cls._env, {"id": config.sql_id})
+        version = render(
+            ctx,
+            "{{ dao.get_value_version(id).value }}",
+            config.model_dump(),
+            **cls._env,
+            id=config.sql_id,
         )
-        logger.info(version["value"])
+
+        print(version)
+
         # for i in range(10):
         #     logger.info(f"Running step {i}")
         #     await asyncio.sleep(0.5)

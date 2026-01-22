@@ -1,6 +1,9 @@
-from typing import Any, Dict, Optional
-from pydantic import BaseModel, Field, PositiveInt, field_validator
+from typing import Any, Dict, Optional, TypedDict
+from pydantic import BaseModel, Field, PositiveInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from auth import User
+from models import Job
 
 
 class ConfigPayload(BaseModel):
@@ -10,7 +13,7 @@ class ConfigPayload(BaseModel):
     description: Optional[str] = None
 
     class Config:
-        allow_population_by_field_name = True
+        validate_by_name = True
         extra = "forbid"
 
 
@@ -58,7 +61,13 @@ class Settings(BaseSettings):
     # Required fields from your previous error
     db_connection: str = ""
     module_path: Optional[str] = ""
+    plugin_path: str = "plugins"
+    user_plugin_path: str = "plugins"
     static_files: Optional[str] = ""
 
     # Configuration for loading from a .env file
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    redis_host: Optional[str] = None
+    redis_port: Optional[int] = 0
+    redis_db: Optional[int] = 0

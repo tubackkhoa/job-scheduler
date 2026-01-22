@@ -12,9 +12,13 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Tuple
 from threading import Lock
 import json
+
 logger = logging.getLogger(__name__)
 
 from log_indexer import LogIndexer, extract_job_id, JOB_ID_RE
+
+LOG_HEADER_RE = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(\w+)\]\s*(.*)$")
+
 
 class LogService:
 
@@ -39,22 +43,22 @@ class LogService:
         self.rotation_keep_ratio = rotation_keep_ratio
         self._locks: Dict[str, Lock] = {}
         self._lock = Lock()  # For locks dict
-        
+
         self.useIndexer = useIndexer
         if self.useIndexer:
             self.log_indexer = LogIndexer(f"{log_dir}/log_indexer.db")
-    
+
     def _extract_job_id_int(self, job_id: str) -> int:
         """Extract numeric job_id from string format (e.g., 'job-scheduler.job.123' -> 123)."""
         m = JOB_ID_RE.search(job_id)
         if m:
             return int(m.group(1))
         # Fallback: try to extract any number from the string
-        numbers = re.findall(r'\d+', job_id)
+        numbers = re.findall(r"\d+", job_id)
         if numbers:
             return int(numbers[-1])  # Use last number found
         # Last resort: use hash of string (not ideal but works)
-        return abs(hash(job_id)) % (10 ** 9)
+        return abs(hash(job_id)) % (10**9)
 
     def _get_lock(self, job_id: str) -> Lock:
         """Get or create a lock for a job_id."""
@@ -229,70 +233,54 @@ class LogService:
                     f.write(log_line)
 
     def _read_log_file(self, file_path: Path) -> List[Dict]:
-        """Read log entries from a file (plain or gzipped), supporting multiline log messages."""
         entries = []
+
         try:
             if file_path.suffix == ".gz":
-                with gzip.open(file_path, "rt", encoding="utf-8") as f:
-                    lines = f.readlines()
+                f = gzip.open(file_path, "rt", encoding="utf-8")
             else:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    lines = f.readlines()
+                f = open(file_path, "r", encoding="utf-8")
 
-            current_entry = None
-            line_num = 0
+            with f:
+                current_entry = None
+                line_num = 0
 
-            for raw_line in lines:
-                line_num += 1
-                line = raw_line.rstrip("\n")
-                if not line.strip():
-                    continue
+                for raw_line in f:
+                    line_num += 1
+                    line = raw_line.rstrip("\n")
 
-                # Check if line starts with timestamp pattern: "YYYY-MM-DD HH:MM:SS"
-                if re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", line):
-                    # Save previous entry if any
-                    if current_entry:
-                        entries.append(current_entry)
+                    header_match = LOG_HEADER_RE.match(line)
 
-                    # Parse new log entry line: timestamp, level, message
-                    match = re.match(
-                        r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(\w+)\] (.+)$", line
-                    )
-                    if match:
-                        timestamp, level, message = match.groups()
+                    if header_match:
+                        # Close previous entry
+                        if current_entry:
+                            entries.append(current_entry)
+
+                        timestamp, level, message = header_match.groups()
                         current_entry = {
                             "offset": line_num,
                             "timestamp": timestamp,
                             "level": level,
-                            "message": message,
+                            "message": message or "",
                         }
                     else:
-                        # Fallback: treat whole line as message
-                        current_entry = {
-                            "offset": line_num,
-                            "timestamp": "",
-                            "level": "INFO",
-                            "message": line,
-                        }
-                else:
-                    # Continuation line: append to last message with newline
-                    if current_entry:
-                        current_entry["message"] += "\n" + line
-                    else:
-                        # No current entry? Treat as standalone info line
-                        current_entry = {
-                            "offset": line_num,
-                            "timestamp": "",
-                            "level": "INFO",
-                            "message": line,
-                        }
+                        # Always append continuation lines (including blanks)
+                        if current_entry:
+                            current_entry["message"] += "\n" + line
+                        else:
+                            # Edge case: file starts without header
+                            current_entry = {
+                                "offset": line_num,
+                                "timestamp": "",
+                                "level": "INFO",
+                                "message": line,
+                            }
 
-            # Append last entry if exists
-            if current_entry:
-                entries.append(current_entry)
+                if current_entry:
+                    entries.append(current_entry)
 
         except Exception:
-            pass  # Skip corrupted files
+            pass
 
         return entries
 
@@ -318,7 +306,7 @@ class LogService:
         if self.useIndexer:
             try:
                 job_id_int = self._extract_job_id_int(job_id)
-                
+
                 if search_text:
                     # Use FTS search from log_indexer
                     results = self.log_indexer.search_logs(
@@ -334,32 +322,34 @@ class LogService:
                         limit=limit,
                         order_desc=order_desc,
                     )
-                
+
                 # Convert to expected format
                 logs = []
                 for r in results:
-                    logs.append({
-                        "offset": r.get("id", 0),
-                        "timestamp": r.get("timestamp", ""),
-                        "level": r.get("level", "INFO"),
-                        "message": r.get("message", ""),
-                    })
-                
+                    logs.append(
+                        {
+                            "offset": r.get("id", 0),
+                            "timestamp": r.get("timestamp", ""),
+                            "level": r.get("level", "INFO"),
+                            "message": r.get("message", ""),
+                        }
+                    )
+
                 # Sort by offset
                 reverse = sort == "desc"
                 logs.sort(key=lambda e: e["offset"], reverse=reverse)
-                
+
                 # Apply offset filter if provided
                 if offset is not None and offset > 0:
                     if sort == "desc":
                         logs = [e for e in logs if e["offset"] <= offset]
                     else:
                         logs = [e for e in logs if e["offset"] >= offset]
-                
+
                 result_entries = logs[:limit]
                 min_offset = result_entries[0]["offset"] if result_entries else None
                 max_offset = result_entries[-1]["offset"] if result_entries else None
-                
+
                 return {
                     "logs": result_entries,
                     "total": len(logs),  # Approximate total
@@ -372,7 +362,7 @@ class LogService:
             except Exception as e:
                 # Fallback to file-based search on error
                 pass
-        
+
         # File-based search (original implementation)
         lock = self._get_lock(job_id)
         with lock:
@@ -420,10 +410,10 @@ class LogService:
 
             min_offset = result_entries[0]["offset"] if result_entries else None
             max_offset = result_entries[-1]["offset"] if result_entries else None
-            
+
             # Determine if there are more logs available for pagination
             has_more = len(all_entries) > limit
-            
+
             return {
                 "logs": result_entries,
                 "total": total,
@@ -447,8 +437,7 @@ class LogService:
         if self.useIndexer:
             try:
                 job_id_int = self._extract_job_id_int(job_id)
-                
-                
+
                 # Use search_logs_with_following from log_indexer
                 groups = self.log_indexer.search_logs_with_following(
                     job_id=job_id_int,
@@ -456,37 +445,39 @@ class LogService:
                     following_lines=n_following,
                     limit=limit,
                 )
-                
+
                 # Convert to expected format
                 result_groups = []
                 for group in groups:
                     match = group.get("match", {})
                     following = group.get("following", [])
-                    
-                    result_groups.append({
-                        "matched_entry": {
+
+                    result_groups.append(
+                        {
+                            "matched_entry": {
+                                "offset": match.get("id", 0),
+                                "timestamp": match.get("timestamp", ""),
+                                "level": match.get("level", "INFO"),
+                                "message": match.get("message", ""),
+                            },
+                            "following_entries": [
+                                {
+                                    "offset": f.get("id", 0),
+                                    "timestamp": f.get("timestamp", ""),
+                                    "level": f.get("level", "INFO"),
+                                    "message": f.get("message", ""),
+                                }
+                                for f in following
+                            ],
                             "offset": match.get("id", 0),
                             "timestamp": match.get("timestamp", ""),
-                            "level": match.get("level", "INFO"),
-                            "message": match.get("message", ""),
-                        },
-                        "following_entries": [
-                            {
-                                "offset": f.get("id", 0),
-                                "timestamp": f.get("timestamp", ""),
-                                "level": f.get("level", "INFO"),
-                                "message": f.get("message", ""),
-                            }
-                            for f in following
-                        ],
-                        "offset": match.get("id", 0),
-                        "timestamp": match.get("timestamp", ""),
-                    })
-                
+                        }
+                    )
+
                 # Sort by offset
                 reverse = sort == "desc"
                 result_groups.sort(key=lambda g: g["offset"], reverse=reverse)
-                
+
                 return {
                     "groups": result_groups[:limit],
                     "total_matches": len(result_groups),
@@ -500,7 +491,7 @@ class LogService:
                     "total_matches": 0,
                     "returned": 0,
                 }
-        
+
         # File-based search (original implementation)
         lock = self._get_lock(job_id)
         with lock:
@@ -595,7 +586,7 @@ class LogService:
                 pass
 
         return deleted_count
-    
+
     def clear_logs(self, job_id: str):
         job_id_int = self._extract_job_id_int(job_id)
         if self.useIndexer:
@@ -607,7 +598,7 @@ class LogService:
             return {"success": True}
         else:
             try:
-            # Write to file (original mode)
+                # Write to file (original mode)
                 lock = self._get_lock(job_id)
                 with lock:
                     log_file = self._get_log_file(job_id)
@@ -615,8 +606,8 @@ class LogService:
                     # Check if rotation needed
                     if log_file.exists():
                         # Clear the file by opening in write mode (truncates file)
-                            with open(log_file, "w", encoding="utf-8") as f:
-                                pass  # File is now empty
+                        with open(log_file, "w", encoding="utf-8") as f:
+                            pass  # File is now empty
             except Exception as e:
                 logger.error(f"Error in clear_logs via file mode: {e}")
                 return {"success": False, "error": str(e)}

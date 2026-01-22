@@ -36,7 +36,6 @@ For a deeper dive on authoring plugins, see **[Plugin Development](./docs/PLUGIN
     - `Plugin(id, package, interval, description)`
     - `Job(id, session_id, plugin_id, config, description, active)`
   - `ws_manager.py` – manages WebSocket connections keyed by `"{plugin_id}/{session_id}"` and broadcasts logs.
-  - `create_data.py` – creates tables and seeds example plugins and jobs for demo/testing.
   - `scripts/database.sql` – raw schema for the `plugins` and `jobs` tables.
 
 - **Plugins (Python)**
@@ -68,8 +67,6 @@ For a deeper dive on authoring plugins, see **[Plugin Development](./docs/PLUGIN
 - A database supported by SQLAlchemy; examples include:
   - SQLite (easiest to start, including in‑memory)
   - PostgreSQL, MySQL, etc.
-
-For in‑memory SQLite demos, set `DB_CONNECTION=sqlite:///:memory:` so `create_data.py` seeds sample data on startup.
 
 ---
 
@@ -132,8 +129,6 @@ uvicorn server:app --reload
 ```
 
 - **Frontend**: run `yarn dev` in `frontend` and configure `API_BASE_URL` (in `frontend/src/api.ts`) to point at your backend (for example `http://localhost:8000` when using uvicorn defaults).
-
-The default data seeding in `create_data.py` creates two example users and several example plugins with pre‑configured jobs so you can immediately see logs and form rendering.
 
 ---
 
