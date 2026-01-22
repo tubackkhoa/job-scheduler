@@ -115,12 +115,16 @@ def format_pnl_table(models: List[Dict[str, Any]]) -> pd.DataFrame:
     """Format PNL data as DataFrame with color-coded icons for PNL values and job status."""
     if not models:
         return "No running models found."
+    print(models)
+    
+    # Store original models for latestPostion access
+    models_dict = {model.get('identity', ''): model for model in models}
     
     df = pd.DataFrame(models)
     
     # Include latestPositionAt in the columns
     df = df[['modelName', 'identity', 'totalPnl', 'latestPositionAt', 'status']].copy()
-    df.columns = ['Model', 'Identity', 'PNL', 'Last Position', 'Status']
+    df.columns = ['Model', 'Identity', 'PNL', 'Last Position Time', 'Status']
     
     # Extract all identities to query jobs efficiently
     identities = [model.get('identity', '') for model in models if model.get('identity')]
@@ -166,6 +170,50 @@ def format_pnl_table(models: List[Dict[str, Any]]) -> pd.DataFrame:
         except:
             return str(x)
     
+    # Format latest position info (symbol, direction, PNL) like signals
+    def format_latest_position(row):
+        identity = row['Identity']
+        model = models_dict.get(identity)
+        
+        if not model or 'latestPostion' not in model:
+            return "-"
+        
+        latest_pos = model.get('latestPostion')
+        if not latest_pos:
+            return "-"
+        
+        symbol = latest_pos.get('symbol', '')
+        direction = latest_pos.get('direction', '')
+        pnl = latest_pos.get('pnl')
+        
+        if not symbol or not direction:
+            return "-"
+        
+        # Color symbol based on direction (BUY = green, SELL = red)
+        if direction.upper() in ['BUY', 'LONG']:
+            symbol_colored = f"<span style='color: #28a745; font-weight: bold;'>{symbol}</span>"
+        elif direction.upper() in ['SELL', 'SHORT']:
+            symbol_colored = f"<span style='color: #dc3545; font-weight: bold;'>{symbol}</span>"
+        else:
+            symbol_colored = f"**{symbol}**"
+        
+        # Format PNL with colored arrow - convert to float for comparison
+        if pnl is not None:
+            try:
+                pnl_value = float(pnl)
+                if pnl_value > 0:
+                    pnl_str = f"<span style='color: #28a745;'>↗ +${pnl_value:.5f}</span>"
+                elif pnl_value < 0:
+                    pnl_str = f"<span style='color: #dc3545;'>↘ ${pnl_value:.5f}</span>"
+                else:
+                    pnl_str = "$0"
+            except (ValueError, TypeError):
+                pnl_str = "-"
+        else:
+            pnl_str = "-"
+        
+        return f"{symbol_colored} {pnl_str}"
+    
     # Format status based on job existence and active status
     def format_status(row):
         identity = row['Identity']
@@ -184,7 +232,8 @@ def format_pnl_table(models: List[Dict[str, Any]]) -> pd.DataFrame:
             return f"<span style='color: #ffc107;'>⏸ Inactive ({job_name})</span>"
     
     df['PNL'] = df['PNL'].apply(format_pnl_with_color)
-    df['Last Position'] = df['Last Position'].apply(format_last_position)
+    df['Last Position Time'] = df['Last Position Time'].apply(format_last_position)
+    df['Latest Position'] = df.apply(format_latest_position, axis=1)
     df['Status'] = df.apply(format_status, axis=1)
     
     df = df.fillna('N/A')    
