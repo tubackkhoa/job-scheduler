@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from fastapi import Request, HTTPException, status, Depends
 from fastapi.security import HTTPBasicCredentials, HTTPBasic
 from datetime import datetime, timedelta
-from typing import Set
+from typing import Optional, Set
 import secrets
 
 
@@ -10,30 +10,33 @@ import secrets
 class User:
     id: int
     roles: frozenset[str]
+    username: str = ""
 
 
 @dataclass(frozen=True)
 class UserData:
     user: User
-    username: str
     password: str
 
 
 USERS: list[UserData] = [
     UserData(
-        User(1, frozenset({"admin"})),
-        "thanhtu",
+        User(1, frozenset({"admin"}), "thanhtu"),
         "admin",
     ),
     UserData(
-        User(2, frozenset({"user"})),
-        "cuongnv",
+        User(
+            2,
+            frozenset({"user"}),
+            "cuongnv",
+        ),
         "admin",
     ),
 ]
 
 
 security = HTTPBasic(auto_error=False)
+
 
 def require_auth(
     request: Request,
@@ -43,8 +46,8 @@ def require_auth(
     if credentials is None:
         request.state.user = User(1, frozenset({"admin"}))
         return
-    
-    user = next((u for u in USERS if u.username == credentials.username), None)
+
+    user = next((u for u in USERS if u.user.username == credentials.username), None)
     if not user or not secrets.compare_digest(credentials.password, user.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

@@ -210,31 +210,33 @@ class DAO:
 
     def get_jobs_by_model_keys(self, model_keys: List[str]) -> List[Job]:
         """Get jobs that have model_key matching any of the provided keys.
-        
+
         This uses PostgreSQL JSON operators for efficient filtering at database level.
         Falls back to Python filtering if the query fails (for non-PostgreSQL databases).
-        
+
         Args:
             model_keys: List of model_key values to filter by
-            
+
         Returns:
             List of Job objects with matching model_key in config
         """
         if not model_keys:
             return []
-        
+
         with Session(self.db_engine) as session:
             try:
                 # Try PostgreSQL JSON operator approach
                 # config::jsonb->>'model_key' extracts the model_key field from JSON
                 result = session.execute(
-                    text("""
+                    text(
+                        """
                         SELECT * FROM jobs 
                         WHERE (config::jsonb->>'model_key') = ANY(:model_keys)
-                    """),
-                    {"model_keys": model_keys}
+                    """
+                    ),
+                    {"model_keys": model_keys},
                 )
-                
+
                 # Convert result to Job objects
                 jobs = []
                 for row in result:
@@ -244,25 +246,24 @@ class DAO:
                         plugin_id=row.plugin_id,
                         description=row.description,
                         config=row.config,
-                        active=row.active
+                        active=row.active,
                     )
                     jobs.append(job)
-                
+
                 return jobs
-                
+
             except Exception:
                 # Fallback to Python filtering if PostgreSQL JSON operators don't work
                 all_jobs = session.query(Job).all()
                 matching_jobs = []
-                
+
                 for job in all_jobs:
                     try:
-                        config = json.loads(job.config) if job.config else {}
-                        if config.get("model_key") in model_keys:
+                        if job.config and job.config.get("model_key") in model_keys:
                             matching_jobs.append(job)
                     except:
                         continue
-                
+
                 return matching_jobs
 
     def get_all_jobs_by_plugin(self, plugin_id: int):
@@ -352,42 +353,38 @@ class DAO:
 
     # ---------- dependency checking ----------
 
-    def get_jobs_depending_on_field(self, field_id: str, version_id: Optional[int] = None) -> List[dict]:
+    def get_jobs_depending_on_field(
+        self, field_id: str, version_id: Optional[int] = None
+    ) -> List[dict]:
         parts = field_id.split(".", 1)
         if len(parts) != 2:
-            raise Exception(
-                f"Invalid field_id format: {field_id}, expected 'plugin_id.field_name'"
-            )
-        
+            raise Exception(f"Invalid field_id format: {field_id}, expected 'plugin_id.field_name'")
+
         plugin_id_str, field_name = parts
         plugin_id = int(plugin_id_str)
-        
+
         dependent_jobs = []
-        
+
         with Session(self.db_engine) as session:
             jobs = session.query(Job).filter(Job.plugin_id == plugin_id).all()
             for job in jobs:
                 if not job.config:
                     continue
-                    
-                try:
-                    config = json.loads(job.config)
-                except json.JSONDecodeError:
-                    continue
-                
-                if field_name in config:
-                    config_value = config[field_name]
-                    
+
+                if field_name in job.config:
+                    config_value = job.config[field_name]
+
                     if version_id is None or config_value == version_id:
-                        dependent_jobs.append({
-                            "job_id": job.id,
-                            "description": job.description or "No description",
-                            "config_value": config_value,
-                            "session_id": job.session_id,
-                            "plugin_id": job.plugin_id,
-                            
-                        })
-        
+                        dependent_jobs.append(
+                            {
+                                "job_id": job.id,
+                                "description": job.description or "No description",
+                                "config_value": config_value,
+                                "session_id": job.session_id,
+                                "plugin_id": job.plugin_id,
+                            }
+                        )
+
         return dependent_jobs
 
     def get_jobs_depending_on_version(self, version_id: int) -> List[dict]:
@@ -395,9 +392,9 @@ class DAO:
             version = session.get(ValueVersion, version_id)
             if not version:
                 raise Exception(f"ValueVersion {version_id} not found")
-            
+
             field_id = version.field_id
-        
+
         # Use the helper method to find dependent jobs
         dependent_jobs = self.get_jobs_depending_on_field(field_id, version_id)
         for job in dependent_jobs:
@@ -409,28 +406,25 @@ class DAO:
 
     def delete_value_version(self, version_id: int) -> dict:
         dependent_jobs = self.get_jobs_depending_on_version(version_id)
-        
+
         updated_job_count = 0
         if dependent_jobs:
             field_name = dependent_jobs[0]["field_name"]
-            
+
             with Session(self.db_engine) as session:
                 for job_info in dependent_jobs:
                     job = session.get(Job, job_info["job_id"])
                     if not job:
                         continue
-                    
-                    try:
-                        config = json.loads(job.config) if job.config else {}
-                        config[field_name] = 0
-                        job.config = json.dumps(config)
-                        self.job_config_cache[job.id] = job.config
-                        updated_job_count += 1
-                    except json.JSONDecodeError:
-                        continue
-                
+
+                    config = job.config or {}
+                    config[field_name] = 0
+                    job.config = config
+                    self.job_config_cache[job.id] = config
+                    updated_job_count += 1
+
                 session.commit()
-        
+
         with Session(self.db_engine) as session:
             version = session.get(ValueVersion, version_id)
             if not version:
