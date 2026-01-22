@@ -29,12 +29,18 @@ class LogService:
         max_files: int = 10,  # Keep last 10 rotated files
         retention_days: int = 7,  # Keep logs for 7 days
         useIndexer: bool = False,
+        max_log_entries: int = 100_000,  # Max logs per job in DB mode before auto-rotation
+        max_total_lines: int = 50_000,  # Max total lines per job in file mode
+        rotation_keep_ratio: float = 0.5,  # Ratio of logs to keep when rotating (0.5 = 50%)
     ):
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.max_file_size = max_file_size
         self.max_files = max_files
         self.retention_days = retention_days
+        self.max_log_entries = max_log_entries
+        self.max_total_lines = max_total_lines
+        self.rotation_keep_ratio = rotation_keep_ratio
         self._locks: Dict[str, Lock] = {}
         self._lock = Lock()  # For locks dict
 
@@ -77,6 +83,37 @@ class LogService:
         )
         return files
 
+    def _count_total_lines(self, job_id: str) -> int:
+        """Count total lines across all log files (rotated and current) for a job.
+        
+        Optimized: counts newlines instead of parsing full content.
+        """
+        total_lines = 0
+        
+        # Count lines in rotated files (gzipped)
+        rotated_files = self._get_rotated_files(job_id)
+        for rotated_file in rotated_files:
+            try:
+                if rotated_file.suffix == ".gz":
+                    with gzip.open(rotated_file, "rt", encoding="utf-8") as f:
+                        total_lines += sum(1 for _ in f)
+                else:
+                    with open(rotated_file, "r", encoding="utf-8") as f:
+                        total_lines += sum(1 for _ in f)
+            except Exception:
+                pass  # Skip corrupted files
+        
+        # Count lines in current file
+        current_file = self._get_log_file(job_id)
+        if current_file.exists():
+            try:
+                with open(current_file, "r", encoding="utf-8") as f:
+                    total_lines += sum(1 for _ in f)
+            except Exception:
+                pass
+        
+        return total_lines
+
     def _rotate_log(self, job_id: str, current_file: Path) -> Path:
         """Rotate log file: compress old one, return new file path."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -89,12 +126,63 @@ class LogService:
 
         current_file.unlink()
 
-        rotated_files = self._get_rotated_files(job_id)
-        if len(rotated_files) > self.max_files:
-            for old_file in rotated_files[self.max_files :]:
-                old_file.unlink()
+        # Smart rotation: check total lines across all files
+        total_lines = self._count_total_lines(job_id)
+        if total_lines > self.max_total_lines:
+            # Keep only the latest logs based on rotation_keep_ratio
+            keep_lines = int(self.max_total_lines * self.rotation_keep_ratio)
+            self._trim_old_logs(job_id, keep_lines)
+            logger.info(
+                f"Auto-trimmed logs for job {job_id}: "
+                f"kept {keep_lines} latest lines, total was {total_lines} lines"
+            )
+        else:
+            # Standard rotation: keep max_files rotated files
+            rotated_files = self._get_rotated_files(job_id)
+            if len(rotated_files) > self.max_files:
+                for old_file in rotated_files[self.max_files :]:
+                    old_file.unlink()
 
         return current_file  # Return path for new file
+
+    def _trim_old_logs(self, job_id: str, keep_lines: int):
+        """Trim old logs by keeping only the latest keep_lines entries.
+        
+        After trimming, the recent logs are kept in the main current file
+        so that API fetch can access them directly.
+        """
+        # Read all log entries from all files (oldest to newest)
+        all_entries = []
+        
+        rotated_files = self._get_rotated_files(job_id)
+        for rotated_file in reversed(rotated_files):
+            entries = self._read_log_file(rotated_file)
+            all_entries.extend(entries)
+        
+        current_file = self._get_log_file(job_id)
+        if current_file.exists():
+            entries = self._read_log_file(current_file)
+            all_entries.extend(entries)
+        
+        # Keep only the latest keep_lines entries
+        if len(all_entries) > keep_lines:
+            all_entries = all_entries[-keep_lines:]
+        
+        # Delete all old rotated files
+        for rotated_file in rotated_files:
+            rotated_file.unlink()
+        
+        # Delete current file if it exists
+        if current_file.exists():
+            current_file.unlink()
+        
+        # Write trimmed logs back to the MAIN current file (not compressed)
+        # This ensures API can fetch recent logs directly
+        if all_entries:
+            with open(current_file, "w", encoding="utf-8") as f:
+                for entry in all_entries:
+                    log_line = f"{entry['timestamp']} [{entry['level']}] {entry['message']}\n"
+                    f.write(log_line)
 
     def write_log(self, job_id: str, level: str, message: str, timestamp: Optional[str] = None):
         if timestamp is None:
@@ -117,6 +205,17 @@ class LogService:
                     message=message,
                     timestamp=timestamp,
                 )
+                
+                # Auto-rotate: check if log count exceeds threshold
+                log_count = self.log_indexer.get_log_count(job_id_int)
+                if log_count > self.max_log_entries:
+                    # Keep latest logs based on rotation_keep_ratio
+                    keep_count = int(self.max_log_entries * self.rotation_keep_ratio)
+                    self.log_indexer.rotate_job_logs_by_count(job_id_int, keep_count)
+                    logger.info(
+                        f"Auto-rotated logs for job {job_id}: "
+                        f"kept {keep_count} latest logs, deleted {log_count - keep_count} oldest logs"
+                    )
             except Exception:
                 pass  # Don't fail on SQLite write errors
         else:
