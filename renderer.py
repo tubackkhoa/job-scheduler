@@ -2,6 +2,7 @@ import inspect
 from typing import Any, Iterable
 from functools import lru_cache
 from jinja2.sandbox import SandboxedEnvironment
+from datetime import datetime, timedelta, timezone
 
 from enforcer import GLOBAL_PERMISSION_REGISTRY, ExecutionContext
 
@@ -45,6 +46,8 @@ class Renderer:
         trim_blocks=True,
         lstrip_blocks=True,
     )
+
+    _sandbox.globals.update({"datetime": datetime, "timedelta": timedelta, "timezone": timezone})
 
     _sandbox.filters.update(
         {
