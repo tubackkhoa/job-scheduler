@@ -271,7 +271,7 @@ def schema(
         if plugin != None:
             jobs = plugin_manager.dao.get_jobs_by_plugin_and_session(ctx, plugin_id, session_id)
             for job in jobs:
-                job.config = plugin.config(ctx, job.config).model_dump(mode='json')
+                job.config = plugin.config(ctx, job.config).model_dump(mode="json")
 
             if len(jobs) == 0:
                 # add empty config so that when saving it will be new job
@@ -280,7 +280,7 @@ def schema(
                         active=False,
                         description="",
                         id=0,
-                        config=plugin.config(ctx).model_dump(mode='json'),
+                        config=plugin.config(ctx).model_dump(mode="json"),
                         plugin_id=plugin_id,
                         session_id=session_id,
                     )
@@ -400,12 +400,7 @@ def update_config(
         plugin = plugin_manager.get_plugin_instance(plugin_item.package)
         if not plugin:
             raise HTTPException(status_code=404, detail="Plugin not found")
-        config = plugin.config(payload.config)
-        
-        # Validate config if plugin has validate method
-        if hasattr(plugin, 'validate'):
-            plugin.validate(config)
-        
+
         ctx = plugin_manager.create_ctx(user, plugin_item.package)
         # validate before saving
         config = plugin.config(ctx, payload.config, True)
@@ -413,11 +408,13 @@ def update_config(
             plugin_manager.add_job(
                 session_id,
                 plugin_id,
-                config.model_dump(mode='json'),
+                config.model_dump(mode="json"),
                 payload.description,
             )
         else:
-            plugin_manager.dao.update_job(job_id, config.model_dump(mode='json'), payload.description)
+            plugin_manager.dao.update_job(
+                job_id, config.model_dump(mode="json"), payload.description
+            )
 
         return config
     except HTTPException:
@@ -506,7 +503,7 @@ def template_plugin(plugin_manager: PluginManagerState, user: UserState, package
                 active=False,
                 description=tpl_plugin.description,
                 id=0,
-                config=config.model_dump(mode='json'),
+                config=config.model_dump(mode="json"),
                 plugin_id=package,
             )
         ],

@@ -64,14 +64,6 @@ class PluginSpec:
     @hookspec
     async def uninstall(cls) -> bool: ...
 
-    @hookspec
-    def validate(cls, config: BaseModel) -> None:
-        """
-        Optional hook for validating job configuration before saving.
-        Should raise an exception if validation fails.
-        """
-        ...
-
 
 class PluginManager:
     """
@@ -293,14 +285,7 @@ class PluginManager:
         # Get plugin to check for validation
         plugin_model = self.dao.get_plugin(plugin_id)
         assert plugin_model is not None
-        
-        plugin_instance = self.get_plugin_instance(plugin_model.package)
-        if plugin_instance and hasattr(plugin_instance, 'validate'):
-            # Parse config and validate if plugin has validate method
-            config_dict = json.loads(config)
-            parsed_config = plugin_instance.config(config_dict)
-            plugin_instance.validate(parsed_config)
-        
+
         # Proceed with saving job
         job_id = self.dao.add_job(session_id, plugin_id, config, description)
         self.add_job_instance(job_id, False, plugin_model)
@@ -324,7 +309,6 @@ class PluginManager:
         if self.log_handler:
             if self.log_handler not in logger.handlers:
                 logger.addHandler(self.log_handler)
-
 
         # replace_existing allow override
         self.scheduler.add_job(
