@@ -1,5 +1,5 @@
 import inspect
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 from functools import lru_cache
 from jinja2.sandbox import SandboxedEnvironment
 from datetime import datetime, timedelta, timezone
@@ -75,7 +75,7 @@ class Renderer:
         cls._compile.cache_clear()
 
     @classmethod
-    def get_globals_doc(cls, extra_globals: dict[str, Any]):
+    def get_globals_doc(cls, extra_globals: Mapping[str, Any]):
         return {
             **cls._globals_doc,
             **{k: describe_callable(v) for k, v in extra_globals.items()},
@@ -83,7 +83,7 @@ class Renderer:
 
     @classmethod
     def render(
-        cls, ctx: ExecutionContext, template_str: str, payload: dict[str, Any], **kwargs: Any
+        cls, ctx: ExecutionContext, template_str: str, payload: Mapping[str, Any], **kwargs: Any
     ) -> str:
         # cache compiled templates for this sandbox
         # first argument must be payload, then later can access this

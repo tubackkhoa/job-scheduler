@@ -3,7 +3,7 @@ import importlib
 import logging
 import sys
 
-from typing import Any, Callable, Concatenate, Optional
+from typing import Any, Callable, Concatenate, Mapping, Optional
 
 import pluggy
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -50,7 +50,7 @@ class PluginSpec:
         config: BaseModel,
         logger: logging.Logger,
         render: Callable[
-            Concatenate[ExecutionContext, str, dict[str, Any], ...],
+            Concatenate[str, dict[str, Any], ...],
             Any,
         ],
     ) -> Any: ...
@@ -228,7 +228,14 @@ class PluginManager:
 
         try:
 
-            retval = asyncio.run(plugin.run(ctx, config, logger, Renderer.render))
+            def render_function(
+                template: str,
+                payload: Mapping[str, Any],
+                **kwargs: Any,
+            ) -> Any:
+                return Renderer.render(ctx, template, payload, **plugin.env(), **kwargs)
+
+            retval = asyncio.run(plugin.run(ctx, config, logger, render_function))
             # logger.info(f"Job executed successfully (return value: {retval})")
             return retval
         except Exception as e:
