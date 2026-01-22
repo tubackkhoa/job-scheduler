@@ -1,6 +1,9 @@
-from typing import Any, Dict, Optional
-from pydantic import BaseModel, Field, PositiveInt, field_validator
+from typing import Any, Dict, Optional, TypedDict
+from pydantic import BaseModel, Field, PositiveInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from auth import User
+from models import Job
 
 
 class ConfigPayload(BaseModel):
@@ -68,3 +71,10 @@ class Settings(BaseSettings):
     redis_host: Optional[str] = None
     redis_port: Optional[int] = 0
     redis_db: Optional[int] = 0
+
+
+class SchemaResponse(TypedDict):
+    schema: dict[str, Any]
+    jobs: list[Job]
+    user: User
+    globals: dict[str, Any]
