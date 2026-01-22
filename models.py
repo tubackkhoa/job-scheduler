@@ -13,8 +13,11 @@ from sqlalchemy import (
     Text,
     select,
     text,
+    cast,
+    func
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
+from sqlalchemy.dialects.postgresql import JSONB
 
 from enforcer import ExecutionContext, global_permission
 
@@ -192,6 +195,7 @@ class DAO:
             if session_id is not None:
                 query = query.filter(Job.session_id == session_id)
             return query.all()
+    
 
     def get_job(self, id: int):
         with Session(self.db_engine) as session:
@@ -313,14 +317,23 @@ class DAO:
         ctx: ExecutionContext,
         field_id: str,
         search: Optional[str] = None,
+        id: Optional[int] = None,
         limit: int = 100,
         offset: int = 0,
     ) -> dict:
+        try:
+            _, field_name = field_id.rsplit(".", 1)
+        except ValueError:
+            raise ValueError('field_id must be in format "{plugin_id}.{field_name}"')
         with Session(self.db_engine) as session:
-            stmt = select(ValueVersion).where(ValueVersion.field_id == field_id)
-
+            stmt = select(ValueVersion).where(
+                func.split_part(ValueVersion.field_id, ".", 2) == field_name
+            )
             if search:
                 stmt = stmt.where(ValueVersion.name.ilike(f"%{search}%"))
+
+            if id:
+                stmt = stmt.where(ValueVersion.id == id)
 
             stmt = stmt.order_by(ValueVersion.created_at.desc()).limit(limit).offset(offset)
 
@@ -354,38 +367,41 @@ class DAO:
     # ---------- dependency checking ----------
 
     def get_jobs_depending_on_field(
-        self, field_id: str, version_id: Optional[int] = None
+        self,
+        field_id: str,
+        version_id: Optional[int] = None,
     ) -> List[dict]:
+    # field_id = "{plugin_id}.{field_name}" but we only need field_name
         parts = field_id.split(".", 1)
         if len(parts) != 2:
-            raise Exception(f"Invalid field_id format: {field_id}, expected 'plugin_id.field_name'")
+            raise ValueError(f"Invalid field_id format: {field_id}, expected 'plugin_id.field_name'")
+        field_name = parts[1]
+        try:
+            with Session(self.db_engine) as session:
+                cfg = cast(Job.config, JSONB)
+                stmt = select(Job).where(Job.config.isnot(None))
 
-        plugin_id_str, field_name = parts
-        plugin_id = int(plugin_id_str)
+                if version_id is None:
+                    # config ? 'field_name'
+                    stmt = stmt.where(cfg.has_key(field_name))
+                else:
+                    cfg_text = cfg.op("->>")(field_name)
+                    stmt = stmt.where(cast(cfg_text, Integer) == version_id)
 
-        dependent_jobs = []
-
-        with Session(self.db_engine) as session:
-            jobs = session.query(Job).filter(Job.plugin_id == plugin_id).all()
-            for job in jobs:
-                if not job.config:
-                    continue
-
-                if field_name in job.config:
-                    config_value = job.config[field_name]
-
-                    if version_id is None or config_value == version_id:
-                        dependent_jobs.append(
-                            {
-                                "job_id": job.id,
-                                "description": job.description or "No description",
-                                "config_value": config_value,
-                                "session_id": job.session_id,
-                                "plugin_id": job.plugin_id,
-                            }
-                        )
-
-        return dependent_jobs
+                jobs = session.execute(stmt).scalars().all()
+                return [
+                    {
+                        "job_id": j.id,
+                        "description": j.description or "No description",
+                        "config_value": (j.config or {}).get(field_name) if isinstance(j.config, dict) else None,
+                        "session_id": j.session_id,
+                        "plugin_id": j.plugin_id,
+                    }
+                    for j in jobs
+                ]
+        except Exception as e:
+            print(e)
+            return []
 
     def get_jobs_depending_on_version(self, version_id: int) -> List[dict]:
         with Session(self.db_engine) as session:
@@ -417,7 +433,13 @@ class DAO:
                     if not job:
                         continue
 
-                    config = job.config or {}
+                    # Handle both JSON string and dict
+                    import json
+                    if isinstance(job.config, str):
+                        config = json.loads(job.config)
+                    else:
+                        config = job.config or {}
+                    
                     config[field_name] = 0
                     job.config = config
                     self.job_config_cache[job.id] = config
