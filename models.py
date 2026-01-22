@@ -463,12 +463,20 @@ class DAO:
                 job = session.get(Job, job_id)
                 if not job or not job.config:
                     continue
-                job.config[field_name] = int(version_id)
-                self.job_config_cache[job.id] = job.config
+                
+                # Handle both JSON string and dict
+                import json
+                if isinstance(job.config, str):
+                    config = json.loads(job.config)
+                else:
+                    config = job.config
+                
+                config[field_name] = int(version_id)
+                job.config = config
+                self.job_config_cache[job.id] = config
                 updated_count += 1
-
+            
             session.commit()
-
             return {
                 "success": True,
                 "updated_jobs": updated_count,
