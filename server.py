@@ -36,7 +36,6 @@ from schemas import (
     ConfigPayload,
     DownloadPayload,
     PluginCreatePayload,
-    SchemaResponse,
     Settings,
     TemplatePayload,
 )
@@ -266,7 +265,7 @@ def schema(
     user: UserState,
     session_id: int,
     plugin_id: int,
-) -> SchemaResponse:
+):
     plugin_item = plugin_manager.dao.get_plugin(plugin_id)
     if not plugin_item:
         raise HTTPException(status_code=404, detail="Plugin not found")
@@ -500,15 +499,13 @@ def clear_logs(log_service: LogServiceState, job_id: int):
 
 # support template plugin, install by user
 @api_router.get("/user/template/{package}")
-def template_plugin(
-    plugin_manager: PluginManagerState, user: UserState, package: str
-) -> SchemaResponse:
+def template_plugin(plugin_manager: PluginManagerState, user: UserState, package: str):
     tpl_plugin = TemplatePlugin(f"{settings.user_plugin_path}/{package}")
     ctx = plugin_manager.create_ctx(user)
     config = tpl_plugin.config(ctx)
     return {
         "schema": tpl_plugin.schema(ctx),
-        "jobs": [
+        "jobs1": [
             Job(
                 active=False,
                 description=tpl_plugin.description,

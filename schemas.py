@@ -71,10 +71,3 @@ class Settings(BaseSettings):
     redis_host: Optional[str] = None
     redis_port: Optional[int] = 0
     redis_db: Optional[int] = 0
-
-
-class SchemaResponse(TypedDict):
-    schema: dict[str, Any]
-    jobs: list[Job]
-    user: User
-    globals: dict[str, Any]
