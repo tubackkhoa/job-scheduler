@@ -55,14 +55,20 @@ class Renderer:
         }
     )
 
-    _globals_doc = {}
+    _globals_doc = {
+        "this": {
+            "type": "variable",
+            "doc": "The payload object passed to the render function.",
+        },
+        "ctx": {"type": "variable", "doc": "Execution context for the current render"},
+    }
 
     @classmethod
     def update(cls):
         cls._sandbox.globals.update(GLOBAL_PERMISSION_REGISTRY)
-        cls._globals_doc = {
-            name: describe_callable(value) for name, value in GLOBAL_PERMISSION_REGISTRY.items()
-        }
+        cls._globals_doc.update(
+            {name: describe_callable(value) for name, value in GLOBAL_PERMISSION_REGISTRY.items()}
+        )
         cls._compile.cache_clear()
 
     @classmethod
