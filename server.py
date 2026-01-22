@@ -505,7 +505,7 @@ def template_plugin(plugin_manager: PluginManagerState, user: UserState, package
     config = tpl_plugin.config(ctx)
     return {
         "schema": tpl_plugin.schema(ctx),
-        "jobs1": [
+        "jobs": [
             Job(
                 active=False,
                 description=tpl_plugin.description,
