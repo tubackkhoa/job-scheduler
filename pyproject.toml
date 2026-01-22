@@ -31,7 +31,7 @@ dependencies = [
     "psycopg2>=2.9.11",
     "casbin>=1.43.0",
     "passlib>=1.7.4",
-    "jose>=1.0.0",
+    "python-jose>=3.5.0",
     "python-multipart>=0.0.21",
     "sqlglot",
     "casbin-redis-adapter>=1.5.0",
