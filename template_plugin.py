@@ -3,8 +3,6 @@ from typing import Any, Optional
 from pydantic import BaseModel, create_model
 import yaml
 
-
-from auth import User
 from enforcer import ExecutionContext
 from renderer import Renderer
 

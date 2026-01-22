@@ -11,7 +11,7 @@ from apscheduler.util import undefined
 from casbin.enforcer import Enforcer
 from pydantic import BaseModel
 
-from auth import User
+from auth import UserContext
 from enforcer import (
     ADMIN_ROLE,
     ExecutionContext,
@@ -119,7 +119,7 @@ class PluginManager:
         Useful for initial load or after a restart.
         """
         # Register all plugins from the database
-        ctx = self.create_ctx(User(0, frozenset({ADMIN_ROLE})))
+        ctx = self.create_ctx(UserContext(0, frozenset({ADMIN_ROLE})))
         all_plugins = self.dao.get_all_plugins(ctx)
         look_up = {}
         for plugin in all_plugins:
@@ -195,7 +195,7 @@ class PluginManager:
         return cls.manager.get_plugin(package)
 
     @classmethod
-    def run_plugin_job(cls, package: str, job_id: int, user: User):
+    def run_plugin_job(cls, package: str, job_id: int, user: UserContext):
         """
         Wrapper to run a plugin's 'run' method asynchronously,
         fetching config from the active job for the user/plugin.
@@ -248,7 +248,7 @@ class PluginManager:
             cls.manager.unregister(existing_plugin, package)
 
     @classmethod
-    def create_ctx(cls, user: User, package: Optional[str] = None):
+    def create_ctx(cls, user: UserContext, package: Optional[str] = None):
         return ExecutionContext(user, package, cls.enforcer.enforce if cls.enforcer else None)
 
     @classmethod
@@ -323,7 +323,7 @@ class PluginManager:
             "interval",
             seconds=plugin.interval,
             # TODO: get user_id, and roles from database, the user of course owning the job
-            args=[plugin.package, job_id, User(0, frozenset({ADMIN_ROLE}))],
+            args=[plugin.package, job_id, UserContext(0, frozenset({ADMIN_ROLE}))],
             next_run_time=undefined if active else None,
             id=job_scheduler_id,
             name=job_scheduler_id,

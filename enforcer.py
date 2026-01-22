@@ -8,7 +8,7 @@ from casbin.persist import Adapter
 from jinja2 import pass_context
 from jinja2.runtime import Context
 
-from auth import User
+from auth import UserContext
 
 ADMIN_ROLE = "admin"
 USER_ROLE = "user"
@@ -41,7 +41,7 @@ class ExecutionContext:
 
     def __init__(
         self,
-        user: User,
+        user: UserContext,
         package: Optional[str] = None,
         enforce: Optional[Callable[[int, str, frozenset[str]], bool]] = None,
     ):

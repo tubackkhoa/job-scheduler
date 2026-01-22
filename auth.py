@@ -1,63 +1,79 @@
 from dataclasses import dataclass
-from fastapi import Request, HTTPException, status, Depends
-from fastapi.security import HTTPBasicCredentials, HTTPBasic
-from datetime import datetime, timedelta
-from typing import Optional, Set
-import secrets
+from fastapi import Request, HTTPException, Depends
+from fastapi.security import (
+    OAuth2PasswordBearer,
+)
+from datetime import datetime, timedelta, timezone
+from jose import jwt
+from passlib.context import CryptContext
+from schemas import settings
+
+
+pwd_context = CryptContext(
+    schemes=["argon2"],
+    deprecated="auto",
+)
+
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain, hashed)
+
+
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30 * 24 * 60
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 
 @dataclass(frozen=True)
-class User:
+class UserContext:
     id: int
     roles: frozenset[str]
     username: str = ""
 
 
-@dataclass(frozen=True)
-class UserData:
-    user: User
-    password: str
+def create_access_token(
+    *,
+    user_id: int,
+    username: str,
+    roles: frozenset[str],
+    expires_delta: timedelta | None = None,
+) -> str:
 
+    expire = datetime.now(timezone.utc) + (
+        expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
 
-USERS: list[UserData] = [
-    UserData(
-        User(1, frozenset({"admin"}), "thanhtu"),
-        "admin",
-    ),
-    UserData(
-        User(
-            2,
-            frozenset({"user"}),
-            "cuongnv",
-        ),
-        "admin",
-    ),
-]
+    payload = {
+        "sub": username,
+        "uid": user_id,
+        "roles": list(roles),
+        "exp": expire,
+    }
 
-
-security = HTTPBasic(auto_error=False)
+    return jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)
 
 
 def require_auth(
     request: Request,
-    credentials: HTTPBasicCredentials | None = Depends(security),
+    token: str = Depends(oauth2_scheme),
 ):
-    # If no credentials provided, default to admin user
-    if credentials is None:
-        request.state.user = User(1, frozenset({"admin"}))
-        return
+    payload = jwt.decode(token, settings.secret_key, algorithms=ALGORITHM)
+    user_id = payload.get("uid")
 
-    user = next((u for u in USERS if u.user.username == credentials.username), None)
-    if not user or not secrets.compare_digest(credentials.password, user.password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-            headers={"WWW-Authenticate": "Basic"},
-        )
+    if user_id is None:
+        raise HTTPException(status_code=401)
 
-    # attach user to request
-    request.state.user = user.user
+    request.state.user = UserContext(
+        id=user_id,
+        username=payload["sub"],
+        roles=frozenset(payload["roles"]),
+    )
 
 
-def get_user(request: Request) -> User:
+def get_user(request: Request) -> UserContext:
     return request.state.user

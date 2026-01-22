@@ -4,6 +4,7 @@ import os
 
 from typing import Annotated, Optional
 
+from fastapi.security import OAuth2PasswordRequestForm
 import uvloop
 from fastapi import (
     APIRouter,
@@ -19,9 +20,10 @@ from fastapi import (
 from fastapi.concurrency import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session
 
-from auth import User, get_user, require_auth
+from auth import UserContext, create_access_token, get_user, require_auth, verify_password
 from enforcer import (
     GLOBAL_PERMISSION_REGISTRY,
     create_enforcer,
@@ -29,14 +31,14 @@ from enforcer import (
 )
 from log_handler import JobLogHandler
 from log_service import LogService
-from models import DAO, Job
+from models import DAO, Job, User
 from plugin_manager import PROJECT_NAME, PluginManager, scheduler_logger
 from renderer import Renderer
 from schemas import (
     ConfigPayload,
     DownloadPayload,
     PluginCreatePayload,
-    Settings,
+    settings,
     TemplatePayload,
 )
 from package_downloader import download_package
@@ -62,9 +64,7 @@ def get_log_service(request: Request):
 
 PluginManagerState = Annotated[PluginManager, Depends(get_plugin_manager)]
 LogServiceState = Annotated[LogService, Depends(get_log_service)]
-UserState = Annotated[User, Depends(get_user)]
-
-settings = Settings()
+UserState = Annotated[UserContext, Depends(get_user)]
 
 
 @asynccontextmanager
@@ -152,6 +152,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(api_router)
+
 
 @app.get("/health")
 def health_check(plugin_manager: PluginManagerState):
@@ -173,6 +175,32 @@ def health_check(plugin_manager: PluginManagerState):
             status_code=503,
             detail=f"Health check failed: {str(e)}",
         )
+
+
+@app.post("/auth/token")
+def login(
+    plugin_manager: PluginManagerState,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+):
+
+    with Session(plugin_manager.dao.db_engine) as session:
+        user = session.execute(
+            select(User).where(User.username == form_data.username)
+        ).scalar_one_or_none()
+
+    if user is None or not verify_password(form_data.password, user.password):
+        raise HTTPException(status_code=401, detail="Incorrect credentials")
+
+    access_token = create_access_token(
+        user_id=user.id,
+        username=user.username,
+        roles=frozenset(user.roles),
+    )
+
+    return {
+        "access_token": access_token,
+        "token_type": "Bearer",
+    }
 
 
 @app.websocket("/ws/logs/{job_id}")
