@@ -39,11 +39,7 @@ class Config(BaseModel):
     pnl_preview: str = Field(
         "", title="PNL Dashboard",
         json_schema_extra=ui_schema({
-            "ui:field": "Template", "type": "markdown",
-            "ui:expr": (
-                "{ default: {{ get_pnl_dashboard(webhook_url, webhook_api_key) }} }",
-                ["webhook_url", "webhook_api_key"]
-            ),
+            "ui:field": "Template", "type": "markdown"
         }),
     )
     
@@ -55,10 +51,7 @@ class Config(BaseModel):
     signal_preview: str = Field(
         "", title="Signal Comparison",
         json_schema_extra=ui_schema({
-            "ui:field": "Template", "type": "markdown",
-            "ui:expr": (
-                "{ default: {{ get_signal_comparison(formData) }} }",
-            ),
+            "ui:field": "Template", "type": "markdown"
         }),
     )
 
@@ -546,7 +539,12 @@ def get_signal_comparison(config: Config) -> pd.DataFrame:
         traceback.print_exc()
         return pd.DataFrame({"error": [f"Error: {str(e)}"]})
 
-
+def _get_pnl_dashboard(config: Config) -> pd.DataFrame:
+    """Render PNL dashboard only."""
+    if not isinstance(config, Config):
+        config = Config.model_validate(config)
+    models = get_running_models(config.webhook_url, config.webhook_api_key)
+    return format_pnl_table(models)
 
 
 # ============================================================================
@@ -554,23 +552,10 @@ def get_signal_comparison(config: Config) -> pd.DataFrame:
 # ============================================================================
 
 class Plugin:
-    _env = Environment(
-        loader=DictLoader({"base": "{% block content %}{% endblock %}"}),
-        autoescape=False, trim_blocks=True, lstrip_blocks=True,
-    )
-    
-    @staticmethod
-    def _get_pnl_dashboard(config: Config) -> pd.DataFrame:
-        """Render PNL dashboard only."""
-        if not isinstance(config, Config):
-            config = Config.model_validate(config)
-        models = get_running_models(config.webhook_url, config.webhook_api_key)
-        return format_pnl_table(models)
-    
-    _env.globals.update({
-        "get_pnl_dashboard": _get_pnl_dashboard.__func__,
+    _env = {
+        "get_pnl_dashboard": _get_pnl_dashboard,
         "get_signal_comparison": get_signal_comparison,
-    })
+    }
     
     @hookimpl
     @classmethod
@@ -579,17 +564,25 @@ class Plugin:
     
     @hookimpl
     @classmethod
-    def env(cls) -> Environment:
+    def env(cls) ->  dict[str, Any]:
         return cls._env
     
     @hookimpl
     @classmethod
-    def schema(cls):
+    def schema(cls, ctx):
         return Config.model_json_schema()
     
     @hookimpl
     @classmethod
-    def config(cls, json=None):
+    def config(
+        cls,
+        ctx,
+        json: Optional[dict[str, Any]] = None,
+        validate: Optional[bool] = False,
+    ):
+        if isinstance(json, str):
+            import json as json_module
+            json = json_module.loads(json)
         return Config.model_validate(json or {})
     
     @hookimpl
@@ -599,6 +592,6 @@ class Plugin:
     
     @hookimpl
     @classmethod
-    async def run(cls, config: Config, logger: logging.Logger, render: Callable[[str, Environment, dict], Any]):
+    async def run(cls, ctx, config: Config, logger: logging.Logger, render: Callable[[str, Environment, dict], Any]):
         logger.info(f"ForwardTestDashboard: {config.webhook_url}")
         return True

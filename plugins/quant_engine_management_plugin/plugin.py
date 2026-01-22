@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from enforcer import ExecutionContext
 from plugins import ui_schema
 from pathlib import Path
+from plugins.schema import SecureBaseModel
 import pluggy
 
 PROJECT_NAME = "quant_engine_management_plugin"
@@ -117,19 +118,23 @@ class Plugin:
     @classmethod
     def config(
         cls,
-        ctx: ExecutionContext,
+        ctx,
         json: Optional[dict[str, Any]] = None,
         validate: Optional[bool] = False,
     ):
+        if isinstance(json, str):
+            import json as json_module
+            json = json_module.loads(json)
         return Config.model_validate(json or {})
+    
 
     @hookimpl
     @classmethod
     def roles(cls):
-        return {}
+        return {"admin"}
 
-    @hookimpl
-    @classmethod
+    @hookimpl   
+    @classmethod    
     async def run(
         cls,
         config: Config,
