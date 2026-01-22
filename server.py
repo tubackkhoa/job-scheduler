@@ -32,7 +32,14 @@ from log_service import LogService
 from models import DAO, Job
 from plugin_manager import PROJECT_NAME, PluginManager, scheduler_logger
 from renderer import Renderer
-from schemas import ConfigPayload, DownloadPayload, PluginCreatePayload, Settings, TemplatePayload
+from schemas import (
+    ConfigPayload,
+    DownloadPayload,
+    PluginCreatePayload,
+    SchemaResponse,
+    Settings,
+    TemplatePayload,
+)
 from package_downloader import download_package
 from template_plugin import TemplatePlugin
 from utils.job import JobUtil
@@ -259,39 +266,40 @@ def schema(
     user: UserState,
     session_id: int,
     plugin_id: int,
-):
+) -> SchemaResponse:
     plugin_item = plugin_manager.dao.get_plugin(plugin_id)
     if not plugin_item:
         raise HTTPException(status_code=404, detail="Plugin not found")
+    plugin = plugin_manager.get_plugin_instance(plugin_item.package)
+    if not plugin:
+        raise HTTPException(status_code=404, detail="Plugin instance not found")
 
     try:
         ctx = plugin_manager.create_ctx(user, plugin_item.package)
-        plugin = plugin_manager.get_plugin_instance(plugin_item.package)
+        jobs = plugin_manager.dao.get_jobs_by_plugin_and_session(ctx, plugin_id, session_id)
+        for job in jobs:
+            job.config = plugin.config(ctx, job.config).model_dump(mode="json")
 
-        if plugin != None:
-            jobs = plugin_manager.dao.get_jobs_by_plugin_and_session(ctx, plugin_id, session_id)
-            for job in jobs:
-                job.config = plugin.config(ctx, job.config).model_dump(mode="json")
-
-            if len(jobs) == 0:
-                # add empty config so that when saving it will be new job
-                jobs.append(
-                    Job(
-                        active=False,
-                        description="",
-                        id=0,
-                        config=plugin.config(ctx).model_dump(mode="json"),
-                        plugin_id=plugin_id,
-                        session_id=session_id,
-                    )
+        if len(jobs) == 0:
+            # add empty config so that when saving it will be new job
+            jobs.append(
+                Job(
+                    active=False,
+                    description="",
+                    id=0,
+                    config=plugin.config(ctx).model_dump(mode="json"),
+                    plugin_id=plugin_id,
+                    session_id=session_id,
                 )
+            )
 
-            # Built-in Jinja tags are provided by extensions
-            return {
-                "schema": plugin.schema(ctx),
-                "jobs": jobs,
-                "globals": Renderer.get_globals_doc(plugin.env()),
-            }
+        # Built-in Jinja tags are provided by extensions
+        return {
+            "user": ctx.user,
+            "schema": plugin.schema(ctx),
+            "jobs": jobs,
+            "globals": Renderer.get_globals_doc(plugin.env()),
+        }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load schema: {str(e)}")
@@ -492,7 +500,9 @@ def clear_logs(log_service: LogServiceState, job_id: int):
 
 # support template plugin, install by user
 @api_router.get("/user/template/{package}")
-def template_plugin(plugin_manager: PluginManagerState, user: UserState, package: str):
+def template_plugin(
+    plugin_manager: PluginManagerState, user: UserState, package: str
+) -> SchemaResponse:
     tpl_plugin = TemplatePlugin(f"{settings.user_plugin_path}/{package}")
     ctx = plugin_manager.create_ctx(user)
     config = tpl_plugin.config(ctx)
@@ -507,6 +517,7 @@ def template_plugin(plugin_manager: PluginManagerState, user: UserState, package
                 plugin_id=package,
             )
         ],
+        "user": ctx.user,
         "globals": Renderer.get_globals_doc(tpl_plugin.env()),
     }
 
