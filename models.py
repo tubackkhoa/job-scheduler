@@ -12,6 +12,8 @@ from sqlalchemy import (
     Text,
     select,
     text,
+    cast,
+    func
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.ext.asyncio import (
@@ -19,6 +21,8 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
 )
 from auth import UserContext
+from sqlalchemy.dialects.postgresql import JSONB
+
 from enforcer import ADMIN_ROLE, ExecutionContext, global_permission
 
 
@@ -120,6 +124,27 @@ class User(Base):
         nullable=False,
         default=list,
     )
+
+
+class SignalMessage(Base):
+    __tablename__ = "signal_messages"
+    
+    id: Mapped[int] = mapped_column(Integer, Sequence("signal_messages_id_seq"), primary_key=True)
+    job_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    model_key: Mapped[str | None] = mapped_column(Text)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
+    captured_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "job_id": self.job_id,
+            "model_key": self.model_key,
+            "message": self.message,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "captured_at": self.captured_at.isoformat() if self.captured_at else None,
+        }
 
 
 class DAO:
@@ -358,14 +383,23 @@ class DAO:
         ctx: ExecutionContext,
         field_id: str,
         search: Optional[str] = None,
+        id: Optional[int] = None,
         limit: int = 100,
         offset: int = 0,
     ) -> dict:
+        try:
+            _, field_name = field_id.rsplit(".", 1)
+        except ValueError:
+            raise ValueError('field_id must be in format "{plugin_id}.{field_name}"')
         async with self.session_factory() as session:
-            stmt = select(ValueVersion).where(ValueVersion.field_id == field_id)
-
+            stmt = select(ValueVersion).where(
+                func.split_part(ValueVersion.field_id, ".", 2) == field_name
+            )
             if search:
                 stmt = stmt.where(ValueVersion.name.ilike(f"%{search}%"))
+
+            if id:
+                stmt = stmt.where(ValueVersion.id == id)
 
             stmt = stmt.order_by(ValueVersion.created_at.desc()).limit(limit).offset(offset)
 
@@ -400,7 +434,6 @@ class DAO:
             await session.refresh(version)
 
             return version.to_dict()
-
     @global_permission("system")
     async def get_all_users(
         self,
@@ -416,7 +449,6 @@ class DAO:
                 )
                 for user in result.all()
             ]
-
     @global_permission("system")
     async def update_user_roles(
         self,
@@ -449,3 +481,226 @@ class DAO:
                 frozenset(user.roles),
                 user.username,
             )
+    # ---------- dependency checking ----------
+
+    def get_jobs_depending_on_field(
+        self,
+        field_id: str,
+        version_id: Optional[int] = None,
+    ) -> List[dict]:
+    # field_id = "{plugin_id}.{field_name}" but we only need field_name
+        parts = field_id.split(".", 1)
+        if len(parts) != 2:
+            raise ValueError(f"Invalid field_id format: {field_id}, expected 'plugin_id.field_name'")
+        field_name = parts[1]
+        try:
+            with Session(self.db_engine) as session:
+                cfg = cast(Job.config, JSONB)
+                stmt = select(Job).where(Job.config.isnot(None))
+
+                if version_id is None:
+                    # config ? 'field_name'
+                    stmt = stmt.where(cfg.has_key(field_name))
+                else:
+                    cfg_text = cfg.op("->>")(field_name)
+                    stmt = stmt.where(cast(cfg_text, Integer) == version_id)
+
+                jobs = session.execute(stmt).scalars().all()
+                return [
+                    {
+                        "job_id": j.id,
+                        "description": j.description or "No description",
+                        "config_value": (j.config or {}).get(field_name) if isinstance(j.config, dict) else None,
+                        "session_id": j.session_id,
+                        "plugin_id": j.plugin_id,
+                    }
+                    for j in jobs
+                ]
+        except Exception as e:
+            print(e)
+            return []
+
+    def get_jobs_depending_on_version(self, version_id: int) -> List[dict]:
+        with Session(self.db_engine) as session:
+            version = session.get(ValueVersion, version_id)
+            if not version:
+                raise Exception(f"ValueVersion {version_id} not found")
+
+            field_id = version.field_id
+
+        # Use the helper method to find dependent jobs
+        dependent_jobs = self.get_jobs_depending_on_field(field_id, version_id)
+        for job in dependent_jobs:
+            job["field_id"] = field_id
+            job["field_name"] = field_id.split(".", 1)[1]
+        return dependent_jobs
+
+    # ---------- delete ----------
+
+    def delete_value_version(self, version_id: int) -> dict:
+        dependent_jobs = self.get_jobs_depending_on_version(version_id)
+
+        updated_job_count = 0
+        if dependent_jobs:
+            field_name = dependent_jobs[0]["field_name"]
+
+            with Session(self.db_engine) as session:
+                for job_info in dependent_jobs:
+                    job = session.get(Job, job_info["job_id"])
+                    if not job:
+                        continue
+
+                    # Handle both JSON string and dict
+                    import json
+                    if isinstance(job.config, str):
+                        config = json.loads(job.config)
+                    else:
+                        config = job.config or {}
+                    
+                    config[field_name] = 0
+                    job.config = config
+                    self.job_config_cache[job.id] = config
+                    updated_job_count += 1
+
+                session.commit()
+
+        with Session(self.db_engine) as session:
+            version = session.get(ValueVersion, version_id)
+            if not version:
+                raise Exception(f"SQL version {version_id} not found")
+
+            session.delete(version)
+            session.commit()
+
+            return {
+                "success": True,
+                "message": f"SQL version {version_id} deleted",
+                "updated_jobs": updated_job_count,
+            }
+
+    @global_permission("job")
+    def apply_value_version_all_jobs(
+        self, ctx: ExecutionContext, version_id: int, job_ids: List[int]
+    ):
+        with Session(self.db_engine) as session:
+            version = session.get(ValueVersion, version_id)
+            if not version:
+                raise Exception(f"ValueVersion {version_id} not found")
+
+            parts = version.field_id.split(".", 1)
+            if len(parts) != 2:
+                raise Exception(
+                    f"Invalid field_id format: {version.field_id}, expected 'plugin_id.field_name'"
+                )
+
+            plugin_id_str, field_name = parts
+            plugin_id = int(plugin_id_str)
+
+            updated_count = 0
+
+            for job_id in job_ids:
+                job = session.get(Job, job_id)
+                if not job or not job.config:
+                    continue
+                
+                # Handle both JSON string and dict
+                import json
+                if isinstance(job.config, str):
+                    config = json.loads(job.config)
+                else:
+                    config = job.config
+                
+                config[field_name] = int(version_id)
+                job.config = config
+                self.job_config_cache[job.id] = config
+                updated_count += 1
+            
+            session.commit()
+            return {
+                "success": True,
+                "updated_jobs": updated_count,
+                "plugin_id": plugin_id,
+                "field_name": field_name,
+                "version_id": version_id,
+            }
+
+    def delete_plugin(self, plugin_id: int) -> tuple[str, list[int]]:
+        deleted_job_ids = []
+        with Session(self.db_engine) as session:
+            # Load plugin in THIS session
+            plugin = session.get(Plugin, plugin_id)
+            if not plugin:
+                raise ValueError(f"Plugin with id {plugin_id} not found")
+            # 🔹 Capture before session closes
+            package = plugin.package
+            jobs = session.query(Job).filter(Job.plugin_id == plugin_id).all()
+            # Remove all jobs from scheduler and delete them
+            for job in jobs:
+                deleted_job_ids.append(job.id)
+                session.delete(job)
+
+            # Delete plugin from database
+            session.delete(plugin)
+            session.commit()
+
+        # 🔹 Post-commit side effects
+        for job_id in deleted_job_ids:
+            self.job_config_cache.pop(job_id, None)
+
+        return package, deleted_job_ids
+
+    def save_signal_message(
+        self,
+        job_id: int,
+        message: str,
+        created_at: datetime,
+    ) -> int:
+        with Session(self.db_engine) as session:
+            job = session.get(Job, job_id)
+            if not job:
+                raise ValueError(f"Job with id {job_id} not found")
+            if isinstance(job.config, str):
+                import json
+                job.config = json.loads(job.config)
+            model_key = job.config.get("model_key", None)
+            signal = SignalMessage(
+                job_id=job_id,
+                message=message,
+                captured_at=created_at,
+                model_key=model_key,
+                created_at=created_at,
+            )
+            session.add(signal)
+            session.commit()
+            session.refresh(signal)
+            return signal.id
+
+    def get_signal_messages(
+        self,
+        job_id: int,
+        limit: int = 100,
+    ) -> List[dict]:
+        with Session(self.db_engine) as session:
+            signals = (
+                session.query(SignalMessage)
+                .filter(SignalMessage.job_id == job_id)
+                .order_by(SignalMessage.captured_at.desc())
+                .limit(limit)
+                .all()
+            )
+            return [s.to_dict() for s in signals]
+
+    def get_signal_messages_by_model(
+        self,
+        model_key: str,
+        limit: int = 100,
+    ) -> List[dict]:
+        with Session(self.db_engine) as session:
+            signals = (
+                session.query(SignalMessage)
+                .filter(SignalMessage.model_key == model_key)
+                .order_by(SignalMessage.captured_at.desc())
+                .limit(limit)
+                .all()
+            )
+            return [s.to_dict() for s in signals]

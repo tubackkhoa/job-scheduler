@@ -79,7 +79,7 @@ async def lifespan(app: FastAPI):
     )
 
     loop = asyncio.get_running_loop()
-    log_handler = JobLogHandler(ws_manager.send_log, loop, log_service=log_service)
+    
 
     # These will be initialised once an event loop is running (inside lifespan)
     engine = create_async_engine(
@@ -91,6 +91,7 @@ async def lifespan(app: FastAPI):
         expire_on_commit=False,
     )
     dao = DAO(session_factory)
+    log_handler = JobLogHandler(ws_manager.send_log, loop, log_service=log_service, dao=dao)
 
     adapter = None
     if settings.redis_host:
@@ -519,6 +520,44 @@ def clear_logs(log_service: LogServiceState, job_id: int):
     if not result["success"]:
         raise HTTPException(status_code=500, detail=result["error"])
     return result
+
+
+@api_router.get("/signals/{job_id}")
+def get_signal_messages(
+    plugin_manager: PluginManagerState,
+    job_id: int,
+    limit: int = 100,
+):
+    try:
+        signals = plugin_manager.dao.get_signal_messages(job_id=job_id, limit=limit)
+        return {
+            "signals": signals,
+            "count": len(signals),
+            "job_id": job_id,
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get signal messages: {str(e)}"
+        )
+
+
+@api_router.get("/signals/model/{model_key}")
+def get_signal_messages_by_model(
+    plugin_manager: PluginManagerState,
+    model_key: str,
+    limit: int = 100,
+):
+    try:
+        signals = plugin_manager.dao.get_signal_messages_by_model(model_key=model_key, limit=limit)
+        return {
+            "signals": signals,
+            "count": len(signals),
+            "model_key": model_key,
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get signal messages by model: {str(e)}"
+        )
 
 
 # support template plugin, install by user
