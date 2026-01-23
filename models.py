@@ -305,3 +305,97 @@ class DAO:
                 return [
                     job for job in jobs if job.config and job.config.get("model_key") in model_keys
                 ]
+
+    @global_permission("field")
+    async def create_value_version(
+        self,
+        ctx: ExecutionContext,
+        payload: dict,
+    ) -> dict:
+        assert "field_id" in payload, "field_id is required"
+
+        async with self.session_factory() as session:
+            value_version = ValueVersion(**payload)
+            session.add(value_version)
+            await session.commit()
+            await session.refresh(value_version)
+            return value_version.to_dict()
+
+    @global_permission("field")
+    async def get_value_version(
+        self,
+        ctx: ExecutionContext,
+        version_id: int,
+    ) -> dict:
+        async with self.session_factory() as session:
+            version = await session.get(ValueVersion, version_id)
+            if not version:
+                raise Exception(f"SQL version {version_id} not found")
+
+            return version.to_dict()
+
+    async def get_latest(self, field_id: str) -> dict:
+        async with self.session_factory() as session:
+            stmt = (
+                select(ValueVersion)
+                .where(ValueVersion.field_id == field_id)
+                .order_by(ValueVersion.updated_at.desc())
+                .limit(1)
+            )
+
+            result = await session.execute(stmt)
+            version = result.scalar_one_or_none()
+
+            if not version:
+                raise Exception(f"No SQL version found for field_id: {field_id}")
+
+            return version.to_dict()
+
+    @global_permission("field")
+    async def get_value_versions(
+        self,
+        ctx: ExecutionContext,
+        field_id: str,
+        search: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> dict:
+        async with self.session_factory() as session:
+            stmt = select(ValueVersion).where(ValueVersion.field_id == field_id)
+
+            if search:
+                stmt = stmt.where(ValueVersion.name.ilike(f"%{search}%"))
+
+            stmt = stmt.order_by(ValueVersion.created_at.desc()).limit(limit).offset(offset)
+
+            result = await session.execute(stmt)
+            versions = result.scalars().all()
+
+            return {
+                "versions": [v.to_dict() for v in versions],
+                "count": len(versions),
+                "search": search,
+                "limit": limit,
+                "offset": offset,
+            }
+
+    @global_permission("field")
+    async def update_value_version(
+        self,
+        ctx: ExecutionContext,
+        version_id: int,
+        payload: dict,
+    ) -> dict:
+        async with self.session_factory() as session:
+            version = await session.get(ValueVersion, version_id)
+            if not version:
+                raise Exception(f"SQL version {version_id} not found")
+
+            for field, value in payload.items():
+                setattr(version, field, value)
+
+            version.updated_at = datetime.now()
+            await session.commit()
+            await session.refresh(version)
+
+            return version.to_dict()
