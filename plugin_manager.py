@@ -3,8 +3,7 @@ import importlib
 import logging
 import sys
 
-import time
-from typing import Any, Awaitable, Callable, Concatenate, Mapping, Optional
+from typing import Any, Awaitable, Callable, Mapping, Optional
 
 import pluggy
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -26,6 +25,11 @@ hookspec = pluggy.HookspecMarker(PROJECT_NAME)
 
 scheduler_logger = logging.getLogger(PROJECT_NAME)
 scheduler_logger.addHandler(logging.StreamHandler())
+
+RenderFn = Callable[
+    [str, Mapping[str, Any]],
+    Awaitable[Any],
+]
 
 
 class PluginSpec:
@@ -50,10 +54,7 @@ class PluginSpec:
         ctx: ExecutionContext,
         config: BaseModel,
         logger: logging.Logger,
-        render: Callable[
-            Concatenate[str, dict[str, Any], ...],
-            Awaitable[Any],
-        ],
+        render: RenderFn,
     ) -> Any: ...
 
     @hookspec
@@ -93,6 +94,8 @@ class PluginManager:
     manager = pluggy.PluginManager(PROJECT_NAME)
     manager.add_hookspecs(PluginSpec)
 
+    _failed_plugins: dict[str, Exception] = {}
+
     def __init__(
         self,
         dao: DAO,
@@ -120,19 +123,21 @@ class PluginManager:
         Useful for initial load or after a restart.
         """
         # Register all plugins from the database
+        self._failed_plugins.clear()
         ctx = self.create_ctx(UserContext(0, frozenset({ADMIN_ROLE})))
         all_plugins = self.dao.get_all_plugins(ctx)
-        look_up = {}
-        for plugin in all_plugins:
-            look_up[plugin.id] = plugin
+        look_up = {plugin.id: plugin for plugin in all_plugins}
 
         all_jobs = self.dao.get_all_jobs()
         for job in all_jobs:
+            plugin = look_up.get(job.plugin_id)
+            if not plugin:
+                continue
             # Populate job config cache so jobs can run after restart
             # Plugin will be lazy load so that can reload and fix
             if job.config:
                 DAO.job_config_cache[job.id] = job.config
-            self.add_job_instance(job.id, job.active, look_up[job.plugin_id])
+            self.add_job_instance(job.id, job.active, plugin)
 
     def start(self):
         self.scheduler.start()
@@ -198,6 +203,19 @@ class PluginManager:
 
         return cls.manager.get_plugin(package)
 
+    @staticmethod
+    def make_render(plugin: PluginSpec, ctx: ExecutionContext) -> RenderFn:
+        env = plugin.env()  # ← hook point
+
+        async def render(
+            template: str,
+            payload: Mapping[str, Any],
+            **kwargs: Any,
+        ):
+            return await Renderer.render(ctx, template, payload, **env, **kwargs)
+
+        return render
+
     @classmethod
     def run_plugin_job(cls, package: str, job_id: int, user: UserContext):
         """
@@ -231,14 +249,7 @@ class PluginManager:
             logger.setLevel(logging.INFO)
 
         try:
-
-            async def render_function(
-                template: str,
-                payload: Mapping[str, Any],
-                **kwargs: Any,
-            ) -> Any:
-                return await Renderer.render(ctx, template, payload, **plugin.env(), **kwargs)
-
+            render_function = cls.make_render(plugin, ctx)
             retval = asyncio.run(plugin.run(ctx, config, logger, render_function))
             # logger.info(f"Job executed successfully (return value: {retval})")
             return retval
@@ -247,6 +258,8 @@ class PluginManager:
 
     @classmethod
     def unload_plugin(cls, package: str):
+        cls._failed_plugins.pop(package, None)
+
         existing_plugin = cls.manager.get_plugin(package)
         if existing_plugin:
             cls.manager.unregister(existing_plugin, package)
@@ -261,24 +274,33 @@ class PluginManager:
         module_path, _, class_name = package.rpartition(".")
 
         if override:
+            cls._failed_plugins.pop(package, None)
             cls.unload_plugin(package)
             cls.reload_module(module_path)
 
-        plugin: PluginSpec | None = cls.manager.get_plugin(package)
-        if plugin is None:
-            try:
-                module = importlib.import_module(module_path)
-                plugin = getattr(module, class_name)
-                assert plugin
-                cls.manager.register(plugin, package)
-            except Exception as e:
-                # show error to terminal to check but keep running
-                scheduler_logger.error(e, exc_info=True)
-                # Raise exception to prevent saving invalid plugin to database
-                raise RuntimeError(f"Failed to load plugin '{package}': {str(e)}") from e
+        # 🚫 Fast-fail if previously broken
+        if package in cls._failed_plugins:
+            raise cls._failed_plugins[package]
 
-        cls.register_plugin_permissions(package, plugin)
-        return plugin
+        plugin: PluginSpec | None = cls.manager.get_plugin(package)
+        if plugin is not None:
+            return plugin
+
+        try:
+            module = importlib.import_module(module_path)
+            plugin = getattr(module, class_name)
+            assert plugin
+            cls.manager.register(plugin, package)
+            cls.register_plugin_permissions(package, plugin)
+            return plugin
+
+        except Exception as e:
+            err = RuntimeError(f"Failed to load plugin '{package}': {e}")
+            cls._failed_plugins[package] = err
+            # show error to terminal to check but keep running
+            scheduler_logger.error(err, exc_info=True)
+            # Raise exception to prevent saving invalid plugin to database
+            raise err
 
     def add_plugin(self, package: str, interval: int, description: Optional[str] = None) -> int:
         # load plugin override module to make sure new code if sharing the same module
