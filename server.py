@@ -4,6 +4,7 @@ import os
 
 from typing import Annotated, Optional
 
+from fastapi.responses import FileResponse
 from fastapi.security import OAuth2PasswordRequestForm
 import uvloop
 from fastapi import (
@@ -48,10 +49,6 @@ from ws_manager import WSConnectionManager
 
 # Configure logging to show INFO and above messages
 logging.basicConfig(level=logging.DEBUG, handlers=[logging.NullHandler()])
-asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-
-
-manager = WSConnectionManager()
 
 
 def get_plugin_manager(request: Request):
@@ -70,6 +67,8 @@ UserState = Annotated[UserContext, Depends(get_user)]
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialise log service and handler
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+    ws_manager = WSConnectionManager()
 
     log_service = LogService(
         log_dir=settings.log_dir,
@@ -80,7 +79,7 @@ async def lifespan(app: FastAPI):
     )
 
     loop = asyncio.get_running_loop()
-    log_handler = JobLogHandler(manager.send_log, loop, log_service=log_service)
+    log_handler = JobLogHandler(ws_manager.send_log, loop, log_service=log_service)
 
     # These will be initialised once an event loop is running (inside lifespan)
     db_engine = create_engine(settings.db_connection)
@@ -125,6 +124,7 @@ async def lifespan(app: FastAPI):
     # store in app state
     app.state.plugin_manager = plugin_manager
     app.state.log_service = log_service
+    app.state.ws_manager = ws_manager
 
     yield
 
@@ -206,13 +206,14 @@ def login(
 @app.websocket("/ws/logs/{job_id}")
 async def websocket_logs_endpoint(websocket: WebSocket, job_id: int):
     scheduler_job_id = PluginManager.get_job_scheduler_id(job_id)
-    await manager.connect(websocket, scheduler_job_id)
+    ws_manager: WSConnectionManager = websocket.app.state.ws_manager
+    await ws_manager.connect(websocket, scheduler_job_id)
     try:
         while True:
             # Keep connection alive; you can also handle client messages here if needed
             await websocket.receive_text()
     except WebSocketDisconnect:
-        manager.disconnect(websocket, scheduler_job_id)
+        ws_manager.disconnect(websocket, scheduler_job_id)
 
 
 # TODO: need checking for api based on ctx as well
@@ -591,7 +592,12 @@ app.include_router(api_router)
 # static site
 if settings.static_files:
     app.mount(
-        "/",
-        StaticFiles(directory=settings.static_files, html=True),
-        name="static",
+        "/assets",
+        StaticFiles(directory=f"{settings.static_files}/assets"),
+        name="assets",
     )
+
+    # SPA fallback (LAST)
+    @app.get("/{path:path}")
+    async def spa_fallback(path: str):
+        return FileResponse(f"{settings.static_files}/index.html")

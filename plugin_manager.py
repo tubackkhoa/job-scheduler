@@ -3,6 +3,7 @@ import importlib
 import logging
 import sys
 
+import time
 from typing import Any, Callable, Concatenate, Mapping, Optional
 
 import pluggy
@@ -123,17 +124,12 @@ class PluginManager:
         all_plugins = self.dao.get_all_plugins(ctx)
         look_up = {}
         for plugin in all_plugins:
-            scheduler_logger.info(f"Loading plugin: {plugin.package}")
-            try:
-                self.load_plugin(plugin.package)
-            except Exception as e:
-                logging.error(f"Error loading plugin: {e}", exc_info=True)
-                continue
             look_up[plugin.id] = plugin
 
         all_jobs = self.dao.get_all_jobs()
         for job in all_jobs:
             # Populate job config cache so jobs can run after restart
+            # Plugin will be lazy load so that can reload and fix
             if job.config:
                 DAO.job_config_cache[job.id] = job.config
             self.add_job_instance(job.id, job.active, look_up[job.plugin_id])
@@ -192,6 +188,14 @@ class PluginManager:
 
     @classmethod
     def get_plugin_instance(cls, package: str) -> Optional[PluginSpec]:
+        if not cls.manager.has_plugin(package):
+            scheduler_logger.info(f"Loading plugin: {package}")
+            try:
+                cls.load_plugin(package)
+            except Exception as e:
+                logging.error(f"Error loading plugin: {e}", exc_info=True)
+                return None
+
         return cls.manager.get_plugin(package)
 
     @classmethod
