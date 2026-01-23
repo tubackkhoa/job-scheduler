@@ -97,6 +97,27 @@ class ValueVersion(Base):
         }
 
 
+class SignalMessage(Base):
+    __tablename__ = "signal_messages"
+    
+    id: Mapped[int] = mapped_column(Integer, Sequence("signal_messages_id_seq"), primary_key=True)
+    job_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    model_key: Mapped[str | None] = mapped_column(Text)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
+    captured_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "job_id": self.job_id,
+            "model_key": self.model_key,
+            "message": self.message,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "captured_at": self.captured_at.isoformat() if self.captured_at else None,
+        }
+
+
 class DAO:
     job_config_cache: Dict[int, Dict[str, Any]] = {}
 
@@ -531,3 +552,59 @@ class DAO:
             self.job_config_cache.pop(job_id, None)
 
         return package, deleted_job_ids
+
+    def save_signal_message(
+        self,
+        job_id: int,
+        message: str,
+        created_at: datetime,
+    ) -> int:
+        with Session(self.db_engine) as session:
+            job = session.get(Job, job_id)
+            if not job:
+                raise ValueError(f"Job with id {job_id} not found")
+            if isinstance(job.config, str):
+                import json
+                job.config = json.loads(job.config)
+            model_key = job.config.get("model_key", None)
+            signal = SignalMessage(
+                job_id=job_id,
+                message=message,
+                captured_at=created_at,
+                model_key=model_key,
+                created_at=created_at,
+            )
+            session.add(signal)
+            session.commit()
+            session.refresh(signal)
+            return signal.id
+
+    def get_signal_messages(
+        self,
+        job_id: int,
+        limit: int = 100,
+    ) -> List[dict]:
+        with Session(self.db_engine) as session:
+            signals = (
+                session.query(SignalMessage)
+                .filter(SignalMessage.job_id == job_id)
+                .order_by(SignalMessage.captured_at.desc())
+                .limit(limit)
+                .all()
+            )
+            return [s.to_dict() for s in signals]
+
+    def get_signal_messages_by_model(
+        self,
+        model_key: str,
+        limit: int = 100,
+    ) -> List[dict]:
+        with Session(self.db_engine) as session:
+            signals = (
+                session.query(SignalMessage)
+                .filter(SignalMessage.model_key == model_key)
+                .order_by(SignalMessage.captured_at.desc())
+                .limit(limit)
+                .all()
+            )
+            return [s.to_dict() for s in signals]
