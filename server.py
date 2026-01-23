@@ -219,13 +219,6 @@ async def websocket_logs_endpoint(websocket: WebSocket, job_id: int):
         ws_manager.disconnect(websocket, scheduler_job_id)
 
 
-@api_router.get("/enforcer/policy")
-def auth_state(plugin_manager: PluginManagerState):
-    if plugin_manager.enforcer:
-        return plugin_manager.enforcer.get_policy()
-    return []
-
-
 @api_router.get("/plugins")
 async def plugins(
     plugin_manager: PluginManagerState,
@@ -587,6 +580,11 @@ async def template_plugin_run(
             status_code=400,
             detail=f"Failed to run template plugin: {str(e)}",
         )
+
+
+@api_router.get("/roles")
+def auth_state(plugin_manager: PluginManagerState):
+    return plugin_manager.roles()
 
 
 @api_router.get("/users")

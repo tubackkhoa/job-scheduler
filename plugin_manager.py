@@ -94,6 +94,7 @@ class PluginManager:
     manager = pluggy.PluginManager(PROJECT_NAME)
     manager.add_hookspecs(PluginSpec)
 
+    _role_cache: set[str] = {ADMIN_ROLE}
     _failed_plugins: dict[str, Exception] = {}
 
     def __init__(
@@ -147,6 +148,11 @@ class PluginManager:
             self.scheduler.shutdown()
 
     @classmethod
+    def roles(cls) -> frozenset[str]:
+        # prevent mutating
+        return frozenset(cls._role_cache)
+
+    @classmethod
     def register_plugin_permissions(cls, package: str, plugin_cls: PluginSpec):
         if not cls.enforcer:
             return
@@ -159,6 +165,8 @@ class PluginManager:
                 # with : to avoid name collision
                 permission = f"{package}:{permission_key}"
                 for role in roles:
+                    # 🔑 cache role early
+                    cls._role_cache.add(role)
                     # make sure not override by mistake in plugin, even we have make permission non-conflict
                     if role != ADMIN_ROLE and not enforcer.has_policy(role, permission):
                         enforcer.add_policy(role, permission)
