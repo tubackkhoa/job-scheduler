@@ -152,20 +152,22 @@ async def health_check(plugin_manager: PluginManagerState):
         )
 
 
+app.include_router(auth.router)
+
+# authorized routers
 api_router = APIRouter(
     prefix="/api",
     dependencies=[Depends(require_auth)],
 )
-
-api_router.include_router(auth.router)
 api_router.include_router(plugins.router)
 api_router.include_router(logs.router)
 api_router.include_router(templates.router)
 api_router.include_router(users.router)
 api_router.include_router(jobs.router)
 api_router.include_router(signals.router)
-
 app.include_router(api_router)
+
+# websocket
 app.include_router(ws.router)
 
 # static site
