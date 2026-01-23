@@ -117,7 +117,7 @@ class PluginManager:
         self.log_handler = log_handler
 
     # reload all jobs from database
-    def reload_all_jobs(self):
+    async def reload_all_jobs(self):
         """
         Reload all jobs from the database into the scheduler.
         Useful for initial load or after a restart.
@@ -125,10 +125,10 @@ class PluginManager:
         # Register all plugins from the database
         self._failed_plugins.clear()
         ctx = self.create_ctx(UserContext(0, frozenset({ADMIN_ROLE})))
-        all_plugins = self.dao.get_all_plugins(ctx)
+        all_plugins = await self.dao.get_all_plugins(ctx)
         look_up = {plugin.id: plugin for plugin in all_plugins}
 
-        all_jobs = self.dao.get_all_jobs()
+        all_jobs = await self.dao.get_all_jobs()
         for job in all_jobs:
             plugin = look_up.get(job.plugin_id)
             if not plugin:
@@ -302,13 +302,15 @@ class PluginManager:
             # Raise exception to prevent saving invalid plugin to database
             raise err
 
-    def add_plugin(self, package: str, interval: int, description: Optional[str] = None) -> int:
+    async def add_plugin(
+        self, package: str, interval: int, description: Optional[str] = None
+    ) -> int:
         # load plugin override module to make sure new code if sharing the same module
         self.load_plugin(package, True)
         # Insert into DB
-        return self.dao.add_plugin(package, interval, description)
+        return await self.dao.add_plugin(package, interval, description)
 
-    def add_job(
+    async def add_job(
         self,
         session_id: int,
         plugin_id: int,
@@ -316,11 +318,11 @@ class PluginManager:
         description: Optional[str] = None,
     ):
         # Get plugin to check for validation
-        plugin_model = self.dao.get_plugin(plugin_id)
+        plugin_model = await self.dao.get_plugin(plugin_id)
         assert plugin_model is not None
 
         # Proceed with saving job
-        job_id = self.dao.add_job(session_id, plugin_id, config, description)
+        job_id = await self.dao.add_job(session_id, plugin_id, config, description)
         self.add_job_instance(job_id, False, plugin_model)
 
     def add_job_instance(self, job_id: int, active: bool, plugin: Plugin):
@@ -358,8 +360,8 @@ class PluginManager:
             replace_existing=True,
         )
 
-    def remove_job(self, job_id: int):
-        self.dao.remove_job(job_id)
+    async def remove_job(self, job_id: int):
+        await self.dao.remove_job(job_id)
         # Remove the specific job from scheduler
         job_scheduler_id = self.get_job_scheduler_id(job_id)
         if self.scheduler.get_job(job_scheduler_id) is not None:
@@ -379,30 +381,30 @@ class PluginManager:
             if self.scheduler.get_job(job_scheduler_id) is not None:
                 self.scheduler.remove_job(job_scheduler_id)
 
-    def activate_job(self, job_id: int):
-        if not self.dao.activate_job(job_id):
+    async def activate_job(self, job_id: int):
+        if not await self.dao.activate_job(job_id):
             return
 
         # Resume the job
         job_scheduler_id = self.get_job_scheduler_id(job_id)
         self.scheduler.resume_job(job_scheduler_id)
 
-    def deactivate_job(self, job_id: int):
-        if not self.dao.deactivate_job(job_id):
+    async def deactivate_job(self, job_id: int):
+        if not await self.dao.deactivate_job(job_id):
             return
 
         # Pause the job
         job_scheduler_id = self.get_job_scheduler_id(job_id)
         self.scheduler.pause_job(job_scheduler_id)
 
-    def delete_plugin(self, plugin_id: int):
+    async def delete_plugin(self, plugin_id: int):
         """
         Delete a plugin from the database and unload it from memory.
         Also removes all associated jobs.
         """
 
         # Get all jobs for this plugin
-        package, deleted_job_ids = self.dao.delete_plugin(plugin_id)
+        package, deleted_job_ids = await self.dao.delete_plugin(plugin_id)
 
         # Remove all jobs from scheduler and delete them
         for job_id in deleted_job_ids:

@@ -21,8 +21,8 @@ from fastapi import (
 from fastapi.concurrency import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import Session
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
 from auth import UserContext, create_access_token, get_user, require_auth, verify_password
 from enforcer import (
@@ -82,8 +82,15 @@ async def lifespan(app: FastAPI):
     log_handler = JobLogHandler(ws_manager.send_log, loop, log_service=log_service)
 
     # These will be initialised once an event loop is running (inside lifespan)
-    db_engine = create_engine(settings.db_connection)
-    dao = DAO(db_engine)
+    engine = create_async_engine(
+        settings.db_connection,
+        echo=False,
+    )
+    session_factory = async_sessionmaker(
+        engine,
+        expire_on_commit=False,
+    )
+    dao = DAO(session_factory)
 
     adapter = None
     if settings.redis_host:
@@ -116,7 +123,7 @@ async def lifespan(app: FastAPI):
     )
 
     # Trade models API functions (no db_engine needed, use api_url/api_key directly)
-    plugin_manager.reload_all_jobs()
+    await plugin_manager.reload_all_jobs()
 
     # ---- STARTUP ----
     plugin_manager.start()
@@ -156,14 +163,11 @@ app.include_router(api_router)
 
 
 @app.get("/health")
-def health_check(plugin_manager: PluginManagerState):
-
-    from sqlalchemy import text
-
+async def health_check(plugin_manager: PluginManagerState):
     try:
         # Check database connection
-        with plugin_manager.dao.db_engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
+        async with plugin_manager.dao.session_factory().bind.connect() as conn:  # type: ignore
+            await conn.execute(text("SELECT 1"))
         return {
             "status": "healthy",
             "database": "connected",
@@ -178,15 +182,14 @@ def health_check(plugin_manager: PluginManagerState):
 
 
 @app.post("/auth/token")
-def login(
+async def login(
     plugin_manager: PluginManagerState,
     form_data: OAuth2PasswordRequestForm = Depends(),
 ):
 
-    with Session(plugin_manager.dao.db_engine) as session:
-        user = session.execute(
-            select(User).where(User.username == form_data.username)
-        ).scalar_one_or_none()
+    async with plugin_manager.dao.session_factory() as session:
+        result = await session.execute(select(User).where(User.username == form_data.username))
+        user = result.scalar_one_or_none()
 
     if user is None or not verify_password(form_data.password, user.password):
         raise HTTPException(status_code=401, detail="Incorrect credentials")
@@ -291,13 +294,13 @@ async def template(
 
 
 @api_router.get("/schema/{session_id}/{plugin_id}")
-def schema(
+async def schema(
     plugin_manager: PluginManagerState,
     user: UserState,
     session_id: int,
     plugin_id: int,
 ):
-    plugin_item = plugin_manager.dao.get_plugin(plugin_id)
+    plugin_item = await plugin_manager.dao.get_plugin(plugin_id)
     if not plugin_item:
         raise HTTPException(status_code=404, detail="Plugin not found")
     plugin = plugin_manager.get_plugin_instance(plugin_item.package)
@@ -306,7 +309,7 @@ def schema(
 
     try:
         ctx = plugin_manager.create_ctx(user, plugin_item.package)
-        jobs = plugin_manager.dao.get_jobs_by_plugin_and_session(ctx, plugin_id, session_id)
+        jobs = await plugin_manager.dao.get_jobs_by_plugin_and_session(ctx, plugin_id, session_id)
         for job in jobs:
             job.config = plugin.config(ctx, job.config).model_dump(mode="json")
 
@@ -336,17 +339,17 @@ def schema(
 
 
 @api_router.post("/activate/{job_id}/{activation}")
-def activate_config(plugin_manager: PluginManagerState, job_id: int, activation: bool):
+async def activate_config(plugin_manager: PluginManagerState, job_id: int, activation: bool):
     if activation:
-        plugin_manager.activate_job(job_id)
+        await plugin_manager.activate_job(job_id)
     else:
-        plugin_manager.deactivate_job(job_id)
+        await plugin_manager.deactivate_job(job_id)
     return {"success": True}
 
 
 @api_router.post("/delete/{job_id}")
-def delete_job(plugin_manager: PluginManagerState, job_id: int):
-    plugin_manager.remove_job(job_id)
+async def delete_job(plugin_manager: PluginManagerState, job_id: int):
+    await plugin_manager.remove_job(job_id)
     return {"success": True}
 
 
@@ -394,13 +397,13 @@ def uninstall_module(plugin_manager: PluginManagerState, package: str):
 
 
 @api_router.delete("/plugins/{plugin_id}")
-def delete_plugin(plugin_manager: PluginManagerState, plugin_id: int):
+async def delete_plugin(plugin_manager: PluginManagerState, plugin_id: int):
     """
     Delete a plugin from the database and unload it from memory.
     Also removes all associated jobs.
     """
     try:
-        plugin_manager.delete_plugin(plugin_id)
+        await plugin_manager.delete_plugin(plugin_id)
         return {"success": True, "message": f"Plugin with id {plugin_id} deleted"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -409,7 +412,7 @@ def delete_plugin(plugin_manager: PluginManagerState, plugin_id: int):
 
 
 @api_router.post("/config/{job_id}")
-def update_config(
+async def update_config(
     plugin_manager: PluginManagerState,
     user: UserState,
     job_id: int,
@@ -427,12 +430,12 @@ def update_config(
             plugin_id = payload.plugin_id
             session_id = payload.session_id
         else:
-            job_item = plugin_manager.dao.get_job(job_id)
+            job_item = await plugin_manager.dao.get_job(job_id)
             if not job_item:
                 raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
             plugin_id = job_item.plugin_id
 
-        plugin_item = plugin_manager.dao.get_plugin(plugin_id)
+        plugin_item = await plugin_manager.dao.get_plugin(plugin_id)
         if not plugin_item:
             raise HTTPException(status_code=404, detail=f"Plugin {plugin_id} not found")
         plugin = plugin_manager.get_plugin_instance(plugin_item.package)
@@ -443,14 +446,14 @@ def update_config(
         # validate before saving
         config = plugin.config(ctx, payload.config, True)
         if job_id == 0:
-            plugin_manager.add_job(
+            await plugin_manager.add_job(
                 session_id,
                 plugin_id,
                 config.model_dump(mode="json"),
                 payload.description,
             )
         else:
-            plugin_manager.dao.update_job(
+            await plugin_manager.dao.update_job(
                 job_id, config.model_dump(mode="json"), payload.description
             )
 
