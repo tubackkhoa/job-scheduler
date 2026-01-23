@@ -450,10 +450,11 @@ class DAO:
     async def get_all_users(
         self,
         ctx: ExecutionContext,
-    ) -> list[dict]:
+    ) -> list:
         async with self.session_factory() as session:
             result = await session.execute(select(User.id, User.username, User.roles))
-            return [dict(row) for row in result.mappings().all()]
+            rows = result.mappings().all()
+            return list(rows)
 
     async def get_user_roles(self, user_id: int) -> list[str]:
         roles = self.user_roles_cache.get(user_id)

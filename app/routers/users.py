@@ -31,11 +31,6 @@ async def update_user(
         )
 
 
-@router.get("/roles")
-def auth_state(plugin_manager: PluginManagerState):
-    return plugin_manager.roles()
-
-
 @router.get("/policy")
 def policy(plugin_manager: PluginManagerState):
     if plugin_manager.enforcer:
