@@ -80,11 +80,12 @@ async def lifespan(app: FastAPI):
     )
 
     loop = asyncio.get_running_loop()
-    log_handler = JobLogHandler(manager.send_log, loop, log_service=log_service)
-
-    # These will be initialised once an event loop is running (inside lifespan)
     db_engine = create_engine(settings.db_connection)
     dao = DAO(db_engine)
+    log_handler = JobLogHandler(manager.send_log, loop, log_service=log_service, dao=dao)
+
+    # These will be initialised once an event loop is running (inside lifespan)
+
 
     adapter = None
     if settings.redis_host:
