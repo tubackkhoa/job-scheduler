@@ -230,12 +230,12 @@ def auth_state(plugin_manager: PluginManagerState, user: UserState):
 
 
 @api_router.get("/plugins")
-def plugins(
+async def plugins(
     plugin_manager: PluginManagerState,
     user: UserState,
 ):
     ctx = PluginManager.create_ctx(user)
-    return plugin_manager.dao.get_all_plugins(ctx)
+    return await plugin_manager.dao.get_all_plugins(ctx)
 
 
 @api_router.post("/plugins")
