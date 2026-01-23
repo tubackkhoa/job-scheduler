@@ -85,11 +85,11 @@ class LogService:
 
     def _count_total_lines(self, job_id: str) -> int:
         """Count total lines across all log files (rotated and current) for a job.
-        
+
         Optimized: counts newlines instead of parsing full content.
         """
         total_lines = 0
-        
+
         # Count lines in rotated files (gzipped)
         rotated_files = self._get_rotated_files(job_id)
         for rotated_file in rotated_files:
@@ -102,7 +102,7 @@ class LogService:
                         total_lines += sum(1 for _ in f)
             except Exception:
                 pass  # Skip corrupted files
-        
+
         # Count lines in current file
         current_file = self._get_log_file(job_id)
         if current_file.exists():
@@ -111,7 +111,7 @@ class LogService:
                     total_lines += sum(1 for _ in f)
             except Exception:
                 pass
-        
+
         return total_lines
 
     def _rotate_log(self, job_id: str, current_file: Path) -> Path:
@@ -147,35 +147,35 @@ class LogService:
 
     def _trim_old_logs(self, job_id: str, keep_lines: int):
         """Trim old logs by keeping only the latest keep_lines entries.
-        
+
         After trimming, the recent logs are kept in the main current file
         so that API fetch can access them directly.
         """
         # Read all log entries from all files (oldest to newest)
         all_entries = []
-        
+
         rotated_files = self._get_rotated_files(job_id)
         for rotated_file in reversed(rotated_files):
             entries = self._read_log_file(rotated_file)
             all_entries.extend(entries)
-        
+
         current_file = self._get_log_file(job_id)
         if current_file.exists():
             entries = self._read_log_file(current_file)
             all_entries.extend(entries)
-        
+
         # Keep only the latest keep_lines entries
         if len(all_entries) > keep_lines:
             all_entries = all_entries[-keep_lines:]
-        
+
         # Delete all old rotated files
         for rotated_file in rotated_files:
             rotated_file.unlink()
-        
+
         # Delete current file if it exists
         if current_file.exists():
             current_file.unlink()
-        
+
         # Write trimmed logs back to the MAIN current file (not compressed)
         # This ensures API can fetch recent logs directly
         if all_entries:
@@ -205,7 +205,7 @@ class LogService:
                     message=message,
                     timestamp=timestamp,
                 )
-                
+
                 # Auto-rotate: check if log count exceeds threshold
                 log_count = self.log_indexer.get_log_count(job_id_int)
                 if log_count > self.max_log_entries:
@@ -433,7 +433,7 @@ class LogService:
         sort: str = "desc",
     ) -> Dict:
         # Use SQLite if useIndexer is enabled
-        print("useIndexer", self.useIndexer)
+        # print("useIndexer", self.useIndexer)
         if self.useIndexer:
             try:
                 job_id_int = self._extract_job_id_int(job_id)
