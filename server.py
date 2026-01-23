@@ -498,6 +498,44 @@ def clear_logs(log_service: LogServiceState, job_id: int):
     return result
 
 
+@api_router.get("/signals/{job_id}")
+def get_signal_messages(
+    plugin_manager: PluginManagerState,
+    job_id: int,
+    limit: int = 100,
+):
+    try:
+        signals = plugin_manager.dao.get_signal_messages(job_id=job_id, limit=limit)
+        return {
+            "signals": signals,
+            "count": len(signals),
+            "job_id": job_id,
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get signal messages: {str(e)}"
+        )
+
+
+@api_router.get("/signals/model/{model_key}")
+def get_signal_messages_by_model(
+    plugin_manager: PluginManagerState,
+    model_key: str,
+    limit: int = 100,
+):
+    try:
+        signals = plugin_manager.dao.get_signal_messages_by_model(model_key=model_key, limit=limit)
+        return {
+            "signals": signals,
+            "count": len(signals),
+            "model_key": model_key,
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get signal messages by model: {str(e)}"
+        )
+
+
 # support template plugin, install by user
 @api_router.get("/user/template/{package}")
 def template_plugin(plugin_manager: PluginManagerState, user: UserState, package: str):
