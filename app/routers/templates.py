@@ -39,23 +39,29 @@ async def render_template(
 # support template plugin, install by user
 @router.get("/user/{package}")
 def get_user_template(plugin_manager: PluginManagerState, user: UserState, package: str):
-    tpl_plugin = TemplatePlugin(f"{settings.user_plugin_path}/{package}")
-    ctx = plugin_manager.create_ctx(user)
-    config = tpl_plugin.config(ctx)
-    return {
-        "schema": tpl_plugin.schema(ctx),
-        "jobs": [
-            Job(
-                active=False,
-                description=tpl_plugin.description,
-                id=0,
-                config=config.model_dump(mode="json"),
-                plugin_id=package,
-            )
-        ],
-        "user": ctx.user,
-        "globals": Renderer.get_globals_doc(tpl_plugin.env()),
-    }
+    try:
+        tpl_plugin = TemplatePlugin(f"{settings.user_plugin_path}/{package}")
+        ctx = plugin_manager.create_ctx(user)
+        config = tpl_plugin.config(ctx)
+        return {
+            "schema": tpl_plugin.schema(ctx),
+            "jobs": [
+                Job(
+                    active=False,
+                    description=tpl_plugin.description,
+                    id=0,
+                    config=config.model_dump(mode="json"),
+                    plugin_id=package,
+                )
+            ],
+            "user": ctx.user,
+            "globals": Renderer.get_globals_doc(tpl_plugin.env()),
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to get user template plugin: {str(e)}",
+        )
 
 
 @router.post("/user/{package}")
