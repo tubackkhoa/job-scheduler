@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from auth import UserContext
 from enforcer import (
     ADMIN_ROLE,
+    USER_ROLE,
     ExecutionContext,
 )
 from models import DAO, Plugin
@@ -94,7 +95,7 @@ class PluginManager:
     manager = pluggy.PluginManager(PROJECT_NAME)
     manager.add_hookspecs(PluginSpec)
 
-    _role_cache: set[str] = {ADMIN_ROLE}
+    _role_cache: set[str] = {ADMIN_ROLE, USER_ROLE}
     _failed_plugins: dict[str, Exception] = {}
 
     def __init__(
