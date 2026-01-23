@@ -1,9 +1,10 @@
 import logging
 import pluggy
 from pydantic import BaseModel, Field
-from typing import List
+from typing import Any, List, Optional
 import pandas as pd
-from jinja2 import Environment, BaseLoader
+
+from enforcer import ExecutionContext
 from .data import (
     compute_accumulated_pnl,
     compute_performance_kpis,
@@ -46,12 +47,24 @@ TODAY_PRICE_MAP = {
 class Config(BaseModel):
     base_assets: List[str] = Field(
         default_factory=list,
-        json_schema_extra=ui_schema({"ui:field": "MultiSelect", "default": "BTC,ETH,SOL,BNB,LINK"}),
+        json_schema_extra=ui_schema(
+            {
+                "ui:field": "Select",
+                "default": "BTC,ETH,SOL,BNB,LINK",
+                "ui:options": {"multiple": True},
+            }
+        ),
     )
     fees: float = 0.001
     bootstrap_windows: List[int] = Field(
         default_factory=list,
-        json_schema_extra=ui_schema({"ui:field": "MultiSelect", "default": [10, 20, 30, 60]}),
+        json_schema_extra=ui_schema(
+            {
+                "ui:field": "Select",
+                "default": [10, 20, 30, 60],
+                "ui:options": {"multiple": True, "size": 6},
+            }
+        ),
     )
     report: str = Field(
         """
@@ -149,17 +162,15 @@ class Config(BaseModel):
 
 
 class Plugin:
-    _env = Environment(loader=BaseLoader(), autoescape=False)
-    _env.globals.update(
-        {
-            "DataFrame": pd.DataFrame,
-            "create_signals": create_signals_for_backtest,
-            "compute_performance_kpis": compute_performance_kpis,
-            "compute_accumulated_pnl": compute_accumulated_pnl,
-            "generate_pnl_chart_data": generate_pnl_chart_data,
-            "generate_ohlcv_chart_data": generate_ohlcv_chart_data,
-        }
-    )
+
+    _env = {
+        "DataFrame": pd.DataFrame,
+        "create_signals": create_signals_for_backtest,
+        "compute_performance_kpis": compute_performance_kpis,
+        "compute_accumulated_pnl": compute_accumulated_pnl,
+        "generate_pnl_chart_data": generate_pnl_chart_data,
+        "generate_ohlcv_chart_data": generate_ohlcv_chart_data,
+    }
 
     @hookimpl
     @classmethod
@@ -168,12 +179,22 @@ class Plugin:
 
     @hookimpl
     @classmethod
-    def schema(cls):
+    def schema(cls, ctx: ExecutionContext):
         return Config.model_json_schema()
 
     @hookimpl
     @classmethod
-    def config(cls, json=None):
+    def roles(cls):
+        return {}
+
+    @hookimpl
+    @classmethod
+    def config(
+        cls,
+        ctx: ExecutionContext,
+        json: Optional[dict[str, Any]] = None,
+        validate: Optional[bool] = False,
+    ):
         return Config.model_validate(json or {})
 
     @hookimpl

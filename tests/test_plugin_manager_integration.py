@@ -2,7 +2,9 @@ import asyncio
 import logging
 import dotenv
 from sqlalchemy import create_engine
-from create_data import create_data
+
+from models import DAO
+from .create_data import create_data
 from plugin_manager import PluginManager
 
 import pytest
@@ -29,7 +31,7 @@ async def test_plugin_manager_with_sample_plugin():
 
     # Setup PluginManager with in-memory DB and basic logging
     plugin_manager = PluginManager(
-        db_engine,
+        DAO(db_engine),
         log_handler=logging.StreamHandler(),
         scheduler_kwargs={
             # You can configure jobstores here if needed for integration tests

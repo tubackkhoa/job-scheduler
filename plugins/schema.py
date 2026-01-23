@@ -1,5 +1,6 @@
-from typing import Any, Literal, TypedDict, List, cast
-
+from typing import Any, Literal, TypedDict, List, cast, Optional
+from pydantic import Field, BaseModel, PrivateAttr
+from enforcer import ExecutionContext
 
 UIWidget = Literal[
     "datetime",
@@ -19,7 +20,7 @@ UIWidget = Literal[
     "files",
 ]
 
-UIField = Literal["MLThresholdsTable", "MultiSelect", "Template", "Version", "Select"]
+UIField = Literal["MLThresholdsTable", "Template", "Version", "Select", "Dynamic"]
 
 
 class ModelExpr(TypedDict, total=False):
@@ -49,57 +50,166 @@ JSONUISchema = TypedDict(
 )
 
 
-def ui_schema(extra: JSONUISchema) -> dict:
+def ui_schema(extra: JSONUISchema | dict) -> dict:
     return cast(dict, extra)
 
 
-def ui_schema_crud(
-    field_path: list[str],
-    crud_exprs: dict[str, str] | None = None,
-    deps: list[str] | None = None,
-    ui_options: dict | None = None,
-) -> dict:
+def SecureField(
+    default: Any = None,
+    *,
+    read: str,
+    write: Optional[str] = None,
+    **kwargs,
+):
+    extra = kwargs.pop("json_schema_extra", {}) or {}
+
+    extra.update(
+        {
+            "read": read,
+            "write": write,
+        }
+    )
+
+    return Field(
+        default=default,
+        json_schema_extra=extra,
+        **kwargs,
+    )
+
+
+class SecureBaseModel(BaseModel):
     """
-    Generic CRUD field schema helper with full expression flexibility.
+    SECURITY CONTRACT
 
-    Args:
-        field_path: Path to the value field (e.g., ["model_type"])
-        crud_exprs: Dict of operation -> jinja expression. Keys: list, detail, create, update, delete
-                   Example: {"list": "j`{{ my_list_func('${field_id}') | tojson }}`"}
-        deps: List of dependency field paths to inject into context (e.g., ["api_url", "api_key"])
-        ui_options: Additional UI options (size, etc.)
-
-    Usage:
-        model_type_id: int = Field(
-            0,
-            json_schema_extra=ui_schema_crud(
-                field_path=["model_type"],
-                crud_exprs={
-                    "list": "j`{{ list_model_types('${field_id}', '${search}', ${api_url}) | tojson }}`",
-                    "create": "j`{{ sync_model_types(${api_url}, ${api_key}) | tojson }}`",
-                },
-                deps=["api_url", "api_key"],
-            ),
-        )
+    - ctx is stored ONLY on the instance
+    - instances MUST be request-scoped
+    - schema NEVER reads instance state
     """
-    # default_exprs = {
-    #     "list": "j`{{ get_value_versions('${field_id}', '${search}', ${limit}, ${offset}) | tojson }}`",
-    #     "detail": "j`{{ get_value_version(${id}) | tojson }}`",
-    #     "create": "j`{{ create_value_version(${payload}) | tojson }}`",
-    #     "update": "j`{{ update_value_version(${id}, ${payload}) | tojson }}`",
-    #     "delete": "j`{{ delete_value_version(${id}) | tojson }}`",
-    # }
 
-    model_expr = {**(crud_exprs or {})}
+    _ctx: Optional[ExecutionContext] = PrivateAttr(default=None)
 
-    schema: dict = {
-        "ui:field": "Crud",
-        "model:binding": field_path,
-        "model:expr": model_expr,
-        "ui:options": {"size": 12, **(ui_options or {})},
-    }
+    # ---------------------
+    # Secure attribute access
+    # ---------------------
 
-    if deps:
-        schema["model:deps"] = deps
+    def __getattr__(self, name: str):
+        value = super().__getattribute__(name)
 
-    return ui_schema(cast(JSONUISchema, schema))
+        ctx = getattr(self, "_ctx", None)
+        if ctx is None:
+            return value
+
+        field = self.model_fields.get(name)
+        if field is None:
+            return value
+
+        extra = field.json_schema_extra
+        if not extra:
+            return value
+
+        perm_key = extra.get("read")
+        if perm_key and not ctx.is_admin() and not ctx.allowed(f"{ctx.package}:{perm_key}"):
+            raise PermissionError(f"Read denied for field '{name}'")
+
+        return value
+
+    # ---------------------
+    # Secure dumping
+    # ---------------------
+
+    def model_dump(self, **kwargs) -> dict[str, Any]:
+        ctx = getattr(self, "_ctx", None)
+        if ctx is None:
+            return super().model_dump(**kwargs)
+
+        allowed: set[str] = set()
+        is_admin = ctx.is_admin()
+
+        for name, field in self.model_fields.items():
+            extra = field.json_schema_extra
+
+            # ⬅️ Not a SecureField → always include
+            if not extra:
+                allowed.add(name)
+                continue
+
+            perm_key = extra.get("read")
+            if perm_key and not is_admin and not ctx.allowed(f"{ctx.package}:{perm_key}"):
+                continue
+
+            allowed.add(name)
+
+        include = kwargs.pop("include", None)
+        if include is not None:
+            allowed &= set(include)
+
+        return super().model_dump(include=allowed, **kwargs)
+
+    # ---------------------
+    # Secure schema (explicit ctx)
+    # ---------------------
+
+    @classmethod
+    def model_json_schema(
+        cls,
+        ctx: ExecutionContext,
+        **kwargs,
+    ) -> dict[str, Any]:
+        # Base schema from Pydantic
+        schema = super().model_json_schema(**kwargs)
+
+        properties: dict[str, Any] = {}
+        is_admin = ctx.is_admin()
+
+        for name, prop in schema.get("properties", {}).items():
+            field = cls.model_fields.get(name)
+            if field is None:
+                continue
+
+            extra = field.json_schema_extra
+            if not extra:
+                properties[name] = prop
+                continue
+
+            perm_key = extra.get("read")
+            if perm_key and not is_admin and not ctx.allowed(f"{ctx.package}:{perm_key}"):
+                continue
+
+            properties[name] = prop
+
+        schema["properties"] = properties
+        return schema
+
+    # ---------------------
+    # Secure validation (ctx injection point)
+    # ---------------------
+
+    @classmethod
+    def model_validate(
+        cls,
+        ctx: ExecutionContext,
+        obj: Any,
+        valiate: Optional[bool] = False,
+        **kwargs,
+    ):
+        # do checking
+        if valiate and not ctx.is_admin():
+            # Enforce write permissions
+            if isinstance(obj, dict):
+
+                for name, field in cls.model_fields.items():
+                    if name in obj:
+                        extra = field.json_schema_extra
+                        if not extra:
+                            continue
+                        perm_key = extra.get("write")
+                        if perm_key:
+                            ctx.require(f"{ctx.package}:{perm_key}")
+
+        # Delegate to Pydantic
+        instance = super().model_validate(obj, **kwargs)
+
+        # Attach ctx (instance-scoped)
+        object.__setattr__(instance, "_ctx", ctx)
+
+        return instance

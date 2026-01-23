@@ -1,15 +1,44 @@
 from enum import Enum
-from typing import Callable, Any
+from typing import Callable, Any, Optional
 import logging
 from pydantic import BaseModel
-from pydantic import BaseModel, Field, ValidationInfo, field_validator
-from plugins import ui_schema, ui_schema_crud
-from jinja2.loaders import DictLoader
-from jinja2.environment import Environment
+from pydantic import BaseModel, Field
+from enforcer import ExecutionContext
+from plugins import ui_schema
+from pathlib import Path
+from plugins.schema import SecureBaseModel
 import pluggy
+
 PROJECT_NAME = "quant_engine_management_plugin"
 
 hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
+
+
+def ui_schema_crud(
+    field_path: list[str],
+    crud_exprs: dict[str, str] | None = None,
+    field_code: Optional[str] = None,
+    field_url: Optional[str] = None,
+    deps: list[str] | None = None,
+    ui_options: dict | None = None,
+) -> dict:
+
+    model_expr = {**(crud_exprs or {})}
+
+    schema: dict = {
+        # "ui:field": "Crud",
+        "ui:field": "Dynamic",
+        "code": field_code,
+        "url": field_url,
+        "model:binding": field_path,
+        "model:expr": model_expr,
+        "ui:options": {"size": 12, **(ui_options or {})},
+    }
+
+    if deps:
+        schema["model:deps"] = deps
+
+    return ui_schema(schema)
 
 
 class ModelEnv(str, Enum):
@@ -19,6 +48,7 @@ class ModelEnv(str, Enum):
     uat_test = "forward_test"
     def __str__(self):
         return self.value
+
 
 class Config(BaseModel):
     webhook_url: str = Field(
@@ -35,25 +65,12 @@ class Config(BaseModel):
 
     env: ModelEnv = ModelEnv.staging
 
-
-    # webhook_test_apikey: str = Field(
-    #     "",
-    #     title="Test API Key",
-    #     json_schema_extra=ui_schema({
-    #         "ui:widget": "password",
-    #         "ui:options": {"size": 6},
-    #         "ui:expr": (
-    #             """{"ui:classNames": '{{ "hidden" if env != "uat_testing_multiple_models" else "" }}', "default": {{ webhook_api_key | tojson if env != "uat_testing_multiple_models" else "" | tojson }}}""",
-    #             ["env", "webhook_api_key"],
-    #         ),
-    #     }),
-    # )
-
-
     model_type: str = Field(
         "",
         title="Model Type",
         json_schema_extra=ui_schema_crud(
+            field_url=Path(__file__).with_name("crud.js").read_text(),
+            # field_url="CrudField.tsx",
             field_path=["model_type"],
             crud_exprs={
                 "list": "{{ list_trade_models(env, webhook_url, webhook_api_key) | tojson }}",
@@ -77,14 +94,10 @@ class Config(BaseModel):
         ),
     )
 
-class Plugin:
-    _env = Environment(
-        loader=DictLoader({"base": "{% block content %}{% endblock %}"}),
-        autoescape=False,
-        trim_blocks=True,
-        lstrip_blocks=True,
-    )
 
+class Plugin:
+
+    _env = {}
 
     @hookimpl
     @classmethod
@@ -93,25 +106,39 @@ class Plugin:
 
     @hookimpl
     @classmethod
-    def env(cls) -> Environment:
+    def env(cls):
         return cls._env
 
     @hookimpl
     @classmethod
-    def schema(cls):
+    def schema(cls, ctx):
         return Config.model_json_schema()
 
     @hookimpl
     @classmethod
-    def config(cls, json=None):
+    def config(
+        cls,
+        ctx,
+        json: Optional[dict[str, Any]] = None,
+        validate: Optional[bool] = False,
+    ):
+        if isinstance(json, str):
+            import json as json_module
+            json = json_module.loads(json)
         return Config.model_validate(json or {})
+    
+
     @hookimpl
     @classmethod
     def roles(cls):
         return {"admin"}
-    @hookimpl
-    @classmethod
+
+    @hookimpl   
+    @classmethod    
     async def run(
-        cls, config: Config, logger: logging.Logger, render: Callable[[str, Environment, dict], Any]
+        cls,
+        config: Config,
+        logger: logging.Logger,
+        render: Callable[[ExecutionContext, str, dict], Any],
     ):
         return True

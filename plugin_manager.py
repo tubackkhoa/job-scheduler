@@ -1,24 +1,23 @@
 import asyncio
-from ctypes import ArgumentError
-from functools import partial
 import importlib
-import json
 import logging
-import subprocess
 import sys
-from typing import Any, Callable, Optional, Set
+
+from typing import Any, Callable, Concatenate, Mapping, Optional
+
 import pluggy
-from pydantic import BaseModel
-from apscheduler.util import undefined
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from jinja2 import Environment
-from acl_resolver import ACLResolver, Role
+from apscheduler.util import undefined
+from casbin.enforcer import Enforcer
+from pydantic import BaseModel
+
+from auth import User
+from enforcer import (
+    ADMIN_ROLE,
+    ExecutionContext,
+)
 from models import DAO, Plugin
-import zipfile
-import tarfile
-import glob
-import shutil
-import os
+from renderer import Renderer
 
 PROJECT_NAME = "job-scheduler"
 
@@ -28,142 +27,42 @@ scheduler_logger = logging.getLogger(PROJECT_NAME)
 scheduler_logger.addHandler(logging.StreamHandler())
 
 
-def extract_package_files(target_dir: str) -> bool:
-    # ------------------------------------------------------------
-    # 1️⃣ Find archive
-    # ------------------------------------------------------------
-    archives = (
-        glob.glob(os.path.join(target_dir, "*.whl"))
-        or glob.glob(os.path.join(target_dir, "*.tar.gz"))
-        or glob.glob(os.path.join(target_dir, "*.zip"))
-    )
-
-    if not archives:
-        scheduler_logger.info("No archive found to extract.")
-        return False
-
-    archive_path = archives[0]
-    scheduler_logger.info(f"Extracting archive: {archive_path}")
-
-    # ------------------------------------------------------------
-    # 2️⃣ Extract (KEEP target_dir = name@version)
-    # ------------------------------------------------------------
-    if archive_path.endswith((".whl", ".zip")):
-        with zipfile.ZipFile(archive_path) as zf:
-            zf.extractall(target_dir)
-    else:
-        with tarfile.open(archive_path, "r:gz") as tf:
-            tf.extractall(target_dir)
-
-    os.remove(archive_path)
-
-    # ------------------------------------------------------------
-    # 3️⃣ Remove *.dist-info
-    # ------------------------------------------------------------
-    for dist_info in glob.glob(os.path.join(target_dir, "*.dist-info")):
-        shutil.rmtree(dist_info, ignore_errors=True)
-
-    # ------------------------------------------------------------
-    # 4️⃣ Flatten archive-created single root folder
-    # ------------------------------------------------------------
-    entries = [
-        e
-        for e in os.listdir(target_dir)
-        if e not in ("__pycache__", "src") and not e.endswith(".dist-info")
-    ]
-
-    if len(entries) == 1:
-        inner = os.path.join(target_dir, entries[0])
-        if os.path.isdir(inner):
-            scheduler_logger.info(f"Flattening archive folder: {inner}")
-            for item in os.listdir(inner):
-                shutil.move(
-                    os.path.join(inner, item),
-                    os.path.join(target_dir, item),
-                )
-            os.rmdir(inner)
-
-    # ------------------------------------------------------------
-    # 5️⃣ Handle src/ layout (pip-style)
-    # ------------------------------------------------------------
-    src_dir = os.path.join(target_dir, "src")
-    if os.path.isdir(src_dir):
-        scheduler_logger.info(f"Detected src layout in {target_dir}")
-        for item in os.listdir(src_dir):
-            shutil.move(
-                os.path.join(src_dir, item),
-                os.path.join(target_dir, item),
-            )
-        shutil.rmtree(src_dir)
-
-    # ------------------------------------------------------------
-    # 6️⃣ Hoist single Python package directory
-    # ------------------------------------------------------------
-    subdirs = [
-        d
-        for d in os.listdir(target_dir)
-        if os.path.isdir(os.path.join(target_dir, d)) and d not in ("__pycache__",)
-    ]
-
-    if len(subdirs) == 1:
-        pkg_dir = os.path.join(target_dir, subdirs[0])
-
-        # Heuristic: looks like a Python package
-        if os.path.exists(os.path.join(pkg_dir, "__init__.py")):
-            scheduler_logger.info(f"Hoisting package {pkg_dir} → {target_dir}")
-
-            for item in os.listdir(pkg_dir):
-                dst = os.path.join(target_dir, item)
-                src = os.path.join(pkg_dir, item)
-
-                if os.path.exists(dst):
-                    shutil.rmtree(dst) if os.path.isdir(dst) else os.remove(dst)
-
-                shutil.move(src, dst)
-
-            os.rmdir(pkg_dir)
-
-    scheduler_logger.info(
-        f"Extraction complete (version preserved at {os.path.basename(target_dir)})"
-    )
-    return True
-
-
 class PluginSpec:
 
     @hookspec
-    def env(cls) -> Environment: ...
+    def env(cls) -> dict[str, Any]: ...
 
     @hookspec
-    def schema(cls) -> dict[str, Any]: ...
+    def schema(cls, ctx: ExecutionContext) -> dict[str, Any]: ...
 
     @hookspec
-    def config(cls, json: Optional[dict[str, Any]] = None) -> BaseModel: ...
+    def config(
+        cls,
+        ctx: ExecutionContext,
+        json: Optional[dict[str, Any]] = None,
+        validate: Optional[bool] = False,
+    ) -> BaseModel: ...
 
     @hookspec
     async def run(
         cls,
+        ctx: ExecutionContext,
         config: BaseModel,
         logger: logging.Logger,
-        render: Callable[[str, Environment, dict], Any],
+        render: Callable[
+            Concatenate[str, dict[str, Any], ...],
+            Any,
+        ],
     ) -> Any: ...
 
     @hookspec
-    def roles(cls) -> Optional[Set[Role]]: ...
+    def roles(cls) -> dict[str, set[str]]: ...
 
     @hookspec
     async def install(cls) -> bool: ...
 
     @hookspec
     async def uninstall(cls) -> bool: ...
-
-    @hookspec
-    def validate(cls, config: BaseModel) -> None:
-        """
-        Optional hook for validating job configuration before saving.
-        Should raise an exception if validation fails.
-        """
-        ...
 
 
 class PluginManager:
@@ -187,7 +86,8 @@ class PluginManager:
     #     finally:
     #         lock.release()
 
-    acl_resolver: Optional[ACLResolver] = None
+    enforcer: Optional[Enforcer] = None
+
     # static pluggy manager, so that all pluginmanager share the same plugins
     manager = pluggy.PluginManager(PROJECT_NAME)
     manager.add_hookspecs(PluginSpec)
@@ -219,10 +119,11 @@ class PluginManager:
         Useful for initial load or after a restart.
         """
         # Register all plugins from the database
-        all_plugins = self.dao.get_all_plugins()
+        ctx = self.create_ctx(User(0, frozenset({ADMIN_ROLE})))
+        all_plugins = self.dao.get_all_plugins(ctx)
         look_up = {}
         for plugin in all_plugins:
-            print(f"Loading plugin: {plugin.package}")
+            scheduler_logger.info(f"Loading plugin: {plugin.package}")
             try:
                 self.load_plugin(plugin.package)
             except Exception as e:
@@ -244,37 +145,28 @@ class PluginManager:
         if self.scheduler.running:
             self.scheduler.shutdown()
 
-    def download_package(self, name: str, version: str) -> bool:
-        if not version:
-            raise ArgumentError("Please provide a version")
+    @classmethod
+    def register_plugin_permissions(cls, package: str, plugin_cls: PluginSpec):
+        if not cls.enforcer:
+            return
+        try:
+            mapping = plugin_cls.roles()
+            if not isinstance(mapping, dict):
+                return
+            enforcer = cls.enforcer
+            for permission_key, roles in mapping.items():
+                # with : to avoid name collision
+                permission = f"{package}:{permission_key}"
+                for role in roles:
+                    # make sure not override by mistake in plugin, even we have make permission non-conflict
+                    if role != ADMIN_ROLE and not enforcer.has_policy(role, permission):
+                        enforcer.add_policy(role, permission)
 
-        is_vcs = version.startswith(("git+", "github+"))
-
-        ref = version.rsplit("@", 1)[-1] if is_vcs else version.replace(".", "_")
-        requirement = version if is_vcs else f"{name}=={version}"
-        target_dir = f"{self.plugin_path}/{name}@{ref}"
-
-        os.makedirs(target_dir, exist_ok=True)
-
-        args = [
-            "uv",
-            "pip",
-            "install" if is_vcs else "download",
-            requirement,
-            "--target" if is_vcs else "--dest",
-            target_dir,
-            "--no-deps",
-        ]
-
-        scheduler_logger.info("Downloading into %s ...", target_dir)
-
-        result = subprocess.run(args, capture_output=True, text=True)
-
-        if result.returncode != 0:
-            scheduler_logger.error("Download failed: %s", result.stderr)
-            return False
-
-        return True if is_vcs else extract_package_files(target_dir)
+        except Exception as ex:
+            scheduler_logger.exception(
+                "Failed to register plugin permissions",
+                extra={"package": package},
+            )
 
     @staticmethod
     def get_job_scheduler_id(job_id: int) -> str:
@@ -303,22 +195,7 @@ class PluginManager:
         return cls.manager.get_plugin(package)
 
     @classmethod
-    def get_globals(cls, roles: Optional[Set[Role]]):
-        return (
-            {}
-            if cls.acl_resolver is None or roles is None
-            else cls.acl_resolver.get_allowed_functions(roles)
-        )
-
-    @classmethod
-    def render(cls, roles: Optional[Set[Role]], template_str: str, env: Environment, payload: dict):
-        template_engine = env.from_string(template_str)
-        functions = cls.get_globals(roles)
-        # assign global function
-        return template_engine.render(**functions, **payload, this=payload)
-
-    @classmethod
-    def run_plugin_job(cls, package: str, job_id: int):
+    def run_plugin_job(cls, package: str, job_id: int, user: User):
         """
         Wrapper to run a plugin's 'run' method asynchronously,
         fetching config from the active job for the user/plugin.
@@ -334,7 +211,11 @@ class PluginManager:
             # No active job means no config to run this plugin instance for this user
             return None
 
-        config = plugin.config(json.loads(job_config))
+        # user from login
+        ctx = cls.create_ctx(user, package)
+
+        # do not validate because already save from db
+        config = plugin.config(ctx, job_config)
 
         job_scheduler_id = cls.get_job_scheduler_id(job_id)
 
@@ -346,8 +227,15 @@ class PluginManager:
             logger.setLevel(logging.INFO)
 
         try:
-            render_function = partial(cls.render, plugin.roles())
-            retval = asyncio.run(plugin.run(config, logger, render_function))
+
+            def render_function(
+                template: str,
+                payload: Mapping[str, Any],
+                **kwargs: Any,
+            ) -> Any:
+                return Renderer.render(ctx, template, payload, **plugin.env(), **kwargs)
+
+            retval = asyncio.run(plugin.run(ctx, config, logger, render_function))
             # logger.info(f"Job executed successfully (return value: {retval})")
             return retval
         except Exception as e:
@@ -358,6 +246,10 @@ class PluginManager:
         existing_plugin = cls.manager.get_plugin(package)
         if existing_plugin:
             cls.manager.unregister(existing_plugin, package)
+
+    @classmethod
+    def create_ctx(cls, user: User, package: Optional[str] = None):
+        return ExecutionContext(user, package, cls.enforcer.enforce if cls.enforcer else None)
 
     @classmethod
     def load_plugin(cls, package: str, override: bool = False):
@@ -373,6 +265,7 @@ class PluginManager:
             try:
                 module = importlib.import_module(module_path)
                 plugin = getattr(module, class_name)
+                assert plugin
                 cls.manager.register(plugin, package)
             except Exception as e:
                 # show error to terminal to check but keep running
@@ -380,6 +273,7 @@ class PluginManager:
                 # Raise exception to prevent saving invalid plugin to database
                 raise RuntimeError(f"Failed to load plugin '{package}': {str(e)}") from e
 
+        cls.register_plugin_permissions(package, plugin)
         return plugin
 
     def add_plugin(self, package: str, interval: int, description: Optional[str] = None) -> int:
@@ -392,20 +286,13 @@ class PluginManager:
         self,
         session_id: int,
         plugin_id: int,
-        config: str,
+        config: dict[str, Any],
         description: Optional[str] = None,
     ):
         # Get plugin to check for validation
         plugin_model = self.dao.get_plugin(plugin_id)
         assert plugin_model is not None
-        
-        plugin_instance = self.get_plugin_instance(plugin_model.package)
-        if plugin_instance and hasattr(plugin_instance, 'validate'):
-            # Parse config and validate if plugin has validate method
-            config_dict = json.loads(config)
-            parsed_config = plugin_instance.config(config_dict)
-            plugin_instance.validate(parsed_config)
-        
+
         # Proceed with saving job
         job_id = self.dao.add_job(session_id, plugin_id, config, description)
         self.add_job_instance(job_id, False, plugin_model)
@@ -430,13 +317,13 @@ class PluginManager:
             if self.log_handler not in logger.handlers:
                 logger.addHandler(self.log_handler)
 
-
         # replace_existing allow override
         self.scheduler.add_job(
             self.run_plugin_job,
             "interval",
             seconds=plugin.interval,
-            args=[plugin.package, job_id],
+            # TODO: get user_id, and roles from database, the user of course owning the job
+            args=[plugin.package, job_id, User(0, frozenset({ADMIN_ROLE}))],
             next_run_time=undefined if active else None,
             id=job_scheduler_id,
             name=job_scheduler_id,
