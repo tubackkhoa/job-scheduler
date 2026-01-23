@@ -4,7 +4,7 @@ from fastapi.security import (
     OAuth2PasswordBearer,
 )
 from datetime import datetime, timedelta, timezone
-from jose import jwt
+from jose import ExpiredSignatureError, JWTError, jwt
 from passlib.context import CryptContext
 from schemas import settings
 
@@ -62,7 +62,17 @@ def require_auth(
     request: Request,
     token: str = Depends(oauth2_scheme),
 ):
-    payload = jwt.decode(token, settings.secret_key, algorithms=ALGORITHM)
+    try:
+        payload = jwt.decode(
+            token,
+            settings.secret_key,
+            algorithms=[ALGORITHM],
+        )
+    except ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
     user_id = payload.get("uid")
 
     if user_id is None:
@@ -76,4 +86,7 @@ def require_auth(
 
 
 def get_user(request: Request) -> UserContext:
-    return request.state.user
+    user = getattr(request.state, "user", None)
+    if user is None:
+        raise HTTPException(status_code=401)
+    return user
