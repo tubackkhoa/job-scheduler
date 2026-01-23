@@ -263,7 +263,7 @@ def create_plugin(plugin_manager: PluginManagerState, payload: PluginCreatePaylo
 
 
 @api_router.post("/template/{package}")
-def template(
+async def template(
     plugin_manager: PluginManagerState,
     user: UserState,
     package: str,
@@ -279,7 +279,9 @@ def template(
 
         ctx = plugin_manager.create_ctx(user, package)
         # env will be extra to make sure params can not override
-        result = Renderer.render(ctx, payload.template, payload.params, **plugin_instance.env())
+        result = await Renderer.render(
+            ctx, payload.template, payload.params, **plugin_instance.env()
+        )
         return Response(content=result, media_type="text/plain")
     except Exception as e:
         raise HTTPException(
@@ -568,7 +570,7 @@ def template_plugin_update(
 
 
 @api_router.post("/user/template/run/{package}")
-def template_plugin_run(
+async def template_plugin_run(
     plugin_manager: PluginManagerState,
     user: UserState,
     package: str,
@@ -578,7 +580,7 @@ def template_plugin_run(
         tpl_plugin = TemplatePlugin(f"{settings.user_plugin_path}/{package}")
         ctx = plugin_manager.create_ctx(user)
         config = tpl_plugin.config(ctx, payload)
-        result = tpl_plugin.run(ctx, config)
+        result = await tpl_plugin.run(ctx, config)
         return Response(content=result, media_type="text/plain")
     except Exception as e:
         raise HTTPException(

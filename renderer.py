@@ -42,6 +42,7 @@ def describe_callable(obj: Any) -> dict[str, Any]:
 
 class Renderer:
     _sandbox = SandboxedEnvironment(
+        enable_async=True,
         autoescape=False,
         trim_blocks=True,
         lstrip_blocks=True,
@@ -82,13 +83,13 @@ class Renderer:
         }
 
     @classmethod
-    def render(
+    async def render(
         cls, ctx: ExecutionContext, template_str: str, payload: Mapping[str, Any], **kwargs: Any
     ) -> str:
         # cache compiled templates for this sandbox
         # first argument must be payload, then later can access this
         template = cls._compile(template_str)
-        return template.render(payload, **kwargs, this=payload, ctx=ctx)
+        return await template.render_async(payload, **kwargs, this=payload, ctx=ctx)
 
     @staticmethod
     @lru_cache(maxsize=1024)

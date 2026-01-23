@@ -44,8 +44,8 @@ class TemplatePlugin:
         Model = create_model("Config", **fields)  # type: ignore
         return Model(**(json or {}))
 
-    def run(self, ctx: ExecutionContext, config: BaseModel):
-        rendered = Renderer.render(ctx, self.template_str, config.model_dump(), **self.env())
+    async def run(self, ctx: ExecutionContext, config: BaseModel):
+        rendered = await Renderer.render(ctx, self.template_str, config.model_dump(), **self.env())
         return rendered
 
     def roles(self):

@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 import pluggy
 from pydantic import BaseModel, Field
-from typing import Any, Callable, List, Optional, ParamSpec
+from typing import Any, Awaitable, Callable, List, Optional, ParamSpec
 from datetime import datetime
 from enforcer import ExecutionContext, job_permission
 from plugins import ui_schema
@@ -149,7 +149,7 @@ class MyClass:
 
 
 @job_permission("fetch_data")
-def fetch_data(ctx: ExecutionContext):
+async def fetch_data(ctx: ExecutionContext):
     return ctx.user
 
 
@@ -207,9 +207,9 @@ class Plugin:
         ctx: ExecutionContext,
         config: Config,
         logger: logging.Logger,
-        render: Callable[..., Any],
+        render: Callable[..., Awaitable[Any]],
     ):
-        version = render(
+        version = await render(
             ctx,
             "{{ dao.get_value_version(id).value }}",
             config.model_dump(),
