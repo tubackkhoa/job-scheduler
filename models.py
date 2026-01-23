@@ -395,7 +395,8 @@ class DAO:
             raise ValueError('field_id must be in format "{plugin_id}.{field_name}"')
         async with self.session_factory() as session:
             stmt = select(ValueVersion).where(
-                func.split_part(ValueVersion.field_id, ".", 2) == field_name
+                func.substr(ValueVersion.field_id, func.instr(ValueVersion.field_id, ".") + 1)
+                == field_name
             )
             if search:
                 stmt = stmt.where(ValueVersion.name.ilike(f"%{search}%"))
