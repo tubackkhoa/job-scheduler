@@ -21,11 +21,11 @@ async def login(
 
     if user is None or not verify_password(form_data.password, user.password):
         raise HTTPException(status_code=401, detail="Incorrect credentials")
-
+    # cache roles for user when login
+    plugin_manager.dao.user_roles_cache[user.id] = user.roles
     access_token = create_access_token(
         user_id=user.id,
         username=user.username,
-        roles=frozenset(user.roles),
     )
 
     return {

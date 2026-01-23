@@ -6,8 +6,14 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 @router.get("")
 async def get_all_users(plugin_manager: PluginManagerState, user: UserState):
-    ctx = plugin_manager.create_ctx(user)
-    return await plugin_manager.dao.get_all_users(ctx)
+    try:
+        ctx = plugin_manager.create_ctx(user)
+        return await plugin_manager.dao.get_all_users(ctx)
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to get users: {str(e)}",
+        )
 
 
 @router.post("/{user_id}")

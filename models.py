@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
 )
-from auth import UserContext
+
 from sqlalchemy.dialects.postgresql import JSONB
 
 from enforcer import ADMIN_ROLE, ExecutionContext, global_permission
@@ -125,6 +125,13 @@ class User(Base):
         default=list,
     )
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "roles": self.roles,
+            "username": self.username,
+        }
+
 
 class SignalMessage(Base):
     __tablename__ = "signal_messages"
@@ -151,6 +158,7 @@ class SignalMessage(Base):
 
 class DAO:
     job_config_cache: Dict[int, Dict[str, Any]] = {}
+    user_roles_cache: dict[int, list[str]] = {}
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
         self.session_factory = session_factory
@@ -442,17 +450,18 @@ class DAO:
     async def get_all_users(
         self,
         ctx: ExecutionContext,
-    ) -> list[UserContext]:
+    ) -> list[dict]:
         async with self.session_factory() as session:
             result = await session.execute(select(User.id, User.username, User.roles))
-            return [
-                UserContext(
-                    user.id,
-                    frozenset(user.roles),
-                    user.username,
-                )
-                for user in result.all()
-            ]
+            return [dict(row) for row in result.mappings().all()]
+
+    async def get_user_roles(self, user_id: int) -> list[str]:
+        roles = self.user_roles_cache.get(user_id)
+        if not roles:
+            async with self.session_factory() as session:
+                roles = await session.scalar(select(User.roles).where(User.id == user_id)) or []
+                self.user_roles_cache[user_id] = roles
+        return roles
 
     @global_permission("system")
     async def update_user_roles(
@@ -460,7 +469,7 @@ class DAO:
         ctx: ExecutionContext,
         user_id: int,
         roles: list[str],
-    ) -> UserContext:
+    ) -> dict:
 
         if not roles:
             raise ValueError("User must have at least one role")
@@ -477,15 +486,13 @@ class DAO:
 
             # update roles only
             user.roles = roles
+            # also update roles
+            self.user_roles_cache[user_id] = roles
 
             await session.commit()
             await session.refresh(user)
 
-            return UserContext(
-                user.id,
-                frozenset(user.roles),
-                user.username,
-            )
+            return user.to_dict()
 
     # ---------- dependency checking ----------
 

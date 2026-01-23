@@ -40,7 +40,6 @@ def create_access_token(
     *,
     user_id: int,
     username: str,
-    roles: frozenset[str],
     expires_delta: timedelta | None = None,
 ) -> str:
 
@@ -51,7 +50,6 @@ def create_access_token(
     payload = {
         "sub": username,
         "uid": user_id,
-        "roles": list(roles),
         "exp": expire,
     }
 
@@ -73,20 +71,5 @@ def require_auth(
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    user_id = payload.get("uid")
-
-    if user_id is None:
-        raise HTTPException(status_code=401)
-
-    request.state.user = UserContext(
-        id=user_id,
-        username=payload["sub"],
-        roles=frozenset(payload["roles"]),
-    )
-
-
-def get_user(request: Request) -> UserContext:
-    user = getattr(request.state, "user", None)
-    if user is None:
-        raise HTTPException(status_code=401)
-    return user
+    # get back roles from cache
+    request.state.user = (payload.get("uid"), payload["sub"])

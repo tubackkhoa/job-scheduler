@@ -1,15 +1,12 @@
 from functools import wraps
-from types import FunctionType, MappingProxyType, MethodType
+from types import MappingProxyType
 from typing import (
-    Any,
     Callable,
     Literal,
     Optional,
     ParamSpec,
-    Protocol,
     TypeVar,
     get_args,
-    runtime_checkable,
 )
 
 from casbin.enforcer import Enforcer
