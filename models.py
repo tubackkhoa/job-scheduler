@@ -18,7 +18,8 @@ from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
 )
-from enforcer import ExecutionContext, global_permission
+from auth import UserContext
+from enforcer import ADMIN_ROLE, ExecutionContext, global_permission
 
 
 class Base(DeclarativeBase):
@@ -399,3 +400,52 @@ class DAO:
             await session.refresh(version)
 
             return version.to_dict()
+
+    @global_permission("system")
+    async def get_all_users(
+        self,
+        ctx: ExecutionContext,
+    ) -> list[UserContext]:
+        async with self.session_factory() as session:
+            result = await session.execute(select(User.id, User.username, User.roles))
+            return [
+                UserContext(
+                    user.id,
+                    frozenset(user.roles),
+                    user.username,
+                )
+                for user in result.all()
+            ]
+
+    @global_permission("system")
+    async def update_user_roles(
+        self,
+        ctx: ExecutionContext,
+        user_id: int,
+        roles: list[str],
+    ) -> UserContext:
+
+        if not roles:
+            raise ValueError("User must have at least one role")
+
+        async with self.session_factory() as session:
+            # fetch user
+            user = await session.get(User, user_id, with_for_update=True)
+            if not user:
+                raise ValueError("User not found")
+
+            # prevent removing last admin
+            if ADMIN_ROLE in user.roles:
+                raise PermissionError("Cannot change the admin roles")
+
+            # update roles only
+            user.roles = roles
+
+            await session.commit()
+            await session.refresh(user)
+
+            return UserContext(
+                user.id,
+                frozenset(user.roles),
+                user.username,
+            )

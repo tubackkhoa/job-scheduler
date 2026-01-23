@@ -219,14 +219,11 @@ async def websocket_logs_endpoint(websocket: WebSocket, job_id: int):
         ws_manager.disconnect(websocket, scheduler_job_id)
 
 
-# TODO: need checking for api based on ctx as well
-@api_router.get("/authorization/state")
-def auth_state(plugin_manager: PluginManagerState, user: UserState):
+@api_router.get("/enforcer/policy")
+def auth_state(plugin_manager: PluginManagerState):
     if plugin_manager.enforcer:
-        return {
-            "policy": plugin_manager.enforcer.get_policy(),
-            "user": user,
-        }
+        return plugin_manager.enforcer.get_policy()
+    return []
 
 
 @api_router.get("/plugins")
@@ -590,6 +587,12 @@ async def template_plugin_run(
             status_code=400,
             detail=f"Failed to run template plugin: {str(e)}",
         )
+
+
+@api_router.get("/users")
+async def get_all_users(plugin_manager: PluginManagerState, user: UserState):
+    ctx = plugin_manager.create_ctx(user)
+    return await plugin_manager.dao.get_all_users(ctx)
 
 
 app.include_router(api_router)
