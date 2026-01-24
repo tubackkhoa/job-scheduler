@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Body, HTTPException
 from app.deps import PluginManagerState, UserState
-from models import Job
+from models import Job, Plugin
 from package_downloader import download_package
 from renderer import Renderer
 from schemas import DownloadPayload, PluginCreatePayload
@@ -10,12 +10,13 @@ router = APIRouter(prefix="/plugins", tags=["plugins"])
 
 
 @router.get("")
-async def plugins(
+def plugins(
     plugin_manager: PluginManagerState,
-    user: UserState,
 ):
-    ctx = plugin_manager.create_ctx(user)
-    return await plugin_manager.dao.get_all_plugins(ctx)
+    return [
+        {"id": id, "interval": interval, "package": package, "description": description}
+        for id, (interval, package, description) in plugin_manager.dao.plugin_cache.items()
+    ]
 
 
 @router.post("")
@@ -67,15 +68,15 @@ async def schema(
     session_id: int,
     plugin_id: int,
 ):
-    plugin_item = await plugin_manager.dao.get_plugin(plugin_id)
+    plugin_item = plugin_manager.dao.plugin_cache.get(plugin_id)
     if not plugin_item:
         raise HTTPException(status_code=404, detail="Plugin not found")
-    plugin = plugin_manager.get_plugin_instance(plugin_item.package)
+    plugin = plugin_manager.get_plugin_instance(plugin_item[1])
     if not plugin:
         raise HTTPException(status_code=404, detail="Plugin instance not found")
 
     try:
-        ctx = plugin_manager.create_ctx(user, plugin_item.package)
+        ctx = plugin_manager.create_ctx(user, plugin_item[1])
         jobs = await plugin_manager.dao.get_jobs_by_plugin_and_session(ctx, plugin_id, session_id)
         for job in jobs:
             job.config = plugin.config(ctx, job.config).model_dump(mode="json")

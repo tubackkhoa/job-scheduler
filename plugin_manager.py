@@ -17,7 +17,7 @@ from enforcer import (
     USER_ROLE,
     ExecutionContext,
 )
-from models import DAO, Plugin
+from models import DAO
 from renderer import Renderer
 
 PROJECT_NAME = "job-scheduler"
@@ -126,19 +126,16 @@ class PluginManager:
         # Register all plugins from the database
         self._failed_plugins.clear()
         ctx = self.create_ctx(UserContext(0, frozenset({ADMIN_ROLE})))
-        all_plugins = await self.dao.get_all_plugins(ctx)
-        look_up = {plugin.id: plugin for plugin in all_plugins}
+        # trigger cache load
+        await self.dao.get_all_plugins(ctx)
 
         all_jobs = await self.dao.get_all_jobs()
         for job in all_jobs:
-            plugin = look_up.get(job.plugin_id)
-            if not plugin:
+            if not job.plugin_id in self.dao.plugin_cache:
                 continue
-            # Populate job config cache so jobs can run after restart
+            interval, package, _ = self.dao.plugin_cache[job.plugin_id]
             # Plugin will be lazy load so that can reload and fix
-            if job.config:
-                DAO.job_config_cache[job.id] = job.config
-            self.add_job_instance(job.id, job.active, plugin)
+            self.add_job_instance(job.id, job.active, interval, package)
 
     def start(self):
         self.scheduler.start()
@@ -228,11 +225,8 @@ class PluginManager:
         if plugin is None:
             return None
 
+        # only job is active can run
         job_config = DAO.job_config_cache.get(job_id)
-
-        if job_config is None:
-            # No active job means no config to run this plugin instance for this user
-            return None
 
         # user from login
         ctx = cls.create_ctx(user, package)
@@ -318,15 +312,14 @@ class PluginManager:
         config: dict[str, Any],
         description: Optional[str] = None,
     ):
-        # Get plugin to check for validation
-        plugin_model = await self.dao.get_plugin(plugin_id)
-        assert plugin_model is not None
+        # Get plugin to check for validation, will call assert internal
+        interval, package, _ = self.dao.plugin_cache[plugin_id]
 
         # Proceed with saving job
         job_id = await self.dao.add_job(session_id, plugin_id, config, description)
-        self.add_job_instance(job_id, False, plugin_model)
+        self.add_job_instance(job_id, False, interval, package)
 
-    def add_job_instance(self, job_id: int, active: bool, plugin: Plugin):
+    def add_job_instance(self, job_id: int, active: bool, interval: int, package: str):
 
         job_scheduler_id = self.get_job_scheduler_id(job_id)
         if self.scheduler.get_job(job_scheduler_id) is not None:
@@ -350,9 +343,9 @@ class PluginManager:
         self.scheduler.add_job(
             self.run_plugin_job,
             "interval",
-            seconds=plugin.interval,
+            seconds=interval,
             # TODO: get user_id, and roles from database, the user of course owning the job
-            args=[plugin.package, job_id, UserContext(0, frozenset({ADMIN_ROLE}))],
+            args=[package, job_id, UserContext(0, frozenset({ADMIN_ROLE}))],
             next_run_time=undefined if active else None,
             id=job_scheduler_id,
             name=job_scheduler_id,

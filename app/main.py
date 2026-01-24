@@ -143,7 +143,8 @@ async def health_check(plugin_manager: PluginManagerState):
             "status": "healthy",
             "database": "connected",
             "plugin_manager": "initialized",
-            "plugins_count": len(plugin_manager.get_plugin_names()),
+            "plugins": len(plugin_manager.dao.plugin_cache),
+            "active_jobs": len(plugin_manager.dao.job_config_cache),
         }
     except Exception as e:
         raise HTTPException(

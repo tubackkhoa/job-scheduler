@@ -157,8 +157,9 @@ class SignalMessage(Base):
 
 
 class DAO:
-    job_config_cache: Dict[int, Dict[str, Any]] = {}
-    user_roles_cache: dict[int, list[str]] = {}
+    plugin_cache: Dict[int, tuple[int, str, Optional[str]]] = {}
+    job_config_cache: Dict[int, Dict[str, Any] | None] = {}
+    user_roles_cache: Dict[int, list[str]] = {}
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
         self.session_factory = session_factory
@@ -177,6 +178,8 @@ class DAO:
             session.add(plugin)
             await session.flush()
             await session.commit()
+            # add cache for plugin
+            self.plugin_cache[plugin.id] = (interval, package, description)
             return plugin.id
 
     async def get_plugin(self, plugin_id: int) -> Optional[Plugin]:
@@ -198,13 +201,13 @@ class DAO:
 
             for job in jobs:
                 deleted_job_ids.append(job.id)
+                # remove job config cache
+                self.job_config_cache.pop(job.id, None)
                 await session.delete(job)
-
+            # remove plugin cache
+            self.plugin_cache.pop(plugin.id, None)
             await session.delete(plugin)
             await session.commit()
-
-        for job_id in deleted_job_ids:
-            self.job_config_cache.pop(job_id, None)
 
         return package, deleted_job_ids
 
@@ -227,8 +230,6 @@ class DAO:
             )
             session.add(job)
             await session.commit()
-
-            self.job_config_cache[job.id] = config
             return job.id
 
     async def update_job(
@@ -242,8 +243,8 @@ class DAO:
             job.config = config
             if description:
                 job.description = description
-
-            self.job_config_cache[job.id] = config
+            if job.active:
+                self.job_config_cache[job.id] = config
             await session.commit()
 
     async def remove_job(self, job_id: int):
@@ -262,7 +263,7 @@ class DAO:
             job = await session.get(Job, job_id)
             if not job:
                 return None
-
+            self.job_config_cache[job.id] = job.config
             job.active = True
             await session.commit()
             return job
@@ -272,7 +273,7 @@ class DAO:
             job = await session.get(Job, job_id)
             if not job:
                 return None
-
+            self.job_config_cache.pop(job_id, None)
             job.active = False
             await session.commit()
             return job
@@ -284,7 +285,12 @@ class DAO:
     async def get_all_jobs(self):
         async with self.session_factory() as session:
             result = await session.execute(select(Job))
-            return result.scalars().all()
+            jobs = result.scalars().all()
+            # cache active job config
+            for job in jobs:
+                if job.active:
+                    self.job_config_cache[job.id] = job.config
+            return jobs
 
     async def get_all_jobs_by_plugin(self, plugin_id: int):
         async with self.session_factory() as session:
@@ -312,7 +318,12 @@ class DAO:
     async def get_all_plugins(self, ctx: ExecutionContext):
         async with self.session_factory() as session:
             result = await session.execute(select(Plugin))
-            return result.scalars().all()
+            plugins = result.scalars().all()
+            # cache plugin info
+            for plugin in plugins:
+                self.plugin_cache[plugin.id] = (plugin.interval, plugin.package, plugin.description)
+
+            return plugins
 
     # ---------- JSON / raw SQL ----------
 
@@ -569,17 +580,12 @@ class DAO:
                     if not job:
                         continue
 
-                    # Handle both JSON string and dict
-                    import json
-
-                    if isinstance(job.config, str):
-                        config = json.loads(job.config)
-                    else:
-                        config = job.config or {}
+                    config = job.config or {}
 
                     config[field_name] = 0
                     job.config = config
-                    self.job_config_cache[job.id] = config
+                    if job.active:
+                        self.job_config_cache[job.id] = config
                     updated_job_count += 1
 
                 await session.commit()
@@ -620,20 +626,14 @@ class DAO:
 
             for job_id in job_ids:
                 job = await session.get(Job, job_id)
-                if not job or not job.config:
+                if not job:
                     continue
 
-                # Handle both JSON string and dict
-                import json
-
-                if isinstance(job.config, str):
-                    config = json.loads(job.config)
-                else:
-                    config = job.config
-
+                config = job.config or {}
                 config[field_name] = int(version_id)
                 job.config = config
-                self.job_config_cache[job.id] = config
+                if job.active:
+                    self.job_config_cache[job.id] = config
                 updated_count += 1
 
             await session.commit()
