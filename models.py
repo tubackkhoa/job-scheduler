@@ -332,26 +332,16 @@ class DAO:
             return []
 
         async with self.session_factory() as session:
-            try:
-                result = await session.execute(
-                    text(
-                        """
-                        SELECT * FROM jobs
-                        WHERE (config::jsonb->>'model_key') = ANY(:model_keys)
-                        """
-                    ),
-                    {"model_keys": model_keys},
-                )
+            dialect = session.bind.dialect.name
 
-                return [Job(**row._mapping) for row in result]
+            if dialect == "postgresql":
+                condition = Job.config["model_key"].astext.in_(model_keys)
+            else:  # sqlite
+                condition = func.json_extract(Job.config, "$.model_key").in_(model_keys)
 
-            except Exception:
-                result = await session.execute(select(Job))
-                jobs = result.scalars().all()
-
-                return [
-                    job for job in jobs if job.config and job.config.get("model_key") in model_keys
-                ]
+            stmt = select(Job).where(condition)
+            result = await session.execute(stmt)
+            return list(result.scalars().all())
 
     @global_permission("field")
     async def create_value_version(

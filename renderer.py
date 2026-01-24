@@ -1,17 +1,10 @@
 import inspect
-from typing import Any, Iterable, Mapping
+from typing import Any, Mapping
 from functools import lru_cache
 from jinja2.sandbox import SandboxedEnvironment
 from datetime import datetime, timedelta, timezone
 
 from enforcer import GLOBAL_PERMISSION_REGISTRY, ExecutionContext
-
-
-def tolist(obj: Iterable, *include: str) -> list[dict]:
-    if include:
-        include_set = set(include)
-        return [{k: v for k, v in item.to_dict().items() if k in include_set} for item in obj]
-    return [item.to_dict() for item in obj]
 
 
 def describe_callable(obj: Any) -> dict[str, Any]:
@@ -55,7 +48,6 @@ class Renderer:
             "in_clause": lambda values: (
                 "()" if not values else f"({','.join(map(repr, values))})"
             ),
-            "tolist": tolist,
         }
     )
 
