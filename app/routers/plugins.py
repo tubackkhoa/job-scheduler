@@ -71,12 +71,13 @@ async def schema(
     plugin_item = plugin_manager.dao.plugin_cache.get(plugin_id)
     if not plugin_item:
         raise HTTPException(status_code=404, detail="Plugin not found")
-    plugin = plugin_manager.get_plugin_instance(plugin_item[1])
+    package = plugin_item[1]
+    plugin = plugin_manager.get_plugin_instance(package)
     if not plugin:
         raise HTTPException(status_code=404, detail="Plugin instance not found")
 
     try:
-        ctx = plugin_manager.create_ctx(user, plugin_item[1])
+        ctx = plugin_manager.create_ctx(user, package)
         jobs = await plugin_manager.dao.get_jobs_by_plugin_and_session(ctx, plugin_id, session_id)
         for job in jobs:
             job.config = plugin.config(ctx, job.config).model_dump(mode="json")
