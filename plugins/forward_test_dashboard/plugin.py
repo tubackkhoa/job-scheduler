@@ -7,7 +7,6 @@ import pandas as pd
 from pydantic import BaseModel, Field
 from typing import Any, Callable, List, Dict
 from jinja2 import Environment
-from sqlalchemy import create_engine
 from typing import Optional
 
 from plugins import ui_schema
