@@ -2,6 +2,7 @@ import hashlib
 import inspect
 from pathlib import Path
 from typing import Any, Mapping
+from collections import OrderedDict
 from jinja2 import DictLoader, FileSystemBytecodeCache
 from jinja2.sandbox import SandboxedEnvironment
 from datetime import datetime, timedelta, timezone
@@ -11,6 +12,26 @@ from schemas import settings
 
 # make sure cache folder exist
 Path(settings.jinja_cache_path).mkdir(parents=True, exist_ok=True)
+
+
+# only remain a small hot item incase of cache miss - but rare
+class LRUDict(OrderedDict):
+    def __init__(self, maxsize: int = 256):
+        super().__init__()
+        self.maxsize = maxsize
+
+    def __setitem__(self, key, value):
+        if key in self:
+            self.move_to_end(key)
+        else:
+            if len(self) >= self.maxsize:
+                self.popitem(last=False)
+        super().__setitem__(key, value)
+
+    def __getitem__(self, key):
+        value = super().__getitem__(key)
+        self.move_to_end(key)
+        return value
 
 
 def describe_callable(obj: Any) -> dict[str, Any]:
@@ -40,7 +61,7 @@ def describe_callable(obj: Any) -> dict[str, Any]:
 
 
 class Renderer:
-    _templates: dict[str, str] = {}
+    _templates = LRUDict()
     _sandbox = SandboxedEnvironment(
         enable_async=True,
         autoescape=False,
@@ -100,9 +121,7 @@ class Renderer:
         key = cls._key(template_str)
 
         # Insert template only once
-        if key not in cls._templates:
-            cls._templates[key] = template_str
-
+        cls._templates[key] = template_str
         template = cls._sandbox.get_template(key)
 
         return await template.render_async(
