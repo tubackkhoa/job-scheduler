@@ -39,7 +39,6 @@ class UserContext:
 def create_access_token(
     *,
     user_id: int,
-    username: str,
     expires_delta: timedelta | None = None,
 ) -> str:
 
@@ -48,7 +47,6 @@ def create_access_token(
     )
 
     payload = {
-        "sub": username,
         "uid": user_id,
         "exp": expire,
     }
@@ -72,4 +70,4 @@ def require_auth(
         raise HTTPException(status_code=401, detail="Invalid token")
 
     # get back roles from cache
-    request.state.user = (payload.get("uid"), payload["sub"])
+    request.state.uid = payload.get("uid")

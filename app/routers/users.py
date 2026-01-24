@@ -5,10 +5,16 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 @router.get("")
-async def get_all_users(plugin_manager: PluginManagerState, user: UserState):
+def get_all_users(plugin_manager: PluginManagerState, user: UserState):
     try:
-        ctx = plugin_manager.create_ctx(user)
-        return await plugin_manager.dao.get_all_users(ctx)
+        return [
+            {
+                "id": id,
+                "username": username,
+                "roles": roles,
+            }
+            for id, (roles, username) in plugin_manager.dao.user_cache.items()
+        ]
     except Exception as e:
         raise HTTPException(
             status_code=400,

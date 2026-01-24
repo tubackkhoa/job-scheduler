@@ -14,14 +14,14 @@ def get_log_service(request: Request):
     return request.app.state.log_service
 
 
-async def get_user(request: Request) -> UserContext:
-    user = getattr(request.state, "user", None)
-    if user is None:
+def get_user(request: Request) -> UserContext:
+    uid = getattr(request.state, "uid", None)
+    if uid is None:
         raise HTTPException(status_code=401)
-    user_id, username = user
+
     plugin_manager: PluginManager = request.app.state.plugin_manager
-    roles = await plugin_manager.dao.get_user_roles(user_id)
-    return UserContext(user_id, frozenset(roles), username)
+    roles, username = plugin_manager.dao.user_cache.get(uid, ([], ""))
+    return UserContext(uid, frozenset(roles), username)
 
 
 PluginManagerState = Annotated[PluginManager, Depends(get_plugin_manager)]

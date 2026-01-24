@@ -159,7 +159,7 @@ class SignalMessage(Base):
 class DAO:
     plugin_cache: Dict[int, tuple[int, str, Optional[str]]] = {}
     job_config_cache: Dict[int, Dict[str, Any] | None] = {}
-    user_roles_cache: Dict[int, list[str]] = {}
+    user_cache: Dict[int, tuple[list[str], str]] = {}
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
         self.session_factory = session_factory
@@ -461,19 +461,13 @@ class DAO:
     async def get_all_users(
         self,
         ctx: ExecutionContext,
-    ) -> list:
+    ):
         async with self.session_factory() as session:
             result = await session.execute(select(User.id, User.username, User.roles))
-            rows = result.mappings().all()
-            return list(rows)
-
-    async def get_user_roles(self, user_id: int) -> list[str]:
-        roles = self.user_roles_cache.get(user_id)
-        if not roles:
-            async with self.session_factory() as session:
-                roles = await session.scalar(select(User.roles).where(User.id == user_id)) or []
-                self.user_roles_cache[user_id] = roles
-        return roles
+            users = result.mappings().all()
+            for user in users:
+                self.user_cache[user.id] = (user.roles, user.username)
+            return users
 
     @global_permission("system")
     async def update_user_roles(
@@ -499,7 +493,7 @@ class DAO:
             # update roles only
             user.roles = roles
             # also update roles
-            self.user_roles_cache[user_id] = roles
+            self.user_cache[user_id] = (roles, self.user_cache[user_id][1])
 
             await session.commit()
             await session.refresh(user)

@@ -126,8 +126,9 @@ class PluginManager:
         # Register all plugins from the database
         self._failed_plugins.clear()
         ctx = self.create_ctx(UserContext(0, frozenset({ADMIN_ROLE})))
-        # trigger cache load
+        # trigger cache load, so that can get user role and job config in memory
         await self.dao.get_all_plugins(ctx)
+        await self.dao.get_all_users(ctx)
 
         all_jobs = await self.dao.get_all_jobs()
         for job in all_jobs:

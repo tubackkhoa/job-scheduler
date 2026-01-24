@@ -16,16 +16,16 @@ async def login(
 ):
 
     async with plugin_manager.dao.session_factory() as session:
-        result = await session.execute(select(User).where(User.username == form_data.username))
-        user = result.scalar_one_or_none()
+        result = await session.execute(
+            select(User.id, User.password).where(User.username == form_data.username)
+        )
+        user = result.mappings().one_or_none()
 
     if user is None or not verify_password(form_data.password, user.password):
         raise HTTPException(status_code=401, detail="Incorrect credentials")
-    # cache roles for user when login
-    plugin_manager.dao.user_roles_cache[user.id] = user.roles
+
     access_token = create_access_token(
         user_id=user.id,
-        username=user.username,
     )
 
     return {
