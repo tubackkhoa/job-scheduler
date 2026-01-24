@@ -31,9 +31,8 @@ from log_service import LogService
 from models import DAO
 from plugin_manager import PROJECT_NAME, PluginManager
 from renderer import Renderer
-from schemas import (
-    settings,
-)
+from schemas import settings
+
 
 from utils.job import JobUtil
 from ws_manager import WSConnectionManager

@@ -49,3 +49,5 @@ docs/
 
 # ignore plugins that are downloaded
 plugins/*@*
+
+cache

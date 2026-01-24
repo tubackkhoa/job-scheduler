@@ -349,7 +349,8 @@ class DAO:
         ctx: ExecutionContext,
         payload: dict,
     ) -> dict:
-        assert "field_id" in payload, "field_id is required"
+        if "field_id" not in payload:
+            raise ValueError("field_id is required")
 
         async with self.session_factory() as session:
             value_version = ValueVersion(**payload)

@@ -71,5 +71,7 @@ class Settings(BaseSettings):
 
     secret_key: str = "CHANGE_ME_SUPER_SECRET"
 
+    jinja_cache_path: str = "cache/jinja"
+
 
 settings = Settings()
