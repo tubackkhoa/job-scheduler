@@ -51,11 +51,12 @@ async def update_job_config(
         plugin_item = plugin_manager.dao.plugin_cache.get(plugin_id)
         if not plugin_item:
             raise HTTPException(status_code=404, detail=f"Plugin {plugin_id} not found")
-        plugin = plugin_manager.get_plugin_instance(plugin_item[1])
+        package = plugin_item[1]
+        plugin = plugin_manager.get_plugin_instance(package)
         if not plugin:
             raise HTTPException(status_code=404, detail="Plugin not found")
 
-        ctx = plugin_manager.create_ctx(user, plugin_item[1])
+        ctx = plugin_manager.create_ctx(user, package)
         # validate before saving
         config = plugin.config(ctx, payload.config, True)
         if job_id == 0:
