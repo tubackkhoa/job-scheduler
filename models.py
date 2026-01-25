@@ -10,6 +10,7 @@ from sqlalchemy import (
     Sequence,
     String,
     Text,
+    delete,
     select,
     text,
     cast,
@@ -187,7 +188,6 @@ class DAO:
             return await session.get(Plugin, plugin_id)
 
     async def delete_plugin(self, plugin_id: int) -> tuple[str, list[int]]:
-        deleted_job_ids: list[int] = []
 
         async with self.session_factory() as session:
             plugin = await session.get(Plugin, plugin_id)
@@ -195,21 +195,31 @@ class DAO:
                 raise ValueError(f"Plugin with id {plugin_id} not found")
 
             package = plugin.package
+            dialect = session.get_bind().dialect.name
+            # optimizing for postgresql
+            if dialect == "postgresql":
+                # Single roundtrip, authoritative
+                result = await session.execute(
+                    delete(Job).where(Job.plugin_id == plugin_id).returning(Job.id)
+                )
+                job_ids = result.scalars().all()
+            else:
+                # Portable fallback
+                result = await session.execute(select(Job.id).where(Job.plugin_id == plugin_id))
+                job_ids = result.scalars().all()
 
-            result = await session.execute(select(Job).where(Job.plugin_id == plugin_id))
-            jobs = result.scalars().all()
+                await session.execute(delete(Job).where(Job.plugin_id == plugin_id))
 
-            for job in jobs:
-                deleted_job_ids.append(job.id)
-                # remove job config cache
-                self.job_config_cache.pop(job.id, None)
-                await session.delete(job)
-            # remove plugin cache
-            self.plugin_cache.pop(plugin.id, None)
             await session.delete(plugin)
             await session.commit()
 
-        return package, deleted_job_ids
+        # cache updates AFTER commit
+        for job_id in job_ids:
+            self.job_config_cache.pop(job_id, None)
+
+        self.plugin_cache.pop(plugin_id, None)
+
+        return package, list(job_ids)
 
     # ---------- jobs ----------
 
@@ -243,9 +253,10 @@ class DAO:
             job.config = config
             if description:
                 job.description = description
+            await session.commit()
+
             if job.active:
                 self.job_config_cache[job.id] = config
-            await session.commit()
 
     async def remove_job(self, job_id: int):
         async with self.session_factory() as session:
@@ -332,7 +343,7 @@ class DAO:
             return []
 
         async with self.session_factory() as session:
-            dialect = session.bind.dialect.name
+            dialect = session.get_bind().dialect.name
 
             if dialect == "postgresql":
                 condition = Job.config["model_key"].astext.in_(model_keys)
@@ -484,7 +495,7 @@ class DAO:
             # update roles only
             user.roles = roles
             # also update roles
-            self.user_cache[user_id] = (roles, self.user_cache[user_id][1])
+            self.user_cache[user_id] = (roles, user.username)
 
             await session.commit()
             await session.refresh(user)
@@ -609,11 +620,10 @@ class DAO:
 
             updated_count = 0
 
-            for job_id in job_ids:
-                job = await session.get(Job, job_id)
-                if not job:
-                    continue
+            result = await session.execute(select(Job).where(Job.id.in_(job_ids)))
+            jobs = result.scalars().all()
 
+            for job in jobs:
                 config = job.config or {}
                 config[field_name] = int(version_id)
                 job.config = config
