@@ -79,7 +79,8 @@ def get_running_models(base_url: str, api_key: str) -> List[Dict[str, Any]]:
         response = httpx.get(url, headers=headers, params={"status": "running"}, timeout=10.0)
         response.raise_for_status()
         data = response.json()
-        return data.get("models", []) if data.get("ok") else []
+        models = data.get("models", []) if data.get("ok") else []
+        return sorted(models, key=lambda x: x.get('createdAt') or '')
     except Exception:
         return []
 
@@ -115,8 +116,7 @@ def format_pnl_table(models: List[Dict[str, Any]]) -> pd.DataFrame:
     """Format PNL data as DataFrame with color-coded icons for PNL values and job status."""
     if not models:
         return "No running models found."
-    print(models)
-    
+
     # Store original models for latestPostion access
     models_dict = {model.get('identity', ''): model for model in models}
     
