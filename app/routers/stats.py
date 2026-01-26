@@ -47,6 +47,29 @@ async def list_jobs(
                 job["signals"] = job_signals
                 job["last_signal"] = job_signals[0]['captured_at'] if job_signals else None
         
+        sql_ids = set()
+        for job in items:
+            config = job.get("config") or {}
+            if config.get("sql_id") and int(config["sql_id"]) > 0:
+                try:
+                    sql_ids.add(int(config["sql_id"]))
+                except (ValueError, TypeError):
+                    pass
+        
+        if sql_ids:
+            versions = await plugin_manager.dao.get_value_versions_by_filters(ids=list(sql_ids))
+            versions_map = {v["id"]: v for v in versions}
+            for job in items:
+                config = job.get("config") or {}
+                if config.get("sql_id"):
+                    try:
+                        sql_id = int(config["sql_id"])
+                        if sql_id in versions_map:
+                            v = versions_map[sql_id]
+                            job["sql_version"] = {"id": v["id"], "name": v["name"]}
+                    except (ValueError, TypeError):
+                        pass
+
         return {
             "items": items,
             "total": result["total"],
