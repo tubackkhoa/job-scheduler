@@ -49,8 +49,7 @@ schema:
           React: { useState },
           Mui: { Box, Button, TextField, Typography }
         }) {
-          const [input, setInput] = useState(formData);
-          
+          const [input, setInput] = useState(formData);          
           const handleRun = async () => {
             onChange(input, fieldPathId.path);
           };
@@ -58,7 +57,7 @@ schema:
           return (
             <Box display="flex" flexDirection="column" gap={2}>
               <Typography variant="subtitle1">
-                Compiled react component
+                Compiled123 react component
               </Typography>
 
               <TextField

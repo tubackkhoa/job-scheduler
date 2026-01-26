@@ -14,6 +14,11 @@ class ConfigPayload(BaseModel):
         extra = "forbid"
 
 
+class TemplateCodePayload(BaseModel):
+    script: str
+    form: str
+
+
 class DownloadPayload(BaseModel):
     version: str = Field(
         ...,

@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Body, HTTPException, Response
 from app.deps import PluginManagerState, UserState
 from renderer import Renderer
-from schemas import ConfigPayload, TemplatePayload, settings
+from schemas import ConfigPayload, TemplateCodePayload, TemplatePayload, settings
 from template_plugin import TemplatePlugin
 from models import Job
 
-router = APIRouter(prefix="/template", tags=["templates", "user-templates"])
+router = APIRouter(prefix="/templates", tags=["templates", "user-templates"])
 
 
 @router.post("/{package}")
@@ -61,6 +61,42 @@ def get_user_template(plugin_manager: PluginManagerState, user: UserState, packa
         raise HTTPException(
             status_code=400,
             detail=f"Failed to get user template plugin: {str(e)}",
+        )
+
+
+@router.get("/user/code/{package}")
+def get_user_template_code(package: str):
+    plugin_dir = f"{settings.user_plugin_path}/{package}"
+    try:
+        code = {}
+        with open(f"{plugin_dir}/plugin.yaml") as f:
+            code["form"] = f.read()
+        with open(f"{plugin_dir}/plugin.j2") as f:
+            code["script"] = f.read()
+        return code
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to load template code for plugin: {str(e)}",
+        )
+
+
+@router.post("/user/code/{package}")
+def update_user_template_code(
+    package: str,
+    payload: TemplateCodePayload = Body(...),
+):
+    plugin_dir = f"{settings.user_plugin_path}/{package}"
+    try:
+        with open(f"{plugin_dir}/plugin.yaml", "w") as f:
+            f.write(payload.form)
+        with open(f"{plugin_dir}/plugin.j2", "w") as f:
+            f.write(payload.script)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to save template code for plugin: {str(e)}",
         )
 
 
