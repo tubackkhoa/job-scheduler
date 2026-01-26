@@ -66,11 +66,12 @@ class Job(Base):
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
 
     def to_dict(self):
+        import json
         return {
             "id": self.id,
             "session_id": self.session_id,
             "plugin_id": self.plugin_id,
-            "config": self.config,
+            "config": json.loads(self.config) if isinstance(self.config, str) else self.config,
             "description": self.description,
             "active": self.active,
         }
@@ -479,6 +480,19 @@ class DAO:
                 "limit": limit,
                 "offset": offset,
             }
+
+    async def get_value_versions_by_filters(
+        self,
+        ids: Optional[List[int]] = None,
+    ) -> List[dict]:
+        async with self.session_factory() as session:
+            stmt = select(ValueVersion)
+            if ids:
+                stmt = stmt.where(ValueVersion.id.in_(ids))
+            
+            result = await session.execute(stmt)
+            versions = result.scalars().all()
+            return [v.to_dict() for v in versions]
 
     @global_permission("field")
     async def update_value_version(
