@@ -1,7 +1,9 @@
 from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field, PositiveInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from dotenv import load_dotenv
 
+load_dotenv()
 
 class ConfigPayload(BaseModel):
     plugin_id: Optional[int] = Field(None, alias="pluginId")

@@ -318,11 +318,13 @@ class DAO:
             if filters.get("active") is not None:
                 conditions.append(Job.active == filters["active"])
             if filters.get("plugin_id") is not None:
-                conditions.append(Job.plugin_id.in_(filters["plugin_id"]))
+                conditions.append(Job.plugin_id.in_([int(x) for x in filters["plugin_id"]]))
             if filters.get("model_key") is not None:
                 conditions.append(cast(Job.config, JSONB)["model_key"].astext.in_(filters["model_key"]))
             if filters.get("sql_id") is not None:
                 conditions.append(cast(Job.config, JSONB)["sql_id"].astext.in_([str(x) for x in filters["sql_id"]]))
+            if filters.get("session_id") is not None:
+                conditions.append(Job.session_id.in_([int(x) for x in filters["session_id"]]))
 
             # Count query
             count_stmt = select(func.count()).select_from(Job)
@@ -458,10 +460,13 @@ class DAO:
         except ValueError:
             raise ValueError('field_id must be in format "{plugin_id}.{field_name}"')
         async with self.session_factory() as session:
-            stmt = select(ValueVersion).where(
-                func.substr(ValueVersion.field_id, func.instr(ValueVersion.field_id, ".") + 1)
-                == field_name
-            )
+            dialect = session.get_bind().dialect.name
+            if dialect == "postgresql":
+                field_expr = func.split_part(ValueVersion.field_id, ".", 2)
+            elif dialect == "sqlite":
+                field_expr = func.substr(ValueVersion.field_id, func.instr(ValueVersion.field_id, ".") + 1)
+            
+            stmt = select(ValueVersion).where(field_expr == field_name)
             if search:
                 stmt = stmt.where(ValueVersion.name.ilike(f"%{search}%"))
 
@@ -472,7 +477,7 @@ class DAO:
 
             result = await session.execute(stmt)
             versions = result.scalars().all()
-
+            
             return {
                 "versions": [v.to_dict() for v in versions],
                 "count": len(versions),
