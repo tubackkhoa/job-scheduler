@@ -1,5 +1,5 @@
 from app.deps import PluginManagerState
-from app.routers import auth, plugins, logs, templates, users, jobs, ws, signals
+from app.routers import auth, plugins, logs, templates, users, jobs, ws, signals, stats
 
 import asyncio
 import logging
@@ -165,6 +165,7 @@ api_router.include_router(templates.router)
 api_router.include_router(users.router)
 api_router.include_router(jobs.router)
 api_router.include_router(signals.router)
+api_router.include_router(stats.router)
 app.include_router(api_router)
 
 # websocket

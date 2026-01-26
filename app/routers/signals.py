@@ -5,7 +5,7 @@ from app.deps import PluginManagerState
 router = APIRouter(prefix="/signals", tags=["signals"])
 
 
-@router.get("/signals/{job_id}")
+@router.get("/{job_id}")
 async def get_signal_messages(
     plugin_manager: PluginManagerState,
     job_id: int,
@@ -22,7 +22,7 @@ async def get_signal_messages(
         raise HTTPException(status_code=500, detail=f"Failed to get signal messages: {str(e)}")
 
 
-@router.get("/signals/model/{model_key}")
+@router.get("/model/{model_key}")
 async def get_signal_messages_by_model(
     plugin_manager: PluginManagerState,
     model_key: str,
