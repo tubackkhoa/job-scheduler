@@ -4,14 +4,12 @@ Inspired by pm2-logrotate: rotate by size/date, keep N files, auto-cleanup.
 """
 
 import logging
-import os
 import gzip
 import re
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict
 from threading import Lock
-import json
 
 logger = logging.getLogger(__name__)
 
