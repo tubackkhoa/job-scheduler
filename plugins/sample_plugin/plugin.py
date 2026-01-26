@@ -38,7 +38,7 @@ class DynamicCode(BaseModel):
         json_schema_extra=ui_schema(
             {
                 "ui:field": "Dynamic",
-                "code": Path(__file__).with_name("compile_plugin.js").read_text(),
+                "url": Path(__file__).with_name("compile_plugin.js").read_text(),
                 # "url": "CompilePluginComponent.tsx",
                 "ui:options": {
                     "size": 6,
