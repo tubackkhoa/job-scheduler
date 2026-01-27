@@ -222,9 +222,11 @@ async def format_pnl_table(models: List[Dict[str, Any]], jobs_list: List[Dict[st
     df["PNL"] = df["PNL"].apply(format_pnl_with_color)
     df["Last Position Time"] = df["Last Position Time"].apply(format_last_position)
     df["Status"] = df.apply(format_status, axis=1)
-    df["Created At"] = df["Created At"].apply(format_last_position)
     df["Latest Position"] = df.apply(format_latest_position, axis=1)
+    df["Created At"] = df["Created At"].apply(format_last_position)
 
+    # Reorder columns to put Created At at the end
+    df = df[["Model", "Identity", "PNL", "Last Position Time", "Status", "Latest Position", "Created At"]]
 
     df = df.fillna("N/A")
     total_models = len(df)
