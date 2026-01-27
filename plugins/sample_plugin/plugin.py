@@ -159,7 +159,6 @@ P = ParamSpec("P")
 class Plugin:
 
     _env = {
-        "datetime": datetime,
         "fetch_data": fetch_data,
         "MyClass": MyClass,
         "get_users": lambda: ["tupt", "cuongnv"],
@@ -209,12 +208,10 @@ class Plugin:
         logger: logging.Logger,
         render: Callable[..., Awaitable[Any]],
     ):
+
         version = await render(
-            ctx,
             "{{ dao.get_value_version(id).value }}",
-            config.model_dump(),
-            **cls._env,
-            id=config.sql_id,
+            {"id": config.sql_id},
         )
 
         print(version)

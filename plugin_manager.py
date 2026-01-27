@@ -14,7 +14,6 @@ from pydantic import BaseModel
 from auth import UserContext
 from enforcer import (
     ADMIN_ROLE,
-    USER_ROLE,
     ExecutionContext,
 )
 from models import DAO
