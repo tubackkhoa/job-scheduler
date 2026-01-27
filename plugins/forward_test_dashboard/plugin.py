@@ -61,7 +61,8 @@ def get_running_models(base_url: str, api_key: str) -> List[Dict[str, Any]]:
         response = httpx.get(url, headers=headers, params={"status": "running"}, timeout=10.0)
         response.raise_for_status()
         data = response.json()
-        return data.get("models", []) if data.get("ok") else []
+        models = data.get("models", []) if data.get("ok") else []
+        return sorted(models, key=lambda x: x.get('createdAt') or '')
     except Exception:
         return []
 
