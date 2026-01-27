@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 import os
 
+
 class ConfigPayload(BaseModel):
     plugin_id: Optional[int] = Field(None, alias="pluginId")
     session_id: Optional[int] = Field(None, alias="sessionId")
@@ -77,7 +78,8 @@ class Settings(BaseSettings):
     redis_port: Optional[int] = 0
     redis_db: Optional[int] = 0
 
-    secret_key: str = "",
+    secret_key: str = ""
+    admin_password: str = ""
 
     jinja_cache_path: str = "cache/jinja"
 

@@ -10,6 +10,7 @@ import os
 
 load_dotenv()
 
+
 async def seed_admin():
     engine = create_async_engine(
         settings.db_connection,
@@ -24,12 +25,15 @@ async def seed_admin():
         if res.scalar_one_or_none():
             return
 
-        session.add(User(
-            username=os.getenv("ADMIN_USER"),
-            password=pwd_context.hash(os.getenv("ADMIN_PASSWORD")),
-            roles=["admin"],
-        ))
+        session.add(
+            User(
+                username=os.getenv("ADMIN_USER"),
+                password=pwd_context.hash(settings.admin_password),
+                roles=["admin"],
+            )
+        )
         await session.commit()
+
 
 if __name__ == "__main__":
     asyncio.run(seed_admin())
