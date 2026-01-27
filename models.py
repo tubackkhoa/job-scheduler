@@ -383,7 +383,7 @@ class DAO:
 
     # ---------- JSON / raw SQL ----------
 
-    async def get_jobs_by_model_keys(self, model_keys: List[str]) -> List[Job]:
+    async def get_jobs_by_model_keys(self, model_keys: List[str]) -> List[dict]:
         if not model_keys:
             return []
 
@@ -391,13 +391,14 @@ class DAO:
             dialect = session.get_bind().dialect.name
 
             if dialect == "postgresql":
-                condition = Job.config["model_key"].astext.in_(model_keys)
+                condition = cast(Job.config, JSONB)["model_key"].astext.in_(model_keys)
             else:  # sqlite
                 condition = func.json_extract(Job.config, "$.model_key").in_(model_keys)
 
             stmt = select(Job).where(condition)
             result = await session.execute(stmt)
-            return list(result.scalars().all())
+            jobs = result.scalars().all()
+            return [job.to_dict() for job in jobs]
 
     @global_permission("field")
     async def create_value_version(
