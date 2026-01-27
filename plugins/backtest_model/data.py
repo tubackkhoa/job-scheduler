@@ -266,3 +266,75 @@ def generate_ohlcv_chart_data(df: pd.DataFrame, symbol: str) -> dict:
             },
         ]
     }
+
+
+df = pd.DataFrame(
+    [
+        {
+            "Model": "BTC Momentum v1",
+            "Identity": "btc_momo_01",
+            "PNL": 124.5321,
+            "Last Position Time": "2026-01-20 09:00 UTC",
+            "Job Status": "active",
+            "Job Description": "BTC Momentum Job",
+            "Latest Symbol": "BTCUSDT",
+            "Latest Direction": "LONG",
+            "Latest PNL": 12.34567,
+            "Created At": "2026-01-01 00:00 UTC",
+        },
+        {
+            "Model": "ETH Mean Revert",
+            "Identity": "eth_mean_02",
+            "PNL": -45.21,
+            "Last Position Time": "2026-01-20 08:00 UTC",
+            "Job Status": "inactive",
+            "Job Description": "ETH Mean Job",
+            "Latest Symbol": "ETHUSDT",
+            "Latest Direction": "SHORT",
+            "Latest PNL": -3.21,
+            "Created At": "2026-01-02 12:00 UTC",
+        },
+        {
+            "Model": "SOL Breakout",
+            "Identity": "sol_break_03",
+            "PNL": 0.8732,
+            "Last Position Time": None,
+            "Job Status": "none",
+            "Job Description": None,
+            "Latest Symbol": None,
+            "Latest Direction": None,
+            "Latest PNL": None,
+            "Created At": "2026-01-05 18:30 UTC",
+        },
+    ]
+)
+
+
+def fmt_pnl(v):
+    if v is None:
+        return "-"
+    cls = "profit" if v > 0 else "loss" if v < 0 else "flat"
+    sign = "+" if v > 0 else ""
+    arrow = "↗" if v > 0 else "↘" if v < 0 else ""
+    return f"{arrow} {sign}${v:.4f} {{.pnl--{cls}}}".strip()
+
+
+def fmt_status(v):
+    return {
+        "active": "✓ Active {.status--active}",
+        "inactive": "⏸ Inactive {.status--inactive}",
+        "none": "⊘ No Job {.status--muted}",
+    }.get(v, "-")
+
+
+def fmt_latest(row):
+    if not row["Latest Symbol"]:
+        return "-"
+    return f"{row['Latest Symbol']} " f"{row['Latest Direction']} " f"{fmt_pnl(row['Latest PNL'])}"
+
+
+display_df = df.assign(
+    PNL=df["PNL"].map(fmt_pnl),
+    Status=df["Job Status"].map(fmt_status),
+    Latest=df.apply(fmt_latest, axis=1),
+).loc[:, ["Model", "Identity", "PNL", "Status", "Latest", "Created At"]]
