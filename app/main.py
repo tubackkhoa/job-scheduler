@@ -55,10 +55,7 @@ async def lifespan(app: FastAPI):
         useIndexer=settings.use_log_indexer,
     )
 
-    loop = asyncio.get_running_loop()
-    log_handler = JobLogHandler(ws_manager.send_log, loop, log_service=log_service)
-
-    # These will be initialised once an event loop is running (inside lifespan)
+     # These will be initialised once an event loop is running (inside lifespan)
     engine = create_async_engine(
         settings.db_connection,
         echo=False,
@@ -69,6 +66,11 @@ async def lifespan(app: FastAPI):
     )
     dao = DAO(session_factory)
 
+
+    loop = asyncio.get_running_loop()
+    log_handler = JobLogHandler(ws_manager.send_log, loop, log_service=log_service, dao=dao)
+
+   
     adapter = None
     if settings.redis_host:
         # using redis adapter on the fly

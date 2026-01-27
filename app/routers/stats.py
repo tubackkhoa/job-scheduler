@@ -48,10 +48,12 @@ async def list_jobs(
             signals_map = await plugin_manager.dao.get_signals_for_jobs(job_ids, limit_per_job=1)
 
             for job in items:
-                del job["config"]
                 job_signals = signals_map.get(job["id"], [])
                 job["signals"] = job_signals
                 job["last_signal"] = job_signals[0]["captured_at"] if job_signals else None
+                job["model_key"] = job["config"]["model_key"] if "model_key" in job["config"] else None
+                job["sql_id"] = job["config"]["sql_id"] if "sql_id" in job["config"] else None
+
 
         sql_ids = set()
         for job in items:
@@ -61,16 +63,17 @@ async def list_jobs(
                     sql_ids.add(int(config["sql_id"]))
                 except (ValueError, TypeError):
                     pass
+            del job["config"]
 
         if sql_ids:
             versions = await plugin_manager.dao.get_value_versions_by_filters(ids=list(sql_ids))
             versions_map = {v["id"]: v for v in versions}
             for job in items:
                 try:
-                    v = versions_map.get(int((job.get("config") or {}).get("sql_id", 0)))
+                    v = versions_map.get(int((job.get("sql_id") or 0)))
                 except (TypeError, ValueError):
                     continue
-
+                
                 if v:
                     job["sql_version"] = {"id": v["id"], "name": v["name"]}
 
