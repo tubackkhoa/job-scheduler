@@ -3,8 +3,6 @@ from typing import Any, Optional
 from pydantic import BaseModel, create_model
 import yaml
 
-
-from auth import User
 from enforcer import ExecutionContext
 from renderer import Renderer
 
@@ -46,8 +44,8 @@ class TemplatePlugin:
         Model = create_model("Config", **fields)  # type: ignore
         return Model(**(json or {}))
 
-    def run(self, ctx: ExecutionContext, config: BaseModel):
-        rendered = Renderer.render(ctx, self.template_str, config.model_dump(), **self.env())
+    async def run(self, ctx: ExecutionContext, config: BaseModel):
+        rendered = await Renderer.render(ctx, self.template_str, config.model_dump(), **self.env())
         return rendered
 
     def roles(self):

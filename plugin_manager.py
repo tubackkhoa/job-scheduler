@@ -3,7 +3,7 @@ import importlib
 import logging
 import sys
 
-from typing import Any, Callable, Concatenate, Mapping, Optional
+from typing import Any, Awaitable, Callable, Mapping, Optional
 
 import pluggy
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -11,12 +11,12 @@ from apscheduler.util import undefined
 from casbin.enforcer import Enforcer
 from pydantic import BaseModel
 
-from auth import User
+from auth import UserContext
 from enforcer import (
     ADMIN_ROLE,
     ExecutionContext,
 )
-from models import DAO, Plugin
+from models import DAO
 from renderer import Renderer
 
 PROJECT_NAME = "job-scheduler"
@@ -25,6 +25,11 @@ hookspec = pluggy.HookspecMarker(PROJECT_NAME)
 
 scheduler_logger = logging.getLogger(PROJECT_NAME)
 scheduler_logger.addHandler(logging.StreamHandler())
+
+RenderFn = Callable[
+    [str, Mapping[str, Any]],
+    Awaitable[Any],
+]
 
 
 class PluginSpec:
@@ -49,10 +54,7 @@ class PluginSpec:
         ctx: ExecutionContext,
         config: BaseModel,
         logger: logging.Logger,
-        render: Callable[
-            Concatenate[str, dict[str, Any], ...],
-            Any,
-        ],
+        render: RenderFn,
     ) -> Any: ...
 
     @hookspec
@@ -92,6 +94,8 @@ class PluginManager:
     manager = pluggy.PluginManager(PROJECT_NAME)
     manager.add_hookspecs(PluginSpec)
 
+    _failed_plugins: dict[str, Exception] = {}
+
     def __init__(
         self,
         dao: DAO,
@@ -113,30 +117,25 @@ class PluginManager:
         self.log_handler = log_handler
 
     # reload all jobs from database
-    def reload_all_jobs(self):
+    async def reload_all_jobs(self):
         """
         Reload all jobs from the database into the scheduler.
         Useful for initial load or after a restart.
         """
         # Register all plugins from the database
-        ctx = self.create_ctx(User(0, frozenset({ADMIN_ROLE})))
-        all_plugins = self.dao.get_all_plugins(ctx)
-        look_up = {}
-        for plugin in all_plugins:
-            scheduler_logger.info(f"Loading plugin: {plugin.package}")
-            try:
-                self.load_plugin(plugin.package)
-            except Exception as e:
-                logging.error(f"Error loading plugin: {e}", exc_info=True)
-                continue
-            look_up[plugin.id] = plugin
+        self._failed_plugins.clear()
+        ctx = self.create_ctx(UserContext(0, frozenset({ADMIN_ROLE})))
+        # trigger cache load, so that can get user role and job config in memory
+        await self.dao.get_all_plugins(ctx)
+        await self.dao.get_all_users(ctx)
 
-        all_jobs = self.dao.get_all_jobs()
+        all_jobs = await self.dao.get_all_jobs()
         for job in all_jobs:
-            # Populate job config cache so jobs can run after restart
-            if job.config:
-                DAO.job_config_cache[job.id] = job.config
-            self.add_job_instance(job.id, job.active, look_up[job.plugin_id])
+            if not job.plugin_id in self.dao.plugin_cache:
+                continue
+            interval, package, _ = self.dao.plugin_cache[job.plugin_id]
+            # Plugin will be lazy load so that can reload and fix
+            self.add_job_instance(job.id, job.active, interval, package)
 
     def start(self):
         self.scheduler.start()
@@ -192,10 +191,31 @@ class PluginManager:
 
     @classmethod
     def get_plugin_instance(cls, package: str) -> Optional[PluginSpec]:
+        if not cls.manager.has_plugin(package):
+            scheduler_logger.info(f"Loading plugin: {package}")
+            try:
+                cls.load_plugin(package)
+            except Exception as e:
+                logging.error(f"Error loading plugin: {e}", exc_info=True)
+                return None
+
         return cls.manager.get_plugin(package)
 
+    @staticmethod
+    def make_render(plugin: PluginSpec, ctx: ExecutionContext) -> RenderFn:
+        env = plugin.env()  # ← hook point
+
+        async def render(
+            template: str,
+            payload: Mapping[str, Any],
+            **kwargs: Any,
+        ):
+            return await Renderer.render(ctx, template, payload, **env, **kwargs)
+
+        return render
+
     @classmethod
-    def run_plugin_job(cls, package: str, job_id: int, user: User):
+    def run_plugin_job(cls, package: str, job_id: int, user: UserContext):
         """
         Wrapper to run a plugin's 'run' method asynchronously,
         fetching config from the active job for the user/plugin.
@@ -205,11 +225,8 @@ class PluginManager:
         if plugin is None:
             return None
 
+        # only job is active can run
         job_config = DAO.job_config_cache.get(job_id)
-
-        if job_config is None:
-            # No active job means no config to run this plugin instance for this user
-            return None
 
         # user from login
         ctx = cls.create_ctx(user, package)
@@ -227,14 +244,7 @@ class PluginManager:
             logger.setLevel(logging.INFO)
 
         try:
-
-            def render_function(
-                template: str,
-                payload: Mapping[str, Any],
-                **kwargs: Any,
-            ) -> Any:
-                return Renderer.render(ctx, template, payload, **plugin.env(), **kwargs)
-
+            render_function = cls.make_render(plugin, ctx)
             retval = asyncio.run(plugin.run(ctx, config, logger, render_function))
             # logger.info(f"Job executed successfully (return value: {retval})")
             return retval
@@ -243,12 +253,14 @@ class PluginManager:
 
     @classmethod
     def unload_plugin(cls, package: str):
+        cls._failed_plugins.pop(package, None)
+
         existing_plugin = cls.manager.get_plugin(package)
         if existing_plugin:
             cls.manager.unregister(existing_plugin, package)
 
     @classmethod
-    def create_ctx(cls, user: User, package: Optional[str] = None):
+    def create_ctx(cls, user: UserContext, package: Optional[str] = None):
         return ExecutionContext(user, package, cls.enforcer.enforce if cls.enforcer else None)
 
     @classmethod
@@ -260,44 +272,53 @@ class PluginManager:
             cls.unload_plugin(package)
             cls.reload_module(module_path)
 
+        # 🚫 Fast-fail if previously broken, when override it will reset fail plugin
+        elif package in cls._failed_plugins:
+            raise cls._failed_plugins[package]
+
         plugin: PluginSpec | None = cls.manager.get_plugin(package)
-        if plugin is None:
-            try:
-                module = importlib.import_module(module_path)
-                plugin = getattr(module, class_name)
-                assert plugin
-                cls.manager.register(plugin, package)
-            except Exception as e:
-                # show error to terminal to check but keep running
-                scheduler_logger.error(e, exc_info=True)
-                # Raise exception to prevent saving invalid plugin to database
-                raise RuntimeError(f"Failed to load plugin '{package}': {str(e)}") from e
+        if plugin is not None:
+            return plugin
 
-        cls.register_plugin_permissions(package, plugin)
-        return plugin
+        try:
+            module = importlib.import_module(module_path)
+            plugin = getattr(module, class_name)
+            assert plugin
+            cls.manager.register(plugin, package)
+            cls.register_plugin_permissions(package, plugin)
+            return plugin
 
-    def add_plugin(self, package: str, interval: int, description: Optional[str] = None) -> int:
+        except Exception as e:
+            err = RuntimeError(f"Failed to load plugin '{package}': {e}")
+            cls._failed_plugins[package] = err
+            # show error to terminal to check but keep running
+            scheduler_logger.error(err, exc_info=True)
+            # Raise exception to prevent saving invalid plugin to database
+            raise err
+
+    async def add_plugin(
+        self, package: str, interval: int, description: Optional[str] = None
+    ) -> int:
         # load plugin override module to make sure new code if sharing the same module
         self.load_plugin(package, True)
         # Insert into DB
-        return self.dao.add_plugin(package, interval, description)
+        return await self.dao.add_plugin(package, interval, description)
 
-    def add_job(
+    async def add_job(
         self,
         session_id: int,
         plugin_id: int,
         config: dict[str, Any],
         description: Optional[str] = None,
     ):
-        # Get plugin to check for validation
-        plugin_model = self.dao.get_plugin(plugin_id)
-        assert plugin_model is not None
+        # Get plugin to check for validation, will call assert internal
+        interval, package, _ = self.dao.plugin_cache[plugin_id]
 
         # Proceed with saving job
-        job_id = self.dao.add_job(session_id, plugin_id, config, description)
-        self.add_job_instance(job_id, False, plugin_model)
+        job_id = await self.dao.add_job(session_id, plugin_id, config, description)
+        self.add_job_instance(job_id, False, interval, package)
 
-    def add_job_instance(self, job_id: int, active: bool, plugin: Plugin):
+    def add_job_instance(self, job_id: int, active: bool, interval: int, package: str):
 
         job_scheduler_id = self.get_job_scheduler_id(job_id)
         if self.scheduler.get_job(job_scheduler_id) is not None:
@@ -321,9 +342,9 @@ class PluginManager:
         self.scheduler.add_job(
             self.run_plugin_job,
             "interval",
-            seconds=plugin.interval,
+            seconds=interval,
             # TODO: get user_id, and roles from database, the user of course owning the job
-            args=[plugin.package, job_id, User(0, frozenset({ADMIN_ROLE}))],
+            args=[package, job_id, UserContext(0, frozenset({ADMIN_ROLE}))],
             next_run_time=undefined if active else None,
             id=job_scheduler_id,
             name=job_scheduler_id,
@@ -332,8 +353,8 @@ class PluginManager:
             replace_existing=True,
         )
 
-    def remove_job(self, job_id: int):
-        self.dao.remove_job(job_id)
+    async def remove_job(self, job_id: int):
+        await self.dao.remove_job(job_id)
         # Remove the specific job from scheduler
         job_scheduler_id = self.get_job_scheduler_id(job_id)
         if self.scheduler.get_job(job_scheduler_id) is not None:
@@ -353,30 +374,30 @@ class PluginManager:
             if self.scheduler.get_job(job_scheduler_id) is not None:
                 self.scheduler.remove_job(job_scheduler_id)
 
-    def activate_job(self, job_id: int):
-        if not self.dao.activate_job(job_id):
+    async def activate_job(self, job_id: int):
+        if not await self.dao.activate_job(job_id):
             return
 
         # Resume the job
         job_scheduler_id = self.get_job_scheduler_id(job_id)
         self.scheduler.resume_job(job_scheduler_id)
 
-    def deactivate_job(self, job_id: int):
-        if not self.dao.deactivate_job(job_id):
+    async def deactivate_job(self, job_id: int):
+        if not await self.dao.deactivate_job(job_id):
             return
 
         # Pause the job
         job_scheduler_id = self.get_job_scheduler_id(job_id)
         self.scheduler.pause_job(job_scheduler_id)
 
-    def delete_plugin(self, plugin_id: int):
+    async def delete_plugin(self, plugin_id: int):
         """
         Delete a plugin from the database and unload it from memory.
         Also removes all associated jobs.
         """
 
         # Get all jobs for this plugin
-        package, deleted_job_ids = self.dao.delete_plugin(plugin_id)
+        package, deleted_job_ids = await self.dao.delete_plugin(plugin_id)
 
         # Remove all jobs from scheduler and delete them
         for job_id in deleted_job_ids:

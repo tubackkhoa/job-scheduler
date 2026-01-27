@@ -1,9 +1,10 @@
-from typing import Any, Dict, Optional, TypedDict
+from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field, PositiveInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from dotenv import load_dotenv
 
-from auth import User
-from models import Job
+load_dotenv()
+import os
 
 
 class ConfigPayload(BaseModel):
@@ -15,6 +16,11 @@ class ConfigPayload(BaseModel):
     class Config:
         validate_by_name = True
         extra = "forbid"
+
+
+class TemplateCodePayload(BaseModel):
+    script: str
+    form: str
 
 
 class DownloadPayload(BaseModel):
@@ -71,3 +77,11 @@ class Settings(BaseSettings):
     redis_host: Optional[str] = None
     redis_port: Optional[int] = 0
     redis_db: Optional[int] = 0
+
+    secret_key: str = ""
+    admin_password: str = ""
+
+    jinja_cache_path: str = "cache/jinja"
+
+
+settings = Settings()

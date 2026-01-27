@@ -1,7 +1,7 @@
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 import importlib
-from auth import User
+from auth import UserContext
 from enforcer import ADMIN_ROLE
 from models import Base, Job, Plugin
 from plugin_manager import PluginSpec
@@ -34,7 +34,7 @@ def create_data(engine: Engine, session_ids: list[int] = [1, 2], plugin_data=PLU
                 module_path, class_name = plugin_item["package"].rsplit(".", 1)
                 module = importlib.import_module(module_path)
                 plugin_class: PluginSpec = getattr(module, class_name)
-                ctx = PluginManager.create_ctx(User(0, frozenset({ADMIN_ROLE})))
+                ctx = PluginManager.create_ctx(UserContext(0, frozenset({ADMIN_ROLE})))
                 default_config = plugin_class.config(ctx)  # Get default Pydantic model
                 job = Job(
                     session_id=session_id,

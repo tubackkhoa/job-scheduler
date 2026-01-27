@@ -2,8 +2,7 @@ import logging
 from pathlib import Path
 import pluggy
 from pydantic import BaseModel, Field
-from typing import Any, Callable, List, Optional, ParamSpec
-from datetime import datetime
+from typing import Any, Awaitable, Callable, List, Optional, ParamSpec
 from enforcer import ExecutionContext, job_permission
 from plugins import ui_schema
 from plugins.schema import SecureBaseModel, SecureField
@@ -38,7 +37,7 @@ class DynamicCode(BaseModel):
         json_schema_extra=ui_schema(
             {
                 "ui:field": "Dynamic",
-                "code": Path(__file__).with_name("compile_plugin.js").read_text(),
+                "url": Path(__file__).with_name("compile_plugin.js").read_text(),
                 # "url": "CompilePluginComponent.tsx",
                 "ui:options": {
                     "size": 6,
@@ -149,7 +148,7 @@ class MyClass:
 
 
 @job_permission("fetch_data")
-def fetch_data(ctx: ExecutionContext):
+async def fetch_data(ctx: ExecutionContext):
     return ctx.user
 
 
@@ -159,7 +158,6 @@ P = ParamSpec("P")
 class Plugin:
 
     _env = {
-        "datetime": datetime,
         "fetch_data": fetch_data,
         "MyClass": MyClass,
         "get_users": lambda: ["tupt", "cuongnv"],
@@ -207,14 +205,12 @@ class Plugin:
         ctx: ExecutionContext,
         config: Config,
         logger: logging.Logger,
-        render: Callable[..., Any],
+        render: Callable[..., Awaitable[Any]],
     ):
-        version = render(
-            ctx,
+
+        version = await render(
             "{{ dao.get_value_version(id).value }}",
-            config.model_dump(),
-            **cls._env,
-            id=config.sql_id,
+            {"id": config.sql_id},
         )
 
         print(version)

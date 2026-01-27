@@ -6,20 +6,25 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
-    Engine,
     Integer,
     Sequence,
     String,
     Text,
+    delete,
     select,
     text,
     cast,
-    func
+    func,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+)
+
 from sqlalchemy.dialects.postgresql import JSONB
 
-from enforcer import ExecutionContext, global_permission
+from enforcer import ADMIN_ROLE, ExecutionContext, global_permission
 
 
 class Base(DeclarativeBase):
@@ -61,11 +66,12 @@ class Job(Base):
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
 
     def to_dict(self):
+        import json
         return {
             "id": self.id,
             "session_id": self.session_id,
             "plugin_id": self.plugin_id,
-            "config": self.config,
+            "config": json.loads(self.config) if isinstance(self.config, str) else self.config,
             "description": self.description,
             "active": self.active,
         }
@@ -97,15 +103,49 @@ class ValueVersion(Base):
         }
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+
+    username: Mapped[str] = mapped_column(
+        String(150),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    password: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    # Embedded small role list
+    roles: Mapped[List[str]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "roles": self.roles,
+            "username": self.username,
+        }
+
+
 class SignalMessage(Base):
     __tablename__ = "signal_messages"
-    
+
     id: Mapped[int] = mapped_column(Integer, Sequence("signal_messages_id_seq"), primary_key=True)
     job_id: Mapped[int] = mapped_column(Integer, nullable=False)
     model_key: Mapped[str | None] = mapped_column(Text)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
-    captured_at: Mapped[datetime] = mapped_column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
+    captured_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=text("CURRENT_TIMESTAMP")
+    )
 
     def to_dict(self):
         return {
@@ -119,39 +159,79 @@ class SignalMessage(Base):
 
 
 class DAO:
-    job_config_cache: Dict[int, Dict[str, Any]] = {}
+    plugin_cache: Dict[int, tuple[int, str, Optional[str]]] = {}
+    job_config_cache: Dict[int, Dict[str, Any] | None] = {}
+    user_cache: Dict[int, tuple[list[str], str]] = {}
 
-    def __init__(self, db_engine: Engine):
-        self.db_engine = db_engine
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
+        self.session_factory = session_factory
 
-    def add_plugin(self, package: str, interval: int, description: Optional[str] = None):
-        # Insert into DB
-        with Session(self.db_engine) as session:
-            plugin_row = Plugin(
+    # ---------- plugins ----------
+
+    async def add_plugin(
+        self, package: str, interval: int, description: Optional[str] = None
+    ) -> int:
+        async with self.session_factory() as session:
+            plugin = Plugin(
                 package=package,
                 interval=interval,
                 description=description,
             )
+            session.add(plugin)
+            await session.flush()
+            await session.commit()
+            # add cache for plugin
+            self.plugin_cache[plugin.id] = (interval, package, description)
+            return plugin.id
 
-            session.add(plugin_row)
-            session.flush()  # get ID
-            plugin_id = plugin_row.id
-            session.commit()
-            return plugin_id
+    async def get_plugin(self, plugin_id: int) -> Optional[Plugin]:
+        async with self.session_factory() as session:
+            return await session.get(Plugin, plugin_id)
 
-    def get_plugin(self, plugin_id: int) -> Optional[Plugin]:
-        with Session(self.db_engine) as session:
-            plugin = session.get(Plugin, plugin_id)
-            return plugin
+    async def delete_plugin(self, plugin_id: int) -> tuple[str, list[int]]:
 
-    def add_job(
+        async with self.session_factory() as session:
+            plugin = await session.get(Plugin, plugin_id)
+            if not plugin:
+                raise ValueError(f"Plugin with id {plugin_id} not found")
+
+            package = plugin.package
+            dialect = session.get_bind().dialect.name
+            # optimizing for postgresql
+            if dialect == "postgresql":
+                # Single roundtrip, authoritative
+                result = await session.execute(
+                    delete(Job).where(Job.plugin_id == plugin_id).returning(Job.id)
+                )
+                job_ids = result.scalars().all()
+            else:
+                # Portable fallback
+                result = await session.execute(select(Job.id).where(Job.plugin_id == plugin_id))
+                job_ids = result.scalars().all()
+
+                await session.execute(delete(Job).where(Job.plugin_id == plugin_id))
+
+            await session.delete(plugin)
+            await session.commit()
+
+        # cache updates AFTER commit
+        for job_id in job_ids:
+            self.job_config_cache.pop(job_id, None)
+
+        self.plugin_cache.pop(plugin_id, None)
+
+        return package, list(job_ids)
+
+    # ---------- jobs ----------
+
+    async def add_job(
         self,
         session_id: int,
         plugin_id: int,
         config: Dict[str, Any],
         description: Optional[str] = None,
-    ):
-        with Session(self.db_engine) as session:
+    ) -> int:
+        async with self.session_factory() as session:
             job = Job(
                 session_id=session_id,
                 plugin_id=plugin_id,
@@ -160,165 +240,197 @@ class DAO:
                 description=description,
             )
             session.add(job)
-            session.commit()
+            await session.commit()
+            return job.id
 
-            job_id = job.id
-
-        # update cache
-        DAO.job_config_cache[job.id] = config
-        return job_id
-
-    def update_job(self, id: int, config: Dict[str, Any], description: Optional[str] = None):
-        with Session(self.db_engine) as session:
-            job = session.get(Job, id)
-            if job:
-                job.config = config
-                if description:
-                    job.description = description
-                self.job_config_cache[job.id] = config
-                session.commit()
-
-    def remove_job(self, job_id: int):
-        with Session(self.db_engine) as session:
-            job = session.get(Job, job_id)
+    async def update_job(
+        self, job_id: int, config: Dict[str, Any], description: Optional[str] = None
+    ):
+        async with self.session_factory() as session:
+            job = await session.get(Job, job_id)
             if not job:
                 return
-            session.delete(job)
-            session.commit()
-            DAO.job_config_cache.pop(job_id, None)
 
-    def activate_job(self, job_id: int):
-        with Session(self.db_engine) as session:
-            job = session.get(Job, job_id)
+            job.config = config
+            if description:
+                job.description = description
+            await session.commit()
+
+            if job.active:
+                self.job_config_cache[job.id] = config
+
+    async def remove_job(self, job_id: int):
+        async with self.session_factory() as session:
+            job = await session.get(Job, job_id)
+            if not job:
+                return
+
+            await session.delete(job)
+            await session.commit()
+
+        self.job_config_cache.pop(job_id, None)
+
+    async def activate_job(self, job_id: int):
+        async with self.session_factory() as session:
+            job = await session.get(Job, job_id)
             if not job:
                 return None
-
+            self.job_config_cache[job.id] = job.config
             job.active = True
-            session.commit()
+            await session.commit()
             return job
 
-    def deactivate_job(self, job_id: int):
-        with Session(self.db_engine) as session:
-            job = session.get(Job, job_id)
+    async def deactivate_job(self, job_id: int):
+        async with self.session_factory() as session:
+            job = await session.get(Job, job_id)
             if not job:
                 return None
-
+            self.job_config_cache.pop(job_id, None)
             job.active = False
-            session.commit()
+            await session.commit()
             return job
 
-    @global_permission("job")
-    def get_jobs_by_plugin_and_session(
-        self, ctx: ExecutionContext, plugin_id: int, session_id: Optional[int] = None
-    ):
-        with Session(self.db_engine) as session:
-            query = session.query(Job).filter(Job.plugin_id == plugin_id)
-            if session_id is not None:
-                query = query.filter(Job.session_id == session_id)
-            return query.all()
-    
+    async def get_job(self, job_id: int):
+        async with self.session_factory() as session:
+            return await session.get(Job, job_id)
 
-    def get_job(self, id: int):
-        with Session(self.db_engine) as session:
-            return session.get(Job, id)
-
-    @global_permission("job")
-    def get_all_plugins(self, ctx: ExecutionContext):
-        with Session(self.db_engine) as session:
-            plugins = session.query(Plugin).all()
-            return plugins
-
-    def get_all_jobs(self):
-        with Session(self.db_engine) as session:
-            jobs = session.query(Job).all()
+    async def get_all_jobs(self):
+        async with self.session_factory() as session:
+            result = await session.execute(select(Job))
+            jobs = result.scalars().all()
+            # cache active job config
+            for job in jobs:
+                if job.active:
+                    self.job_config_cache[job.id] = job.config
             return jobs
 
-    def get_jobs_by_model_keys(self, model_keys: List[str]) -> List[Job]:
-        """Get jobs that have model_key matching any of the provided keys.
+    async def get_all_jobs_by_plugin(self, plugin_id: int):
+        async with self.session_factory() as session:
+            result = await session.execute(select(Job).where(Job.plugin_id == plugin_id))
+            return result.scalars().all()
+    
+    @global_permission("system")
+    async def get_jobs_by_filters(self, ctx: ExecutionContext, filters: Dict[str, Any]):
+        async with self.session_factory() as session:
+            conditions = []
+            if filters.get("search_text") is not None:
+                conditions.append(cast(Job.config, JSONB)["model_key"].astext.ilike(f"%{filters['search_text']}%") | Job.description.ilike(f"%{filters['search_text']}%"))
+            if filters.get("active") is not None:
+                conditions.append(Job.active == filters["active"])
+            if filters.get("plugin_id") is not None:
+                conditions.append(Job.plugin_id.in_([int(x) for x in filters["plugin_id"]]))
+            if filters.get("model_key") is not None:
+                conditions.append(cast(Job.config, JSONB)["model_key"].astext.in_(filters["model_key"]))
+            if filters.get("sql_id") is not None:
+                conditions.append(cast(Job.config, JSONB)["sql_id"].astext.in_([str(x) for x in filters["sql_id"]]))
+            if filters.get("session_id") is not None:
+                conditions.append(Job.session_id.in_([int(x) for x in filters["session_id"]]))
 
-        This uses PostgreSQL JSON operators for efficient filtering at database level.
-        Falls back to Python filtering if the query fails (for non-PostgreSQL databases).
+            # Count query
+            count_stmt = select(func.count()).select_from(Job)
+            if conditions:
+                count_stmt = count_stmt.where(*conditions)
+            total = (await session.execute(count_stmt)).scalar() or 0
 
-        Args:
-            model_keys: List of model_key values to filter by
+            # Data query
+            stmt = select(Job)
+            if conditions:
+                stmt = stmt.where(*conditions)
+            
+            if filters.get("order_by") is not None: 
+                if filters.get("sort") == "desc":
+                    stmt = stmt.order_by(getattr(Job, filters["order_by"]).desc())
+                else:
+                    stmt = stmt.order_by(getattr(Job, filters["order_by"]))
+            if filters.get("limit") is not None:
+                stmt = stmt.limit(filters["limit"])
+            if filters.get("offset") is not None:
+                stmt = stmt.offset(filters["offset"])
+                
+            result = await session.execute(stmt)
+            return {
+                "items": result.scalars().all(),
+                "total": total
+            }
 
-        Returns:
-            List of Job objects with matching model_key in config
-        """
+    # ---------- permissions ----------
+
+    @global_permission("job")
+    async def get_jobs_by_plugin_and_session(
+        self,
+        ctx: ExecutionContext,
+        plugin_id: int,
+        session_id: Optional[int] = None,
+    ) -> list[Job]:
+        async with self.session_factory() as session:
+            stmt = select(Job).where(Job.plugin_id == plugin_id)
+            if session_id is not None:
+                stmt = stmt.where(Job.session_id == session_id)
+
+            result = await session.execute(stmt)
+            return list(result.scalars().all())
+
+    @global_permission("job")
+    async def get_all_plugins(self, ctx: ExecutionContext):
+        async with self.session_factory() as session:
+            result = await session.execute(select(Plugin))
+            plugins = result.scalars().all()
+            # cache plugin info
+            for plugin in plugins:
+                self.plugin_cache[plugin.id] = (plugin.interval, plugin.package, plugin.description)
+
+            return plugins
+
+    # ---------- JSON / raw SQL ----------
+
+    async def get_jobs_by_model_keys(self, model_keys: List[str]) -> List[dict]:
         if not model_keys:
             return []
 
-        with Session(self.db_engine) as session:
-            try:
-                # Try PostgreSQL JSON operator approach
-                # config::jsonb->>'model_key' extracts the model_key field from JSON
-                result = session.execute(
-                    text(
-                        """
-                        SELECT * FROM jobs 
-                        WHERE (config::jsonb->>'model_key') = ANY(:model_keys)
-                    """
-                    ),
-                    {"model_keys": model_keys},
-                )
+        async with self.session_factory() as session:
+            dialect = session.get_bind().dialect.name
 
-                # Convert result to Job objects
-                jobs = []
-                for row in result:
-                    job = Job(
-                        id=row.id,
-                        session_id=row.session_id,
-                        plugin_id=row.plugin_id,
-                        description=row.description,
-                        config=row.config,
-                        active=row.active,
-                    )
-                    jobs.append(job)
+            if dialect == "postgresql":
+                condition = cast(Job.config, JSONB)["model_key"].astext.in_(model_keys)
+            else:  # sqlite
+                condition = func.json_extract(Job.config, "$.model_key").in_(model_keys)
 
-                return jobs
-
-            except Exception:
-                # Fallback to Python filtering if PostgreSQL JSON operators don't work
-                all_jobs = session.query(Job).all()
-                matching_jobs = []
-
-                for job in all_jobs:
-                    try:
-                        if job.config and job.config.get("model_key") in model_keys:
-                            matching_jobs.append(job)
-                    except:
-                        continue
-
-                return matching_jobs
-
-    def get_all_jobs_by_plugin(self, plugin_id: int):
-        with Session(self.db_engine) as session:
-            jobs = session.query(Job).filter(Job.plugin_id == plugin_id).all()
-            return jobs
+            stmt = select(Job).where(condition)
+            result = await session.execute(stmt)
+            jobs = result.scalars().all()
+            return [job.to_dict() for job in jobs]
 
     @global_permission("field")
-    def create_value_version(self, ctx: ExecutionContext, payload: dict) -> dict:
-        assert "field_id" in payload, "field_id is required"
+    async def create_value_version(
+        self,
+        ctx: ExecutionContext,
+        payload: dict,
+    ) -> dict:
+        if "field_id" not in payload:
+            raise ValueError("field_id is required")
 
-        with Session(self.db_engine) as session:
+        async with self.session_factory() as session:
             value_version = ValueVersion(**payload)
             session.add(value_version)
-            session.commit()
-            session.refresh(value_version)
+            await session.commit()
+            await session.refresh(value_version)
             return value_version.to_dict()
 
-    # ---------- read ----------
     @global_permission("field")
-    def get_value_version(self, ctx: ExecutionContext, version_id: int) -> dict:
-        with Session(self.db_engine) as session:
-            version = session.get(ValueVersion, version_id)
+    async def get_value_version(
+        self,
+        ctx: ExecutionContext,
+        version_id: int,
+    ) -> dict:
+        async with self.session_factory() as session:
+            version = await session.get(ValueVersion, version_id)
             if not version:
                 raise Exception(f"SQL version {version_id} not found")
 
             return version.to_dict()
 
-    def get_latest(self, field_id: str) -> dict:
-        with Session(self.db_engine) as session:
+    async def get_latest(self, field_id: str) -> dict:
+        async with self.session_factory() as session:
             stmt = (
                 select(ValueVersion)
                 .where(ValueVersion.field_id == field_id)
@@ -326,14 +438,16 @@ class DAO:
                 .limit(1)
             )
 
-            version = session.execute(stmt).scalar_one_or_none()
+            result = await session.execute(stmt)
+            version = result.scalar_one_or_none()
+
             if not version:
                 raise Exception(f"No SQL version found for field_id: {field_id}")
 
             return version.to_dict()
 
     @global_permission("field")
-    def get_value_versions(
+    async def get_value_versions(
         self,
         ctx: ExecutionContext,
         field_id: str,
@@ -346,10 +460,14 @@ class DAO:
             _, field_name = field_id.rsplit(".", 1)
         except ValueError:
             raise ValueError('field_id must be in format "{plugin_id}.{field_name}"')
-        with Session(self.db_engine) as session:
-            stmt = select(ValueVersion).where(
-                func.split_part(ValueVersion.field_id, ".", 2) == field_name
-            )
+        async with self.session_factory() as session:
+            dialect = session.get_bind().dialect.name
+            if dialect == "postgresql":
+                field_expr = func.split_part(ValueVersion.field_id, ".", 2)
+            elif dialect == "sqlite":
+                field_expr = func.substr(ValueVersion.field_id, func.instr(ValueVersion.field_id, ".") + 1)
+            
+            stmt = select(ValueVersion).where(field_expr == field_name)
             if search:
                 stmt = stmt.where(ValueVersion.name.ilike(f"%{search}%"))
 
@@ -358,8 +476,9 @@ class DAO:
 
             stmt = stmt.order_by(ValueVersion.created_at.desc()).limit(limit).offset(offset)
 
-            versions = session.execute(stmt).scalars().all()
-
+            result = await session.execute(stmt)
+            versions = result.scalars().all()
+            
             return {
                 "versions": [v.to_dict() for v in versions],
                 "count": len(versions),
@@ -368,11 +487,28 @@ class DAO:
                 "offset": offset,
             }
 
-    # ---------- update ----------
+    async def get_value_versions_by_filters(
+        self,
+        ids: Optional[List[int]] = None,
+    ) -> List[dict]:
+        async with self.session_factory() as session:
+            stmt = select(ValueVersion)
+            if ids:
+                stmt = stmt.where(ValueVersion.id.in_(ids))
+            
+            result = await session.execute(stmt)
+            versions = result.scalars().all()
+            return [v.to_dict() for v in versions]
+
     @global_permission("field")
-    def update_value_version(self, ctx: ExecutionContext, version_id: int, payload: dict) -> dict:
-        with Session(self.db_engine) as session:
-            version = session.get(ValueVersion, version_id)
+    async def update_value_version(
+        self,
+        ctx: ExecutionContext,
+        version_id: int,
+        payload: dict,
+    ) -> dict:
+        async with self.session_factory() as session:
+            version = await session.get(ValueVersion, version_id)
             if not version:
                 raise Exception(f"SQL version {version_id} not found")
 
@@ -380,25 +516,70 @@ class DAO:
                 setattr(version, field, value)
 
             version.updated_at = datetime.now()
-            session.commit()
-            session.refresh(version)
+            await session.commit()
+            await session.refresh(version)
 
             return version.to_dict()
 
+    @global_permission("system")
+    async def get_all_users(
+        self,
+        ctx: ExecutionContext,
+    ):
+        async with self.session_factory() as session:
+            result = await session.execute(select(User.id, User.username, User.roles))
+            users = result.mappings().all()
+            for user in users:
+                self.user_cache[user.id] = (user.roles, user.username)
+            return users
+
+    @global_permission("system")
+    async def update_user_roles(
+        self,
+        ctx: ExecutionContext,
+        user_id: int,
+        roles: list[str],
+    ) -> dict:
+
+        if not roles:
+            raise ValueError("User must have at least one role")
+
+        async with self.session_factory() as session:
+            # fetch user
+            user = await session.get(User, user_id, with_for_update=True)
+            if not user:
+                raise ValueError("User not found")
+
+            # prevent removing last admin
+            if ADMIN_ROLE in user.roles:
+                raise PermissionError("Cannot change the admin roles")
+
+            # update roles only
+            user.roles = roles
+            # also update roles
+            self.user_cache[user_id] = (roles, user.username)
+
+            await session.commit()
+            await session.refresh(user)
+
+            return user.to_dict()
+
     # ---------- dependency checking ----------
 
-    def get_jobs_depending_on_field(
+    async def get_jobs_depending_on_field(
         self,
         field_id: str,
         version_id: Optional[int] = None,
     ) -> List[dict]:
-    # field_id = "{plugin_id}.{field_name}" but we only need field_name
+        # field_id = "{plugin_id}.{field_name}" but we only need field_name
         parts = field_id.split(".", 1)
         if len(parts) != 2:
-            raise ValueError(f"Invalid field_id format: {field_id}, expected 'plugin_id.field_name'")
+            raise ValueError(
+                f"Invalid field_id format: {field_id}, expected 'plugin_id.field_name'"
+            )
         field_name = parts[1]
         try:
-            with Session(self.db_engine) as session:
+            async with self.session_factory() as session:
                 cfg = cast(Job.config, JSONB)
                 stmt = select(Job).where(Job.config.isnot(None))
 
@@ -409,12 +590,15 @@ class DAO:
                     cfg_text = cfg.op("->>")(field_name)
                     stmt = stmt.where(cast(cfg_text, Integer) == version_id)
 
-                jobs = session.execute(stmt).scalars().all()
+                result = await session.execute(stmt)
+                jobs = result.scalars().all()
                 return [
                     {
                         "job_id": j.id,
                         "description": j.description or "No description",
-                        "config_value": (j.config or {}).get(field_name) if isinstance(j.config, dict) else None,
+                        "config_value": (
+                            (j.config or {}).get(field_name) if isinstance(j.config, dict) else None
+                        ),
                         "session_id": j.session_id,
                         "plugin_id": j.plugin_id,
                     }
@@ -424,16 +608,16 @@ class DAO:
             print(e)
             return []
 
-    def get_jobs_depending_on_version(self, version_id: int) -> List[dict]:
-        with Session(self.db_engine) as session:
-            version = session.get(ValueVersion, version_id)
+    async def get_jobs_depending_on_version(self, version_id: int) -> List[dict]:
+        async with self.session_factory() as session:
+            version = await session.get(ValueVersion, version_id)
             if not version:
                 raise Exception(f"ValueVersion {version_id} not found")
 
             field_id = version.field_id
 
         # Use the helper method to find dependent jobs
-        dependent_jobs = self.get_jobs_depending_on_field(field_id, version_id)
+        dependent_jobs = await self.get_jobs_depending_on_field(field_id, version_id)
         for job in dependent_jobs:
             job["field_id"] = field_id
             job["field_name"] = field_id.split(".", 1)[1]
@@ -441,40 +625,36 @@ class DAO:
 
     # ---------- delete ----------
 
-    def delete_value_version(self, version_id: int) -> dict:
-        dependent_jobs = self.get_jobs_depending_on_version(version_id)
+    async def delete_value_version(self, version_id: int) -> dict:
+        dependent_jobs = await self.get_jobs_depending_on_version(version_id)
 
         updated_job_count = 0
         if dependent_jobs:
             field_name = dependent_jobs[0]["field_name"]
 
-            with Session(self.db_engine) as session:
+            async with self.session_factory() as session:
                 for job_info in dependent_jobs:
-                    job = session.get(Job, job_info["job_id"])
+                    job = await session.get(Job, job_info["job_id"])
                     if not job:
                         continue
 
-                    # Handle both JSON string and dict
-                    import json
-                    if isinstance(job.config, str):
-                        config = json.loads(job.config)
-                    else:
-                        config = job.config or {}
-                    
+                    config = job.config or {}
+
                     config[field_name] = 0
                     job.config = config
-                    self.job_config_cache[job.id] = config
+                    if job.active:
+                        self.job_config_cache[job.id] = config
                     updated_job_count += 1
 
-                session.commit()
+                await session.commit()
 
-        with Session(self.db_engine) as session:
-            version = session.get(ValueVersion, version_id)
+        async with self.session_factory() as session:
+            version = await session.get(ValueVersion, version_id)
             if not version:
                 raise Exception(f"SQL version {version_id} not found")
 
-            session.delete(version)
-            session.commit()
+            await session.delete(version)
+            await session.commit()
 
             return {
                 "success": True,
@@ -483,11 +663,11 @@ class DAO:
             }
 
     @global_permission("job")
-    def apply_value_version_all_jobs(
+    async def apply_value_version_all_jobs(
         self, ctx: ExecutionContext, version_id: int, job_ids: List[int]
     ):
-        with Session(self.db_engine) as session:
-            version = session.get(ValueVersion, version_id)
+        async with self.session_factory() as session:
+            version = await session.get(ValueVersion, version_id)
             if not version:
                 raise Exception(f"ValueVersion {version_id} not found")
 
@@ -502,24 +682,19 @@ class DAO:
 
             updated_count = 0
 
-            for job_id in job_ids:
-                job = session.get(Job, job_id)
-                if not job or not job.config:
-                    continue
-                
-                # Handle both JSON string and dict
-                import json
-                if isinstance(job.config, str):
-                    config = json.loads(job.config)
-                else:
-                    config = job.config
-                
+            result = await session.execute(select(Job).where(Job.id.in_(job_ids)))
+            jobs = result.scalars().all()
+
+            for job in jobs:
+                config = job.config or {}
                 config[field_name] = int(version_id)
                 job.config = config
-                self.job_config_cache[job.id] = config
+                if job.active:
+                    self.job_config_cache[job.id] = config
                 updated_count += 1
-            
-            session.commit()
+
+            await session.commit()
+
             return {
                 "success": True,
                 "updated_jobs": updated_count,
@@ -528,45 +703,18 @@ class DAO:
                 "version_id": version_id,
             }
 
-    def delete_plugin(self, plugin_id: int) -> tuple[str, list[int]]:
-        deleted_job_ids = []
-        with Session(self.db_engine) as session:
-            # Load plugin in THIS session
-            plugin = session.get(Plugin, plugin_id)
-            if not plugin:
-                raise ValueError(f"Plugin with id {plugin_id} not found")
-            # 🔹 Capture before session closes
-            package = plugin.package
-            jobs = session.query(Job).filter(Job.plugin_id == plugin_id).all()
-            # Remove all jobs from scheduler and delete them
-            for job in jobs:
-                deleted_job_ids.append(job.id)
-                session.delete(job)
-
-            # Delete plugin from database
-            session.delete(plugin)
-            session.commit()
-
-        # 🔹 Post-commit side effects
-        for job_id in deleted_job_ids:
-            self.job_config_cache.pop(job_id, None)
-
-        return package, deleted_job_ids
-
-    def save_signal_message(
+    async def save_signal_message(
         self,
         job_id: int,
         message: str,
         created_at: datetime,
     ) -> int:
-        with Session(self.db_engine) as session:
-            job = session.get(Job, job_id)
+        async with self.session_factory() as session:
+            job = await session.get(Job, job_id)
             if not job:
                 raise ValueError(f"Job with id {job_id} not found")
-            if isinstance(job.config, str):
-                import json
-                job.config = json.loads(job.config)
-            model_key = job.config.get("model_key", None)
+
+            model_key = job.config.get("model_key", None) if job.config else None
             signal = SignalMessage(
                 job_id=job_id,
                 message=message,
@@ -575,36 +723,101 @@ class DAO:
                 created_at=created_at,
             )
             session.add(signal)
-            session.commit()
-            session.refresh(signal)
+            await session.commit()
+            await session.refresh(signal)
             return signal.id
 
-    def get_signal_messages(
+    async def get_signal_messages(
         self,
         job_id: int,
         limit: int = 100,
     ) -> List[dict]:
-        with Session(self.db_engine) as session:
-            signals = (
-                session.query(SignalMessage)
-                .filter(SignalMessage.job_id == job_id)
+        async with self.session_factory() as session:
+            stmt = (
+                select(SignalMessage)
+                .where(SignalMessage.job_id == job_id)
                 .order_by(SignalMessage.captured_at.desc())
                 .limit(limit)
-                .all()
             )
+            result = await session.execute(stmt)
+            signals = result.scalars().all()
             return [s.to_dict() for s in signals]
 
-    def get_signal_messages_by_model(
+    async def get_signal_messages_by_model(
         self,
         model_key: str,
         limit: int = 100,
     ) -> List[dict]:
-        with Session(self.db_engine) as session:
-            signals = (
-                session.query(SignalMessage)
-                .filter(SignalMessage.model_key == model_key)
+        async with self.session_factory() as session:
+            stmt = (
+                select(SignalMessage)
+                .where(SignalMessage.model_key == model_key)
                 .order_by(SignalMessage.captured_at.desc())
                 .limit(limit)
-                .all()
             )
+            result = await session.execute(stmt)
+            signals = result.scalars().all()
             return [s.to_dict() for s in signals]
+
+    async def get_signals_for_jobs(
+        self,
+        job_ids: List[int],
+        limit_per_job: int = 5,
+    ) -> Dict[int, List[dict]]:
+        if not job_ids:
+            return {}
+            
+        async with self.session_factory() as session:
+            subq = (
+                select(
+                    SignalMessage,
+                    func.row_number()
+                    .over(partition_by=SignalMessage.job_id, order_by=SignalMessage.captured_at.desc())
+                    .label("rn"),
+                )
+                .where(SignalMessage.job_id.in_(job_ids))
+                .subquery()
+            )
+            
+            stmt = select(subq).where(subq.c.rn <= limit_per_job)
+            
+            
+            try:
+                result = await session.execute(stmt)
+                rows = result.all()
+                
+                # Group by job_id
+                signals_by_job: Dict[int, List[dict]] = {jid: [] for jid in job_ids}
+                for row in rows:
+                    sig_dict = {
+                        "id": row.id,
+                        "job_id": row.job_id,
+                        "model_key": row.model_key,
+                        "message": row.message,
+                        "created_at": row.created_at.isoformat() if row.created_at else None,
+                        "captured_at": row.captured_at.isoformat() if row.captured_at else None,
+                    }
+                    if row.job_id in signals_by_job:
+                        signals_by_job[row.job_id].append(sig_dict)
+                        
+                return signals_by_job
+                
+            except Exception:
+                stmt = (
+                    select(SignalMessage)
+                    .where(SignalMessage.job_id.in_(job_ids))
+                    .order_by(SignalMessage.captured_at.desc())
+                    .limit(len(job_ids) * limit_per_job)
+                )
+                result = await session.execute(stmt)
+                signals = result.scalars().all()
+                
+                signals_by_job = {jid: [] for jid in job_ids}
+                counts = {jid: 0 for jid in job_ids}
+                
+                for sig in signals:
+                    if counts[sig.job_id] < limit_per_job:
+                        signals_by_job[sig.job_id].append(sig.to_dict())
+                        counts[sig.job_id] += 1
+                        
+                return signals_by_job

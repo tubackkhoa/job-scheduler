@@ -1,5 +1,4 @@
 import gzip
-import logging
 import re
 import sqlite3
 from pathlib import Path
@@ -108,10 +107,7 @@ class LogIndexer:
 
     def get_log_count(self, job_id: int) -> int:
         """Get total number of logs for a specific job."""
-        result = self.db.execute(
-            "SELECT COUNT(*) FROM logs WHERE job_id = ?",
-            (job_id,)
-        ).fetchone()
+        result = self.db.execute("SELECT COUNT(*) FROM logs WHERE job_id = ?", (job_id,)).fetchone()
         return result[0] if result else 0
 
     def insert_log(
@@ -213,7 +209,6 @@ class LogIndexer:
                 (job_id, query, limit),
             )
         ]
-        
 
         if not match_ids:
             return []
@@ -394,9 +389,6 @@ class LogIndexer:
 #     print(f"{log['timestamp']} {log['message']}")
 
 
-
-
-
 # def print_following_log(log):
 #     print_log(log["match"])
 #     for sub_log in log["following"]:
@@ -407,7 +399,6 @@ class LogIndexer:
 # matches = log_indexer.search_logs_with_following(
 #     job_id=16, query="Ranking completed", limit=2, following_lines=11
 # )
-
 
 
 # elapsed = time.time() - start

@@ -1,17 +1,37 @@
+import hashlib
 import inspect
-from typing import Any, Iterable, Mapping
-from functools import lru_cache
+from pathlib import Path
+from typing import Any, Mapping
+from collections import OrderedDict
+from jinja2 import DictLoader, FileSystemBytecodeCache
 from jinja2.sandbox import SandboxedEnvironment
 from datetime import datetime, timedelta, timezone
 
 from enforcer import GLOBAL_PERMISSION_REGISTRY, ExecutionContext
+from schemas import settings
+
+# make sure cache folder exist
+Path(settings.jinja_cache_path).mkdir(parents=True, exist_ok=True)
 
 
-def tolist(obj: Iterable, *include: str) -> list[dict]:
-    if include:
-        include_set = set(include)
-        return [{k: v for k, v in item.to_dict().items() if k in include_set} for item in obj]
-    return [item.to_dict() for item in obj]
+# only remain a small hot item incase of cache miss - but rare
+class LRUDict(OrderedDict):
+    def __init__(self, maxsize: int = 256):
+        super().__init__()
+        self.maxsize = maxsize
+
+    def __setitem__(self, key, value):
+        if key in self:
+            self.move_to_end(key)
+        else:
+            if len(self) >= self.maxsize:
+                self.popitem(last=False)
+        super().__setitem__(key, value)
+
+    def __getitem__(self, key):
+        value = super().__getitem__(key)
+        self.move_to_end(key)
+        return value
 
 
 def describe_callable(obj: Any) -> dict[str, Any]:
@@ -41,10 +61,17 @@ def describe_callable(obj: Any) -> dict[str, Any]:
 
 
 class Renderer:
+    _templates = LRUDict()
     _sandbox = SandboxedEnvironment(
+        enable_async=True,
         autoescape=False,
         trim_blocks=True,
         lstrip_blocks=True,
+        optimized=True,
+        bytecode_cache=FileSystemBytecodeCache(
+            directory=settings.jinja_cache_path,
+        ),
+        loader=DictLoader(_templates),
     )
 
     _sandbox.globals.update({"datetime": datetime, "timedelta": timedelta, "timezone": timezone})
@@ -54,7 +81,6 @@ class Renderer:
             "in_clause": lambda values: (
                 "()" if not values else f"({','.join(map(repr, values))})"
             ),
-            "tolist": tolist,
         }
     )
 
@@ -66,13 +92,16 @@ class Renderer:
         "ctx": {"type": "variable", "doc": "Execution context for the current render"},
     }
 
+    @staticmethod
+    def _key(template_str: str) -> str:
+        return hashlib.blake2b(template_str.encode(), digest_size=16).hexdigest()
+
     @classmethod
     def update(cls):
         cls._sandbox.globals.update(GLOBAL_PERMISSION_REGISTRY)
         cls._globals_doc.update(
             {name: describe_callable(value) for name, value in GLOBAL_PERMISSION_REGISTRY.items()}
         )
-        cls._compile.cache_clear()
 
     @classmethod
     def get_globals_doc(cls, extra_globals: Mapping[str, Any]):
@@ -82,15 +111,22 @@ class Renderer:
         }
 
     @classmethod
-    def render(
-        cls, ctx: ExecutionContext, template_str: str, payload: Mapping[str, Any], **kwargs: Any
+    async def render(
+        cls,
+        ctx: ExecutionContext,
+        template_str: str,
+        payload: Mapping[str, Any],
+        **kwargs: Any,
     ) -> str:
-        # cache compiled templates for this sandbox
-        # first argument must be payload, then later can access this
-        template = cls._compile(template_str)
-        return template.render(payload, **kwargs, this=payload, ctx=ctx)
+        key = cls._key(template_str)
 
-    @staticmethod
-    @lru_cache(maxsize=1024)
-    def _compile(template_str: str):
-        return Renderer._sandbox.from_string(template_str)
+        # Insert template only once
+        cls._templates[key] = template_str
+        template = cls._sandbox.get_template(key)
+
+        return await template.render_async(
+            payload,
+            **kwargs,
+            this=payload,
+            ctx=ctx,
+        )

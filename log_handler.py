@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from datetime import datetime
-from math import log
 from typing import Any, Callable, Optional
 from log_service import LogService
 from models import DAO
@@ -54,6 +53,8 @@ class JobLogHandler(logging.Handler):
 
     async def _drain_signals(self):
         while True:
+            if not self.dao:
+                continue
             signal_data = await self.signal_queue.get()
             print("signal_data: ", signal_data)
             try:
@@ -82,7 +83,7 @@ class JobLogHandler(logging.Handler):
                 signal_data,
             )
             del self.detected_ranking_table[record.name]
-        
+
         if "ranking table ::::" in log_entry:
             self.detected_ranking_table[record.name] = True
 

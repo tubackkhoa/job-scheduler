@@ -1,6 +1,13 @@
 from functools import wraps
-from types import FunctionType, MappingProxyType, MethodType
-from typing import Any, Callable, Literal, Optional, ParamSpec, Protocol, TypeVar, runtime_checkable
+from types import MappingProxyType
+from typing import (
+    Callable,
+    Literal,
+    Optional,
+    ParamSpec,
+    TypeVar,
+    get_args,
+)
 
 from casbin.enforcer import Enforcer
 from casbin.fast_enforcer import FastEnforcer
@@ -8,12 +15,12 @@ from casbin.persist import Adapter
 from jinja2 import pass_context
 from jinja2.runtime import Context
 
-from auth import User
+from auth import UserContext
 
 ADMIN_ROLE = "admin"
 USER_ROLE = "user"
-GlobalPermissions = Literal["plugin", "job", "field"]
-PERMISSION_KEYS: set[GlobalPermissions] = {"plugin", "job", "field"}
+GlobalPermissions = Literal["system", "plugin", "job", "field"]
+PERMISSION_KEYS: set[GlobalPermissions] = set(get_args(GlobalPermissions))
 
 POLICIES = [
     [ADMIN_ROLE, "*"],
@@ -41,7 +48,7 @@ class ExecutionContext:
 
     def __init__(
         self,
-        user: User,
+        user: UserContext,
         package: Optional[str] = None,
         enforce: Optional[Callable[[int, str, frozenset[str]], bool]] = None,
     ):
