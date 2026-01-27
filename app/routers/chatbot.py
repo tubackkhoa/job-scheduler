@@ -1,6 +1,5 @@
 import os
 import sys
-import asyncio
 from pathlib import Path
 from typing import AsyncIterator
 from fastapi import APIRouter
@@ -10,7 +9,7 @@ from pydantic import BaseModel
 # Required for macOS + FAISS
 if sys.platform == "darwin":
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-
+from langchain_core.runnables import RunnableSerializable
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -122,12 +121,10 @@ class EditRequest(BaseModel):
 # ---------------------------------------------------------
 # Streaming helper
 # ---------------------------------------------------------
-async def stream_chain(chain, payload) -> AsyncIterator[str]:
-    for chunk in chain.stream(payload):
-        token = getattr(chunk, "content", "")
-        if token:
-            yield token
-            await asyncio.sleep(0)
+async def stream_chain(chain: RunnableSerializable, payload) -> AsyncIterator[str]:
+    async for chunk in chain.astream(payload):
+        if chunk.content:
+            yield chunk.content
 
 
 # ---------------------------------------------------------
