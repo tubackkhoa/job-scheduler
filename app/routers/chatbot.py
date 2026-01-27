@@ -1,3 +1,4 @@
+import asyncio
 import os
 import sys
 from pathlib import Path
@@ -9,7 +10,7 @@ from pydantic import BaseModel
 # Required for macOS + FAISS
 if sys.platform == "darwin":
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-from langchain_core.runnables import RunnableSerializable
+from langchain_core.runnables import RunnableSerializable, RunnableLambda, RunnablePassthrough
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -121,10 +122,22 @@ class EditRequest(BaseModel):
 # ---------------------------------------------------------
 # Streaming helper
 # ---------------------------------------------------------
-async def stream_chain(chain: RunnableSerializable, payload) -> AsyncIterator[str]:
-    async for chunk in chain.astream(payload):
-        if chunk.content:
-            yield chunk.content
+async def stream_chain(
+    chain: RunnableSerializable,
+    payload,
+) -> AsyncIterator[str]:
+    try:
+        async for chunk in chain.astream(payload):
+            text = chunk if isinstance(chunk, str) else getattr(chunk, "content", None)
+            if text:
+                yield text
+    except asyncio.CancelledError:
+        # Client disconnected — normal behavior for StreamingResponse
+        raise
+
+
+def join_docs(docs: list[Document]) -> str:
+    return "\n\n".join(d.page_content for d in docs)
 
 
 # ---------------------------------------------------------
@@ -137,8 +150,8 @@ router = APIRouter(prefix="/chatbot", tags=["chatbot"])
 async def generate(req: GenerateRequest):
     chain = (
         {
-            "context": retriever,
-            "question": lambda _: req.query,
+            "context": retriever | RunnableLambda(join_docs),
+            "question": RunnablePassthrough(),
         }
         | generate_prompt
         | llm
