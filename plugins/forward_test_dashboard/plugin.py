@@ -61,7 +61,8 @@ def get_running_models(base_url: str, api_key: str) -> List[Dict[str, Any]]:
         response = httpx.get(url, headers=headers, params={"status": "running"}, timeout=10.0)
         response.raise_for_status()
         data = response.json()
-        return data.get("models", []) if data.get("ok") else []
+        models = data.get("models", []) if data.get("ok") else []
+        return sorted(models, key=lambda x: x.get('createdAt') or '')
     except Exception:
         return []
 
@@ -97,7 +98,7 @@ def fetch_positions_with_pnl(
         return []
 
 
-async def format_pnl_table(models: List[Dict[str, Any]], jobs_list: List[Job]) -> pd.DataFrame:
+async def format_pnl_table(models: List[Dict[str, Any]], jobs_list: List[Dict[str, Any]]) -> pd.DataFrame:
     """Format PNL data as DataFrame with color-coded icons for PNL values and job status."""
     if not models:
         raise ValueError("No running models found.")
@@ -108,20 +109,22 @@ async def format_pnl_table(models: List[Dict[str, Any]], jobs_list: List[Job]) -
     df = pd.DataFrame(models)
 
     # Include latestPositionAt in the columns
-    df = df[["modelName", "identity", "totalPnl", "latestPositionAt", "status"]].copy()
-    df.columns = ["Model", "Identity", "PNL", "Last Position Time", "Status"]
+    df = df[["modelName", "identity", "totalPnl", "latestPositionAt", "status", "createdAt"]].copy()
+    df.columns = ["Model", "Identity", "PNL", "Last Position Time", "Status", "Created At"]
 
     # Create a mapping of identity -> (job_id, active status)
     identity_job_map = {}
     for job in jobs_list:
         try:
-            job_config = job.config or {}
+            import json
+            job_config = json.loads(job.get("config", "{}")) if isinstance(job.get("config"), str) else job.get("config", {})
+
             model_key = job_config.get("model_key")
             if model_key:
                 identity_job_map[model_key] = {
-                    "job_id": job.id,
-                    "active": job.active,
-                    "description": job.description or "No description",
+                    "job_id": job.get("id"),
+                    "active": job.get("active"),
+                    "description": job.get("description") or "No description",
                 }
         except:
             continue
@@ -192,6 +195,12 @@ async def format_pnl_table(models: List[Dict[str, Any]], jobs_list: List[Job]) -
             pnl_str = "-"
 
         return f"{symbol_colored} {pnl_str}"
+    def parse_pnl_html(pnl_html: str) -> float:
+        import re
+
+        text = re.sub(r"<[^>]*>", "", str(pnl_html))
+        text = text.replace("↗", "").replace("↘", "").replace("$", "").strip()
+        return float(text)
 
     # Format status based on job existence and active status
     def format_status(row):
@@ -214,9 +223,17 @@ async def format_pnl_table(models: List[Dict[str, Any]], jobs_list: List[Job]) -
     df["Last Position Time"] = df["Last Position Time"].apply(format_last_position)
     df["Latest Position"] = df.apply(format_latest_position, axis=1)
     df["Status"] = df.apply(format_status, axis=1)
+    df["Created At"] = df["Created At"].apply(format_last_position)
 
     df = df.fillna("N/A")
-    return df
+    total_models = len(df)
+    total_pnl = sum(parse_pnl_html(x) for x in df["PNL"].tolist())
+
+    summary = {
+        "total_models": total_models,
+        "total_pnl": total_pnl,
+    }
+    return df, summary
 
 
 def parse_table_message(message: str) -> Optional[Dict[str, Any]]:
@@ -384,7 +401,7 @@ def extract_signals_from_job(job_id: int, keyword: str) -> pd.DataFrame:
 
 
 def get_signal_comparison(
-    config: Config, models: List[Dict[str, Any]], jobs_list: list[Job]
+    config: Config, models: List[Dict[str, Any]], jobs_list: list[Dict[str, Any]]
 ) -> pd.DataFrame:
     try:
         if not isinstance(config, Config):
@@ -393,8 +410,9 @@ def get_signal_comparison(
         # Create mapping of identity -> job for quick lookup
         identity_to_job = {}
         for job in jobs_list:
+            import json
             try:
-                job_config = job.config or {}
+                job_config = json.loads(job.get("config", "{}")) if isinstance(job.get("config"), str) else job.get("config", {})
                 model_key = job_config.get("model_key")
                 if model_key:
                     identity_to_job[model_key] = job
@@ -409,7 +427,7 @@ def get_signal_comparison(
             if job:
                 matched_jobs.append(
                     {
-                        "job_id": job.id,
+                        "job_id": job.get('id'),
                         "model_name": model.get("modelName", ""),
                         "identity": identity,
                         "pnl": model.get("totalPnl", 0),
@@ -533,6 +551,14 @@ def get_signal_comparison(
         pivot = combined_df.pivot_table(
             index=["pred_time", "base_asset"], columns="_identity", values="signal", aggfunc="first"
         )
+
+        # Reorder columns to match the input models order
+        ordered_columns = [
+            job["identity"]
+            for job in matched_jobs
+            if job["identity"] in pivot.columns
+        ]
+        pivot = pivot[ordered_columns]
 
         pivot = pivot.fillna("-")
 

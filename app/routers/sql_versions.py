@@ -23,7 +23,6 @@ async def list_sql_versions(
             limit=limit,
             offset=offset,
         )
-        print(result)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to list SQL versions: {str(e)}")

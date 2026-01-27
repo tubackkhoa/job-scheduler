@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 
 load_dotenv()
+import os
 
 class ConfigPayload(BaseModel):
     plugin_id: Optional[int] = Field(None, alias="pluginId")
@@ -76,7 +77,7 @@ class Settings(BaseSettings):
     redis_port: Optional[int] = 0
     redis_db: Optional[int] = 0
 
-    secret_key: str = "CHANGE_ME_SUPER_SECRET"
+    secret_key: str = "",
 
     jinja_cache_path: str = "cache/jinja"
 
