@@ -1,36 +1,21 @@
 import os
+import sys
 import asyncio
 from pathlib import Path
 from typing import AsyncIterator
-
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-import uvicorn
 
 # Required for macOS + FAISS
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+if sys.platform == "darwin":
+    os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_ollama import OllamaEmbeddings, ChatOllama
-
-
-# ---------------------------------------------------------
-# App
-# ---------------------------------------------------------
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # lock down in prod
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 # ---------------------------------------------------------
@@ -148,7 +133,10 @@ async def stream_chain(chain, payload) -> AsyncIterator[str]:
 # ---------------------------------------------------------
 # HTTP streaming endpoints
 # ---------------------------------------------------------
-@app.post("/generate")
+router = APIRouter(prefix="/chatbot", tags=["chatbot"])
+
+
+@router.post("/generate")
 async def generate(req: GenerateRequest):
     chain = (
         {
@@ -165,7 +153,7 @@ async def generate(req: GenerateRequest):
     )
 
 
-@app.post("/edit")
+@router.post("/edit")
 async def edit(req: EditRequest):
     chain = edit_prompt | llm
 
@@ -175,12 +163,4 @@ async def edit(req: EditRequest):
             {"plugin": req.plugin, "instruction": req.instruction},
         ),
         media_type="text/plain",
-    )
-
-
-if __name__ == "__main__":
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=8001,
     )
