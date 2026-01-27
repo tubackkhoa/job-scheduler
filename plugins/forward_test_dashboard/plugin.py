@@ -109,8 +109,8 @@ async def format_pnl_table(models: List[Dict[str, Any]], jobs_list: List[Dict[st
     df = pd.DataFrame(models)
 
     # Include latestPositionAt in the columns
-    df = df[["modelName", "identity", "totalPnl", "latestPositionAt", "status"]].copy()
-    df.columns = ["Model", "Identity", "PNL", "Last Position Time", "Status"]
+    df = df[["modelName", "identity", "totalPnl", "latestPositionAt", "status", "createdAt"]].copy()
+    df.columns = ["Model", "Identity", "PNL", "Last Position Time", "Status", "Created At"]
 
     # Create a mapping of identity -> (job_id, active status)
     identity_job_map = {}
@@ -223,6 +223,7 @@ async def format_pnl_table(models: List[Dict[str, Any]], jobs_list: List[Dict[st
     df["Last Position Time"] = df["Last Position Time"].apply(format_last_position)
     df["Latest Position"] = df.apply(format_latest_position, axis=1)
     df["Status"] = df.apply(format_status, axis=1)
+    df["Created At"] = df["Created At"].apply(format_last_position)
 
     df = df.fillna("N/A")
     total_models = len(df)
@@ -550,6 +551,14 @@ def get_signal_comparison(
         pivot = combined_df.pivot_table(
             index=["pred_time", "base_asset"], columns="_identity", values="signal", aggfunc="first"
         )
+
+        # Reorder columns to match the input models order
+        ordered_columns = [
+            job["identity"]
+            for job in matched_jobs
+            if job["identity"] in pivot.columns
+        ]
+        pivot = pivot[ordered_columns]
 
         pivot = pivot.fillna("-")
 
