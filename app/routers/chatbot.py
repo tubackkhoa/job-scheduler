@@ -1,36 +1,21 @@
-import os
 import asyncio
+import os
+import sys
 from pathlib import Path
 from typing import AsyncIterator
-
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-import uvicorn
 
 # Required for macOS + FAISS
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-
+if sys.platform == "darwin":
+    os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+from langchain_core.runnables import RunnableSerializable, RunnableLambda, RunnablePassthrough
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_ollama import OllamaEmbeddings, ChatOllama
-
-
-# ---------------------------------------------------------
-# App
-# ---------------------------------------------------------
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # lock down in prod
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 # ---------------------------------------------------------
@@ -137,23 +122,36 @@ class EditRequest(BaseModel):
 # ---------------------------------------------------------
 # Streaming helper
 # ---------------------------------------------------------
-async def stream_chain(chain, payload) -> AsyncIterator[str]:
-    for chunk in chain.stream(payload):
-        token = getattr(chunk, "content", "")
-        if token:
-            yield token
-            await asyncio.sleep(0)
+async def stream_chain(
+    chain: RunnableSerializable,
+    payload,
+) -> AsyncIterator[str]:
+    try:
+        async for chunk in chain.astream(payload):
+            text = chunk if isinstance(chunk, str) else getattr(chunk, "content", None)
+            if text:
+                yield text
+    except asyncio.CancelledError:
+        # Client disconnected — normal behavior for StreamingResponse
+        raise
+
+
+def join_docs(docs: list[Document]) -> str:
+    return "\n\n".join(d.page_content for d in docs)
 
 
 # ---------------------------------------------------------
 # HTTP streaming endpoints
 # ---------------------------------------------------------
-@app.post("/generate")
+router = APIRouter(prefix="/chatbot", tags=["chatbot"])
+
+
+@router.post("/generate")
 async def generate(req: GenerateRequest):
     chain = (
         {
-            "context": retriever,
-            "question": lambda _: req.query,
+            "context": retriever | RunnableLambda(join_docs),
+            "question": RunnablePassthrough(),
         }
         | generate_prompt
         | llm
@@ -165,7 +163,7 @@ async def generate(req: GenerateRequest):
     )
 
 
-@app.post("/edit")
+@router.post("/edit")
 async def edit(req: EditRequest):
     chain = edit_prompt | llm
 
@@ -175,12 +173,4 @@ async def edit(req: EditRequest):
             {"plugin": req.plugin, "instruction": req.instruction},
         ),
         media_type="text/plain",
-    )
-
-
-if __name__ == "__main__":
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=8001,
     )

@@ -709,23 +709,31 @@ class DAO:
         message: str,
         created_at: datetime,
     ) -> int:
+        import json
         async with self.session_factory() as session:
-            job = await session.get(Job, job_id)
-            if not job:
-                raise ValueError(f"Job with id {job_id} not found")
+            try:
+                job = await session.get(Job, job_id)
+                if not job:
+                    raise ValueError(f"Job with id {job_id} not found")
 
-            model_key = job.config.get("model_key", None) if job.config else None
-            signal = SignalMessage(
-                job_id=job_id,
-                message=message,
-                captured_at=created_at,
-                model_key=model_key,
-                created_at=created_at,
-            )
-            session.add(signal)
-            await session.commit()
-            await session.refresh(signal)
-            return signal.id
+                config = job.config
+                if isinstance(config, str):
+                    config = json.loads(config)
+                
+                model_key = config.get("model_key", None) if config else None
+                signal = SignalMessage(
+                    job_id=job_id,
+                    message=message,
+                    captured_at=created_at,
+                    model_key=model_key,
+                    created_at=created_at,
+                )
+                session.add(signal)
+                await session.commit()
+                await session.refresh(signal)
+                return signal.id
+            except Exception as e:
+                print(f"Failed to save signal message: {str(e)}")
 
     async def get_signal_messages(
         self,

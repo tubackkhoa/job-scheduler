@@ -80,7 +80,7 @@ class Settings(BaseSettings):
 
     secret_key: str = ""
     admin_password: str = ""
-
+    chatbot_enabled: bool = False
     jinja_cache_path: str = "cache/jinja"
 
 

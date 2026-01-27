@@ -58,9 +58,7 @@ class JobLogHandler(logging.Handler):
             signal_data = await self.signal_queue.get()
             print("signal_data: ", signal_data)
             try:
-                await self.loop.run_in_executor(
-                    None,
-                    self.dao.save_signal_message,
+                await self.dao.save_signal_message(
                     extract_job_id_int(signal_data["job_id"]),
                     signal_data["message"],
                     signal_data["created_at"],
@@ -84,7 +82,7 @@ class JobLogHandler(logging.Handler):
             )
             del self.detected_ranking_table[record.name]
 
-        if "ranking table ::::" in log_entry:
+        if "ranking table" in log_entry:
             self.detected_ranking_table[record.name] = True
 
         log_event = {

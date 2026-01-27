@@ -1,5 +1,16 @@
 from app.deps import PluginManagerState
-from app.routers import auth, plugins, logs, templates, users, jobs, ws, signals, stats, sql_versions
+from app.routers import (
+    auth,
+    plugins,
+    logs,
+    templates,
+    users,
+    jobs,
+    ws,
+    signals,
+    stats,
+    sql_versions,
+)
 
 import asyncio
 import logging
@@ -55,10 +66,7 @@ async def lifespan(app: FastAPI):
         useIndexer=settings.use_log_indexer,
     )
 
-    loop = asyncio.get_running_loop()
-    log_handler = JobLogHandler(ws_manager.send_log, loop, log_service=log_service)
-
-    # These will be initialised once an event loop is running (inside lifespan)
+     # These will be initialised once an event loop is running (inside lifespan)
     engine = create_async_engine(
         settings.db_connection,
         echo=False,
@@ -69,6 +77,11 @@ async def lifespan(app: FastAPI):
     )
     dao = DAO(session_factory)
 
+
+    loop = asyncio.get_running_loop()
+    log_handler = JobLogHandler(ws_manager.send_log, loop, log_service=log_service, dao=dao)
+
+   
     adapter = None
     if settings.redis_host:
         # using redis adapter on the fly
@@ -167,6 +180,11 @@ api_router.include_router(jobs.router)
 api_router.include_router(signals.router)
 api_router.include_router(stats.router)
 api_router.include_router(sql_versions.router)
+if settings.chatbot_enabled:
+    from app.routers import chatbot
+
+    api_router.include_router(chatbot.router)
+
 app.include_router(api_router)
 
 # websocket
