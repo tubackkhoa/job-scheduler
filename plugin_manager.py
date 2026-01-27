@@ -269,12 +269,11 @@ class PluginManager:
         module_path, _, class_name = package.rpartition(".")
 
         if override:
-            cls._failed_plugins.pop(package, None)
             cls.unload_plugin(package)
             cls.reload_module(module_path)
 
-        # 🚫 Fast-fail if previously broken
-        if package in cls._failed_plugins:
+        # 🚫 Fast-fail if previously broken, when override it will reset fail plugin
+        elif package in cls._failed_plugins:
             raise cls._failed_plugins[package]
 
         plugin: PluginSpec | None = cls.manager.get_plugin(package)
