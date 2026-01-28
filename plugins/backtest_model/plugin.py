@@ -1,5 +1,4 @@
 import logging
-from networkx import display
 import pluggy
 from pydantic import BaseModel, Field
 from typing import Any, List, Optional
@@ -10,9 +9,6 @@ from .data import (
     compute_accumulated_pnl,
     compute_performance_kpis,
     create_signals_for_backtest,
-    fmt_latest,
-    fmt_pnl,
-    fmt_status,
     generate_pnl_chart_data,
     generate_ohlcv_chart_data,
     display_df,
@@ -157,7 +153,14 @@ class Config(BaseModel):
 ```
 
 """,
-        json_schema_extra=ui_schema({"ui:field": "Template", "type": "markdown"}),
+        json_schema_extra=ui_schema(
+            {
+                "ui:field": "Template",
+                "type": "markdown",
+                # "code": Path(__file__).with_name("md_code.js").read_text(),
+                "url": "TableMarkdown.tsx",
+            }
+        ),
     )
 
 
@@ -176,9 +179,6 @@ class Plugin:
         "generate_pnl_chart_data": generate_pnl_chart_data,
         "generate_ohlcv_chart_data": generate_ohlcv_chart_data,
         "signals": display_df,
-        "fmt_pnl": fmt_pnl,
-        "fmt_status": fmt_status,
-        "fmt_latest": fmt_latest,
     }
 
     @hookimpl
