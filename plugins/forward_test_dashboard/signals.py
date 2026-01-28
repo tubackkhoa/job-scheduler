@@ -1,5 +1,5 @@
 import pandas as pd
-from typing import List, Dict, Any
+from typing import List, Dict, Any, cast
 
 from sphinx import ret
 from log_service import LogService
@@ -121,10 +121,10 @@ def build_signal_comparison(
     def render_signal(row) -> str:
         # Normalize prediction hour
         pred_time = row["pred_time"]
-        if isinstance(pred_time, pd.Timestamp):
-            hour = pred_time.floor("h").to_pydatetime().strftime("%Y-%m-%dT%H:%M:%S")
-        else:
-            hour = ""
+        pred_hour = pred_time.floor("h")
+        # Convert to naive datetime (remove timezone) then to ISO string
+        pred_hour_naive = pred_hour.tz_localize(None) if pred_hour.tz is not None else pred_hour
+        hour = pred_hour_naive.isoformat()
 
         key = (row["base_asset"], row["_identity"], hour)
 
@@ -167,7 +167,7 @@ def build_signal_comparison(
     ).fillna("-")
 
     pivot = pivot.reset_index()
-    pivot["pred_time"] = pivot["pred_time"].dt.strftime("%Y-%m-%d %H:%M")
+    pivot["pred_time"] = pivot["pred_time"].dt.strftime("%Y-%m-%d %H:%M")  # type: ignore
     pivot = pivot.rename(columns={"pred_time": "Time", "base_asset": "Symbol"})
 
     # visually group repeated times
