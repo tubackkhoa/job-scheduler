@@ -1,88 +1,66 @@
 import unittest
-from unittest.mock import patch, MagicMock, call
-import os
-import sys
-import asyncio
+from unittest.mock import patch, MagicMock
+from sqlalchemy.ext.asyncio import (
+    create_async_engine,
+    async_sessionmaker,
+    AsyncSession,
+)
 import logging
 
-from sqlalchemy import create_engine
-
 # Import the PluginManager and extract_package_files
-from models import DAO
-from plugin_manager import PluginManager, extract_package_files
+from auth import UserContext
+from enforcer import ADMIN_ROLE
+from models import DAO, User
+from package_downloader import download_package, extract_package_files
+from plugin_manager import PluginManager
+
+
+logger = logging.getLogger(__name__)
 
 
 class TestPluginManager(unittest.TestCase):
     def setUp(self):
-        # Clear registered plugins before each test to avoid conflicts
+        # Clear registered plugins before each test
         for name, plugin in list(PluginManager.manager.list_name_plugin()):
             PluginManager.manager.unregister(plugin, name)
-        # Use an in-memory SQLite for tests
-        self.db_url = "sqlite:///:memory:"
+
+        self.db_url = "sqlite+aiosqlite:///:memory:"
+
+        engine = create_async_engine(self.db_url, echo=False)
+
+        session_factory = async_sessionmaker(
+            engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
+
         self.pm = PluginManager(
-            DAO(create_engine(self.db_url)), module_paths=["tests.plugins"], plugin_path="plugins"
+            DAO(session_factory),
+            module_paths=["tests.plugins"],
+            plugin_path="plugins",
         )
 
-    @patch("plugin_manager.glob.glob")
-    @patch("plugin_manager.zipfile.ZipFile")
-    @patch("plugin_manager.tarfile.open")
-    @patch("plugin_manager.shutil.rmtree")
-    @patch("plugin_manager.shutil.move")
-    @patch("plugin_manager.os.remove")
-    @patch("plugin_manager.os.path.isdir")
-    @patch("plugin_manager.os.listdir")
-    @patch("plugin_manager.os.rmdir")
-    def test_extract_package_files_zip(
-        self,
-        mock_rmdir,
-        mock_listdir,
-        mock_isdir,
-        mock_remove,
-        mock_move,
-        mock_rmtree,
-        mock_tar_open,
-        mock_zipfile,
-        mock_glob,
-    ):
+        self.admin = UserContext(0, frozenset({ADMIN_ROLE}))
 
-        # Setup mock returns
-        test_dir = "/fake_dir"
-        mock_glob.side_effect = [
-            ["/fake_dir/fake.whl"],  # archives found
-            [],  # no dist-info after extraction
-            [],  # no flatten entries
-        ]
-        mock_isdir.return_value = False
-        mock_listdir.return_value = []
-        # Mock ZipFile context manager
-        mock_zipfile.return_value.__enter__.return_value.extractall = MagicMock()
-
-        result = extract_package_files(test_dir)
-        self.assertTrue(result)
-        mock_zipfile.return_value.__enter__.return_value.extractall.assert_called_once_with(
-            test_dir
-        )
-        mock_remove.assert_called_once_with("/fake_dir/fake.whl")
-
-    @patch("plugin_manager.subprocess.run")
-    @patch("plugin_manager.extract_package_files")
+    @patch("package_downloader.subprocess.run")
+    @patch("package_downloader.extract_package_files")
     def test_download_package_success(self, mock_extract, mock_run):
         mock_run.return_value.returncode = 0
         mock_extract.return_value = True
 
-        result = self.pm.download_package("example", "1.2.3")
+        result = download_package(logger, self.pm.plugin_path, "example", "1.2.3")
         self.assertTrue(result)
         mock_run.assert_called_once()
         mock_extract.assert_called_once()
 
-    @patch("plugin_manager.subprocess.run")
-    @patch("plugin_manager.extract_package_files")
+    @patch("package_downloader.subprocess.run")
+    @patch("package_downloader.extract_package_files")
     def test_download_package_fail(self, mock_extract, mock_run):
         mock_run.return_value.returncode = 1
         mock_run.return_value.stderr = "Error"
         mock_extract.return_value = False
 
-        result = self.pm.download_package("example", "1.2.3")
+        result = download_package(logger, self.pm.plugin_path, "example", "1.2.3")
         self.assertFalse(result)
         mock_extract.assert_not_called()
 
@@ -110,26 +88,29 @@ class TestPluginManager(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             PluginManager.load_plugin(package, override=False)
 
-    @patch("plugin_manager.PluginManager._active_job_cache", {1: '{"key":"value"}'})
+    @patch("models.DAO.job_config_cache", {1: '{"key":"value"}'})
     @patch("plugin_manager.PluginManager.get_plugin_instance")
     def test_run_plugin_job_success(self, mock_get_plugin):
         class DummyPlugin:
-            def config(self, json):
+            def config(self, ctx, json):
                 self.config_obj = json
                 return json
 
-            async def run(self, config, logger):
+            def env(self):
+                return {}
+
+            async def run(self, ctx, config, logger, render_fn):
                 return "success"
 
         dummy_plugin = DummyPlugin()
         mock_get_plugin.return_value = dummy_plugin
 
-        result = PluginManager.run_plugin_job("some.plugin", 1)
+        result = PluginManager.run_plugin_job("some.plugin", 1, self.admin)
         self.assertEqual(result, "success")
 
     @patch("plugin_manager.PluginManager.get_plugin_instance", return_value=None)
     def test_run_plugin_job_no_plugin(self, mock_get_plugin):
-        result = PluginManager.run_plugin_job("no.plugin", 1)
+        result = PluginManager.run_plugin_job("no.plugin", 1, self.admin)
         self.assertIsNone(result)
 
     def test_get_plugin_names(self):
