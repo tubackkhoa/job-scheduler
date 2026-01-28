@@ -10,6 +10,9 @@ from .data import (
     compute_accumulated_pnl,
     compute_performance_kpis,
     create_signals_for_backtest,
+    fmt_latest,
+    fmt_pnl,
+    fmt_status,
     generate_pnl_chart_data,
     generate_ohlcv_chart_data,
     display_df,
@@ -173,6 +176,9 @@ class Plugin:
         "generate_pnl_chart_data": generate_pnl_chart_data,
         "generate_ohlcv_chart_data": generate_ohlcv_chart_data,
         "signals": display_df,
+        "fmt_pnl": fmt_pnl,
+        "fmt_status": fmt_status,
+        "fmt_latest": fmt_latest,
     }
 
     @hookimpl

@@ -268,7 +268,7 @@ def generate_ohlcv_chart_data(df: pd.DataFrame, symbol: str) -> dict:
     }
 
 
-df = pd.DataFrame(
+display_df = pd.DataFrame(
     [
         {
             "Model": "BTC Momentum v1",
@@ -308,33 +308,53 @@ df = pd.DataFrame(
         },
     ]
 )
+display_df = display_df.assign(
+    Latest=display_df.apply(
+        lambda r: (
+            None
+            if r["Latest Symbol"] is None
+            else {
+                "symbol": r["Latest Symbol"],
+                "direction": r["Latest Direction"],
+                "pnl": r["Latest PNL"],
+            }
+        ),
+        axis=1,
+    )
+)
 
 
 def fmt_pnl(v):
     if v is None:
         return "-"
-    cls = "profit" if v > 0 else "loss" if v < 0 else "flat"
-    sign = "+" if v > 0 else ""
-    arrow = "↗" if v > 0 else "↘" if v < 0 else ""
-    return f"{arrow} {sign}${v:.4f} {{.pnl--{cls}}}".strip()
+
+    if v > 0:
+        color = "#28a745"  # green
+        arrow = "↗"
+        sign = "+"
+    elif v < 0:
+        color = "#dc3545"  # red
+        arrow = "↘"
+        sign = ""
+    else:
+        color = "#6c757d"  # gray
+        arrow = ""
+        sign = ""
+
+    return (
+        f"<span style='color: {color}; font-weight: 600;'>" f"{arrow} {sign}${v:.4f}" f"</span>"
+    ).strip()
 
 
 def fmt_status(v):
     return {
-        "active": "✓ Active {.status--active}",
-        "inactive": "⏸ Inactive {.status--inactive}",
-        "none": "⊘ No Job {.status--muted}",
+        "active": ("<span style='color: #28a745; font-weight: 600;'>" "✓ Active</span>"),
+        "inactive": ("<span style='color: #ffc107; font-weight: 600;'>" "⏸ Inactive</span>"),
+        "none": ("<span style='color: #6c757d;'>" "⊘ No Job</span>"),
     }.get(v, "-")
 
 
-def fmt_latest(row):
-    if not row["Latest Symbol"]:
+def fmt_latest(v):
+    if v is None:
         return "-"
-    return f"{row['Latest Symbol']} " f"{row['Latest Direction']} " f"{fmt_pnl(row['Latest PNL'])}"
-
-
-display_df = df.assign(
-    PNL=df["PNL"].map(fmt_pnl),
-    Status=df["Job Status"].map(fmt_status),
-    Latest=df.apply(fmt_latest, axis=1),
-).loc[:, ["Model", "Identity", "PNL", "Status", "Latest", "Created At"]]
+    return f"{v['symbol']} {v['direction']} {fmt_pnl(v['pnl'])}"
