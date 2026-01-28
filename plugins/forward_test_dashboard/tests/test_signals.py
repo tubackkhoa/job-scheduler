@@ -1,5 +1,4 @@
-import pandas as pd
-from signals import extract_signals
+from plugins.forward_test_dashboard.signals import extract_signals, logger
 
 
 class FakeLogService:
@@ -27,7 +26,6 @@ class FakeLogService:
 
 def test_extract_signals_basic(monkeypatch):
     # Monkeypatch the logger used in signals.py
-    from signals import logger
 
     monkeypatch.setattr(
         logger, "search_logs_with_following", FakeLogService().search_logs_with_following
@@ -50,8 +48,6 @@ def test_extract_signals_basic(monkeypatch):
 
 def test_extract_signals_missing_optional_columns(monkeypatch):
     """Should not crash if gated_flag or new_mu is missing"""
-
-    from signals import logger
 
     monkeypatch.setattr(
         logger,
@@ -81,7 +77,6 @@ def test_extract_signals_missing_optional_columns(monkeypatch):
 
 
 def test_extract_signals_empty_logs(monkeypatch):
-    from signals import logger
 
     monkeypatch.setattr(
         logger,

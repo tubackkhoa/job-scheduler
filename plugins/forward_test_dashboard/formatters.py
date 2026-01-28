@@ -1,4 +1,4 @@
-from theme import THEME, color_span
+from .theme import THEME, color_span
 
 
 def fmt_pnl(v):

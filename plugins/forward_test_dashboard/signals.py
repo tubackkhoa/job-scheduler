@@ -1,5 +1,5 @@
 import pandas as pd
-from parsing import parse_table_message
+from .parsing import parse_table_message
 from log_service import LogService
 
 logger = LogService(useIndexer=False)
@@ -25,16 +25,16 @@ def extract_signals(job_id: int, keyword: str) -> pd.DataFrame:
 
         df = pd.DataFrame(parsed["rows"], columns=parsed["header"])
         if {"pred_time", "base_asset"}.issubset(df.columns):
+
             if "new_mu" in df.columns:
                 df["new_mu"] = pd.to_numeric(df["new_mu"], errors="coerce").fillna(0)
             else:
                 df["new_mu"] = 0
 
-            df["direction"] = pd.cut(
-                df["new_mu"],
-                bins=[-float("inf"), 0, float("inf")],
-                labels=["SHORT", "NONE", "LONG"],
-            )
+            df["direction"] = "NONE"
+            df.loc[df["new_mu"] > 0, "direction"] = "LONG"
+            df.loc[df["new_mu"] < 0, "direction"] = "SHORT"
+
             if "gated_flag" in df.columns:
                 df["is_gated"] = df["gated_flag"].isin(["1", "True", "1.0"])
             else:
@@ -42,4 +42,10 @@ def extract_signals(job_id: int, keyword: str) -> pd.DataFrame:
 
             records.append(df)
 
-    return pd.concat(records, ignore_index=True) if records else pd.DataFrame()
+    result_df = pd.concat(records, ignore_index=True) if records else pd.DataFrame()
+
+    if not result_df.empty and "is_gated" in result_df.columns:
+        # 🔥 THIS is the critical line
+        result_df["is_gated"] = result_df["is_gated"].astype(object)
+
+    return result_df

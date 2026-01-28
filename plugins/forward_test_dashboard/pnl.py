@@ -7,7 +7,10 @@ def build_pnl_map(positions):
         return {}
 
     df["entry_hour"] = (
-        pd.to_datetime(df["entryTime"]).dt.floor("h").dt.tz_localize(None).astype(str)
+        pd.to_datetime(df["entryTime"], utc=True)
+        .dt.floor("h")
+        .dt.tz_convert(None)
+        .dt.strftime("%Y-%m-%dT%H:%M:%S")
     )
 
     return {(r.symbol, r.modelKey, r.entry_hour): r.pnl for r in df.itertuples()}

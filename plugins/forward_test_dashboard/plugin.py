@@ -3,9 +3,9 @@ import logging
 from typing import Any, Callable, Dict
 from jinja2 import Environment
 
-from api import get_running_models
-from config import Config
-from formatters import fmt_pnl, fmt_status, fmt_latest
+from .api import get_running_models
+from .config import Config
+from .formatters import fmt_pnl, fmt_status, fmt_latest
 
 PROJECT_NAME = "alpha-miner"
 hookimpl = pluggy.HookimplMarker(PROJECT_NAME)

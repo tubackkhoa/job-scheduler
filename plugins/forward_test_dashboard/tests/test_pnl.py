@@ -1,4 +1,4 @@
-from pnl import build_pnl_map
+from plugins.forward_test_dashboard.pnl import build_pnl_map
 
 
 def test_build_pnl_map_basic():

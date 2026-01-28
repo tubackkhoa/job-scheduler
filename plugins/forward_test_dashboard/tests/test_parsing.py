@@ -1,4 +1,4 @@
-from parsing import parse_table_message
+from plugins.forward_test_dashboard.parsing import parse_table_message
 
 
 def test_parse_table():
