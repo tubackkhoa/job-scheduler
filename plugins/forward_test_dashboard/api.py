@@ -1,25 +1,37 @@
 import httpx
+import logging
 from typing import Optional, List, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 API_TIMEOUT_SHORT = 10.0
 API_TIMEOUT_LONG = 30.0
 
 
-def _get(url: str, api_key: str, params=None, timeout=API_TIMEOUT_SHORT) -> dict:
+def _get(
+    url: str,
+    api_key: str,
+    params=None,
+    timeout=API_TIMEOUT_SHORT,
+) -> dict:
     try:
-        resp = httpx.get(
-            url,
-            headers={
-                "test-system-api-key": api_key,
-                "accept": "application/json",
-            },
-            params=params,
-            timeout=timeout,
-        )
-        resp.raise_for_status()
-        return resp.json()
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.get(
+                url,
+                headers={
+                    "test-system-api-key": api_key,
+                    "accept": "application/json",
+                },
+                params=params,
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.HTTPError as e:
+        logger.warning("API error %s: %s", url, e)
     except Exception:
-        return {}
+        logger.exception("Unexpected API failure: %s", url)
+
+    return {}
 
 
 def get_running_models(base_url: str, api_key: str) -> List[Dict[str, Any]]:

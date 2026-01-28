@@ -1,21 +1,27 @@
 import pandas as pd
-from typing import List, Dict, Any
+from datetime import datetime
+from typing import Dict, Iterable, Tuple, List, Any
+
+from .parsing import extract_model_key
 from .formatters import fmt_pnl, fmt_status, fmt_latest
 
 
-def build_pnl_map(positions):
-    df = pd.DataFrame(positions)
-    if df.empty:
-        return {}
+def build_pnl_map(positions: Iterable[dict]) -> Dict[Tuple[str, str, str], float]:
+    pnl_map = {}
 
-    df["entry_hour"] = (
-        pd.to_datetime(df["entryTime"], utc=True)
-        .dt.floor("h")
-        .dt.tz_convert(None)
-        .dt.strftime("%Y-%m-%dT%H:%M:%S")
-    )
+    for p in positions:
+        try:
+            dt = datetime.fromisoformat(p["entryTime"].replace("Z", "+00:00")).replace(
+                minute=0, second=0, microsecond=0
+            )
+            hour = dt.strftime("%Y-%m-%dT%H:%M:%S")
 
-    return {(r.symbol, r.modelKey, r.entry_hour): r.pnl for r in df.itertuples()}
+            key = (p["symbol"], p["modelKey"], hour)
+            pnl_map[key] = p.get("pnl", 0.0)
+        except Exception:
+            continue
+
+    return pnl_map
 
 
 def build_pnl_table(
@@ -29,13 +35,7 @@ def build_pnl_table(
     # Map model identity → job info
     identity_job = {}
     for job in jobs:
-        cfg = job.get("config") or {}
-        if isinstance(cfg, str):
-            import json
-
-            cfg = json.loads(cfg)
-
-        model_key = cfg.get("model_key")
+        model_key = extract_model_key(job)
         if model_key:
             identity_job[model_key] = {
                 "state": "active" if job.get("active") else "inactive",

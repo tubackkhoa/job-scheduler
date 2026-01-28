@@ -9,14 +9,10 @@ def parse_table_message(message: str) -> Optional[Dict[str, Any]]:
     if len(lines) < 2:
         return None
 
-    header_idx = None
-    for i, line in enumerate(lines):
-        if ":" in line:  # skip banner lines
-            continue
-        cols = line.split()
-        if len(cols) >= 2:
-            header_idx = i
-            break
+    header_idx = next(
+        (i for i, line in enumerate(lines) if ":" not in line and len(line.split()) >= 2),
+        None,
+    )
 
     if header_idx is None or header_idx + 1 >= len(lines):
         return None
@@ -26,11 +22,18 @@ def parse_table_message(message: str) -> Optional[Dict[str, Any]]:
 
     for line in lines[header_idx + 1 :]:
         cells = line.split()
-
-        # merge date + time
         if len(cells) > len(header):
             cells = [" ".join(cells[:2])] + cells[2:]
 
         rows.append((cells + [""] * len(header))[: len(header)])
 
     return {"header": header, "rows": rows}
+
+
+def extract_model_key(job) -> str | None:
+    cfg = job.get("config") or {}
+    if isinstance(cfg, str):
+        import json
+
+        cfg = json.loads(cfg)
+    return cfg.get("model_key")

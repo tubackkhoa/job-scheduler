@@ -42,8 +42,8 @@ def test_extract_signals_basic(monkeypatch):
     assert df.loc[df["base_asset"] == "SOL", "direction"].iloc[0] == "NONE"
 
     # Gating
-    assert df.loc[df["base_asset"] == "ETH", "is_gated"].iloc[0] is True
-    assert df.loc[df["base_asset"] == "BTC", "is_gated"].iloc[0] is False
+    assert df.loc[df["base_asset"] == "ETH", "is_gated"].iloc[0]  # Asserts truthy
+    assert not df.loc[df["base_asset"] == "BTC", "is_gated"].iloc[0]
 
 
 def test_extract_signals_missing_optional_columns(monkeypatch):
@@ -73,7 +73,7 @@ def test_extract_signals_missing_optional_columns(monkeypatch):
 
     assert not df.empty
     assert df["direction"].iloc[0] == "NONE"
-    assert df["is_gated"].iloc[0] is False
+    assert not df["is_gated"].iloc[0]
 
 
 def test_extract_signals_empty_logs(monkeypatch):

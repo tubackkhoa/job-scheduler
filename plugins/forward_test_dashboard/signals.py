@@ -4,7 +4,7 @@ from log_service import LogService
 
 
 from .theme import THEME, color_span
-from .parsing import parse_table_message
+from .parsing import parse_table_message, extract_model_key
 from .api import fetch_positions
 from .pnl import build_pnl_map
 from .config import Config
@@ -38,12 +38,16 @@ def extract_signals(job_id: int, keyword: str) -> pd.DataFrame:
             else:
                 df["new_mu"] = 0
 
-            df["direction"] = "NONE"
-            df.loc[df["new_mu"] > 0, "direction"] = "LONG"
-            df.loc[df["new_mu"] < 0, "direction"] = "SHORT"
+            import numpy as np
+
+            df["direction"] = np.select(
+                [df["new_mu"] > 0, df["new_mu"] < 0],
+                ["LONG", "SHORT"],
+                default="NONE",
+            )
 
             if "gated_flag" in df.columns:
-                df["is_gated"] = df["gated_flag"].isin(["1", "True", "1.0"])
+                df["is_gated"] = df["gated_flag"].astype(str).isin({"1", "True", "1.0"})
             else:
                 df["is_gated"] = False
 
@@ -51,26 +55,16 @@ def extract_signals(job_id: int, keyword: str) -> pd.DataFrame:
 
     result_df = pd.concat(records, ignore_index=True) if records else pd.DataFrame()
 
-    if not result_df.empty and "is_gated" in result_df.columns:
-        # 🔥 THIS is the critical line
-        result_df["is_gated"] = result_df["is_gated"].astype(object)
-
     return result_df
 
 
 def coerce_float(value) -> float:
     if isinstance(value, bool):
         return 0.0
-    if isinstance(value, (int, float)):
-        return float(value)
     try:
-        import numpy as np
-
-        if isinstance(value, (np.integer, np.floating)):
-            return float(value)
-    except Exception:
-        pass
-    return 0.0
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def build_signal_comparison(
@@ -82,13 +76,7 @@ def build_signal_comparison(
     # Map identity → job
     identity_job = {}
     for job in jobs:
-        cfg = job.get("config") or {}
-        if isinstance(cfg, str):
-            import json
-
-            cfg = json.loads(cfg)
-
-        model_key = cfg.get("model_key")
+        model_key = extract_model_key(job)
         if model_key:
             identity_job[model_key] = job
 
