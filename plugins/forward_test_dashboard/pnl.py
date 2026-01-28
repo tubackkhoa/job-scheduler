@@ -62,12 +62,12 @@ def build_pnl_table(
 
         rows.append(
             {
-                "Model": m.get("modelName"),
                 "Identity": identity,
+                "Model": m.get("modelName"),
                 "PNL": fmt_pnl(pnl),
                 "Total Runtime": m.get("totalRunningTime") or "-",
                 "Winrate": fmt_winrate(m.get("winrate")),
-                "Max Drawdown": fmt_drawdown(m.get("maxDrawdown")),
+                "Max Drawdown": m.get("maxDrawdown"),
                 "Last Position Time": m.get("latestPositionAt") or "-",
                 "Status": fmt_status(identity_job.get(identity)),
                 "Latest Position": fmt_latest(m.get("latestPostion")),

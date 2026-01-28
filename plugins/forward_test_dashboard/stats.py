@@ -64,20 +64,21 @@ def build_stats_table(
             last_pos_time = last_pos.get("time")
         
         rows.append({
-            "Model": stat.get("modelName"),
             "Identity": identity,
+            "Model": stat.get("modelName"),
             "Total PNL": fmt_pnl(pnl),
             "PNL 1H": fmt_pnl(stat.get("pnlDelta1h") or 0.0),
             "PNL 4H": fmt_pnl(stat.get("pnlDelta4h") or 0.0),
             "PNL 1D": fmt_pnl(stat.get("pnlDelta1d") or 0.0),
-            "Total Positions": positions,
-            "Total Runtime": stat.get("totalRunningTime") or "-",
+           
             "Winrate": fmt_winrate(stat.get("winrate")),
-            "Max Drawdown": fmt_drawdown(stat.get("maxDrawdown")),
+            "Max Drawdown": stat.get("maxDrawdown"),
             "Latest Position": fmt_latest(last_pos_formatted),
             "Latest Position Time": format_utc_time(last_pos_time),
             "Status": fmt_status(identity_job.get(identity)),
             "Started": format_utc_time(stat.get("startedAt")),
+            "Total Positions": positions,
+            "Total Runtime": stat.get("totalRunningTime") or "-",
         })
     
     df = pd.DataFrame(rows)

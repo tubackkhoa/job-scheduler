@@ -1,3 +1,4 @@
+import random
 from typing import Any, Dict
 import duckdb
 import pandas as pd
@@ -268,46 +269,34 @@ def generate_ohlcv_chart_data(df: pd.DataFrame, symbol: str) -> dict:
     }
 
 
-display_df = pd.DataFrame(
-    [
+assets = ["BTC", "ETH", "SOL", "BNB", "XRP", "ADA", "DOGE"]
+directions = ["LONG", "SHORT"]
+statuses = ["active", "inactive", "none"]
+
+rows = []
+
+for i in range(50):
+    asset = random.choice(assets)
+    rows.append(
         {
-            "Model": "BTC Momentum v1",
-            "Identity": "btc_momo_01",
-            "PNL": 124.5321,
-            "Last Position Time": "2026-01-20 09:00 UTC",
-            "Job Status": "active",
-            "Job Description": "BTC Momentum Job",
-            "Latest Symbol": "BTCUSDT",
-            "Latest Direction": "LONG",
-            "Latest PNL": 12.34567,
-            "Created At": "2026-01-01 00:00 UTC",
-        },
-        {
-            "Model": "ETH Mean Revert",
-            "Identity": "eth_mean_02",
-            "PNL": -45.21,
-            "Last Position Time": "2026-01-20 08:00 UTC",
-            "Job Status": "inactive",
-            "Job Description": "ETH Mean Job",
-            "Latest Symbol": "ETHUSDT",
-            "Latest Direction": "SHORT",
-            "Latest PNL": -3.21,
-            "Created At": "2026-01-02 12:00 UTC",
-        },
-        {
-            "Model": "SOL Breakout",
-            "Identity": "sol_break_03",
-            "PNL": 0.8732,
-            "Last Position Time": None,
-            "Job Status": "none",
-            "Job Description": None,
-            "Latest Symbol": None,
-            "Latest Direction": None,
-            "Latest PNL": None,
-            "Created At": "2026-01-05 18:30 UTC",
-        },
-    ]
-)
+            "Model": f"{asset} Strategy v{i+1}",
+            "Identity": f"{asset.lower()}_{i:02d}",
+            "PNL": round(random.uniform(-200, 500), 4),
+            "Last Position Time": (
+                None
+                if random.random() < 0.2
+                else f"2026-01-{random.randint(18,21)} {random.randint(0,23):02d}:00 UTC"
+            ),
+            "Job Status": random.choice(statuses),
+            "Job Description": f"{asset} automated strategy",
+            "Latest Symbol": f"{asset}USDT",
+            "Latest Direction": random.choice(directions),
+            "Latest PNL": round(random.uniform(-20, 40), 4),
+            "Created At": f"2026-01-{random.randint(1,10):02d} 00:00 UTC",
+        }
+    )
+
+display_df = pd.DataFrame(rows)
 display_df = display_df.assign(
     Latest=display_df.apply(
         lambda r: (
@@ -322,39 +311,3 @@ display_df = display_df.assign(
         axis=1,
     )
 )
-
-
-def fmt_pnl(v):
-    if v is None:
-        return "-"
-
-    if v > 0:
-        color = "#28a745"  # green
-        arrow = "↗"
-        sign = "+"
-    elif v < 0:
-        color = "#dc3545"  # red
-        arrow = "↘"
-        sign = ""
-    else:
-        color = "#6c757d"  # gray
-        arrow = ""
-        sign = ""
-
-    return (
-        f"<span style='color: {color}; font-weight: 600;'>" f"{arrow} {sign}${v:.4f}" f"</span>"
-    ).strip()
-
-
-def fmt_status(v):
-    return {
-        "active": ("<span style='color: #28a745; font-weight: 600;'>" "✓ Active</span>"),
-        "inactive": ("<span style='color: #ffc107; font-weight: 600;'>" "⏸ Inactive</span>"),
-        "none": ("<span style='color: #6c757d;'>" "⊘ No Job</span>"),
-    }.get(v, "-")
-
-
-def fmt_latest(v):
-    if v is None:
-        return "-"
-    return f"{v['symbol']} {v['direction']} {fmt_pnl(v['pnl'])}"
