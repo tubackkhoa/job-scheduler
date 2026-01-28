@@ -26,7 +26,8 @@ def parse_table_message(message: str) -> Optional[Dict[str, Any]]:
             cells = [" ".join(cells[:2])] + cells[2:]
 
         rows.append((cells + [""] * len(header))[: len(header)])
-
+    for row in rows:
+        row[0] = row[0].split(" ")[1]
     return {"header": header, "rows": rows}
 
 

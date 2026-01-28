@@ -64,7 +64,7 @@ def coerce_float(value) -> float:
 
 
 def build_signal_comparison(
-    config: Config,
+    config: Dict[str, Any],
     models: List[Dict[str, Any]],
     jobs: List[Dict[str, Any]],
 ) -> pd.DataFrame:
@@ -84,7 +84,7 @@ def build_signal_comparison(
         if not job:
             continue
 
-        df = extract_signals(job["id"], config.signal_keyword)
+        df = extract_signals(job["id"], config['signal_keyword'])
         if df.empty:
             continue
 
@@ -109,8 +109,8 @@ def build_signal_comparison(
     start_time = df["pred_time"].min().isoformat() + "Z"
 
     positions = fetch_positions(
-        config.webhook_url,
-        config.webhook_api_key,
+        config['webhook_url'],
+        config['webhook_api_key'],
         start_time,
     )
 
@@ -123,7 +123,6 @@ def build_signal_comparison(
         # Convert to naive datetime (remove timezone) then to ISO string
         pred_hour_naive = pred_hour.tz_localize(None) if pred_hour.tz is not None else pred_hour
         hour = pred_hour_naive.isoformat()
-
         key = (row["base_asset"], row["_identity"], hour)
 
         # Safely coerce PNL
@@ -144,9 +143,9 @@ def build_signal_comparison(
 
         # PNL formatting
         if pnl > 0:
-            pnl_str = color_span(f"↗ +${pnl:.4f}", THEME["positive"])
+                pnl_str = color_span(f"↗ +${pnl:.4f}", THEME["positive"])
         elif pnl < 0:
-            pnl_str = color_span(f"↘ ${pnl:.4f}", THEME["negative"])
+                pnl_str = color_span(f"↘ ${pnl:.4f}", THEME["negative"])
         else:
             pnl_str = color_span("$0.0000", THEME["neutral"])
 
@@ -168,9 +167,9 @@ def build_signal_comparison(
     pivot["pred_time"] = pivot["pred_time"].dt.strftime("%Y-%m-%d %H:%M")  # type: ignore
     pivot = pivot.rename(columns={"pred_time": "Time", "base_asset": "Symbol"})
 
-    # visually group repeated times
-    for i in range(1, len(pivot)):
-        if pivot.loc[i, "Time"] == pivot.loc[i - 1, "Time"]:
-            pivot.loc[i, "Time"] = ""
+    time_col = pivot["Time"].copy()
+    for i in range(1, len(time_col)):
+        if time_col.iloc[i] == time_col.iloc[i - 1]:
+            pivot.at[i, "Time"] = ""
 
-    return pivot.sort_index(ascending=False)
+    return pivot

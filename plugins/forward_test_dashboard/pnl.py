@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Dict, Iterable, Tuple, List, Any
 
 from .parsing import extract_model_key
-from .formatters import fmt_pnl, fmt_status, fmt_latest
+from .formatters import fmt_pnl, fmt_status, fmt_latest, fmt_winrate, fmt_drawdown
 
 
 def build_pnl_map(positions: Iterable[dict]) -> Dict[Tuple[str, str, str], float]:
@@ -55,6 +55,9 @@ def build_pnl_table(
                 "Model": m.get("modelName"),
                 "Identity": identity,
                 "PNL": fmt_pnl(pnl),
+                "Total Runtime": m.get("totalRunningTime") or "-",
+                "Winrate": fmt_winrate(m.get("winrate")),
+                "Max Drawdown": fmt_drawdown(m.get("maxDrawdown")),
                 "Last Position Time": m.get("latestPositionAt") or "-",
                 "Status": fmt_status(identity_job.get(identity)),
                 "Latest Position": fmt_latest(m.get("latestPostion")),
