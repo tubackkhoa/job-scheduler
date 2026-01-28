@@ -38,13 +38,9 @@ def extract_signals(job_id: int, keyword: str) -> pd.DataFrame:
             else:
                 df["new_mu"] = 0
 
-            import numpy as np
-
-            df["direction"] = np.select(
-                [df["new_mu"] > 0, df["new_mu"] < 0],
-                ["LONG", "SHORT"],
-                default="NONE",
-            )
+            df["direction"] = "NONE"  # Default for == 0 or missing
+            df.loc[df["new_mu"] > 0, "direction"] = "LONG"
+            df.loc[df["new_mu"] < 0, "direction"] = "SHORT"
 
             if "gated_flag" in df.columns:
                 df["is_gated"] = df["gated_flag"].astype(str).isin({"1", "True", "1.0"})
