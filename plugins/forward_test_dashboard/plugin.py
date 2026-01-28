@@ -11,7 +11,6 @@ from typing import Optional
 
 from plugins import ui_schema
 from log_service import LogService
-from models import Job
 
 
 PROJECT_NAME = "alpha-miner"
@@ -62,7 +61,7 @@ def get_running_models(base_url: str, api_key: str) -> List[Dict[str, Any]]:
         response.raise_for_status()
         data = response.json()
         models = data.get("models", []) if data.get("ok") else []
-        return sorted(models, key=lambda x: x.get('createdAt') or '')
+        return sorted(models, key=lambda x: x.get("createdAt") or "")
     except Exception:
         return []
 
@@ -98,145 +97,149 @@ def fetch_positions_with_pnl(
         return []
 
 
-async def format_pnl_table(models: List[Dict[str, Any]], jobs_list: List[Dict[str, Any]]) -> pd.DataFrame:
-    """Format PNL data as DataFrame with color-coded icons for PNL values and job status."""
+async def format_pnl_table(
+    models: List[Dict[str, Any]],
+    jobs_list: List[Dict[str, Any]],
+) -> tuple[pd.DataFrame, dict]:
     if not models:
         raise ValueError("No running models found.")
 
-    # Store original models for latestPostion access
-    models_dict = {model.get("identity", ""): model for model in models}
-
+    # -----------------------------
+    # 1. Base DataFrame
+    # -----------------------------
     df = pd.DataFrame(models)
 
-    # Include latestPositionAt in the columns
-    df = df[["modelName", "identity", "totalPnl", "latestPositionAt", "status", "createdAt"]].copy()
-    df.columns = ["Model", "Identity", "PNL", "Last Position Time", "Status", "Created At"]
+    df = df[
+        ["modelName", "identity", "totalPnl", "latestPositionAt", "status", "createdAt"]
+    ].rename(
+        columns={
+            "modelName": "Model",
+            "identity": "Identity",
+            "totalPnl": "PNL",
+            "latestPositionAt": "Last Position Time",
+            "status": "Raw Status",
+            "createdAt": "Created At",
+        }
+    )
 
-    # Create a mapping of identity -> (job_id, active status)
-    identity_job_map = {}
+    # -----------------------------
+    # 2. Job lookup (pure data)
+    # -----------------------------
+    identity_job = {}
     for job in jobs_list:
         try:
             import json
-            job_config = json.loads(job.get("config", "{}")) if isinstance(job.get("config"), str) else job.get("config", {})
 
-            model_key = job_config.get("model_key")
-            if model_key:
-                identity_job_map[model_key] = {
-                    "job_id": job.get("id"),
+            cfg = (
+                json.loads(job["config"])
+                if isinstance(job.get("config"), str)
+                else job.get("config", {})
+            )
+            key = cfg.get("model_key")
+            if key:
+                identity_job[key] = {
                     "active": job.get("active"),
                     "description": job.get("description") or "No description",
                 }
-        except:
+        except Exception:
             continue
 
-    # Format PNL with colored arrows and numbers (HTML)
-    def format_pnl_with_color(x):
-        if pd.notna(x):
-            if x > 0:
-                # Green arrow and number for profit
-                return f"<span style='color: #28a745;'>↗ +${x:.4f}</span>"
-            else:
-                # Red arrow and number for loss or zero
-                return f"<span style='color: #dc3545;'>↘ ${x:.4f}</span>"
-        return "$0"
+    # -----------------------------
+    # 3. Latest position (STRUCTURAL)
+    # -----------------------------
+    model_lookup = {m["identity"]: m for m in models}
 
-    # Format latestPositionAt to UTC time
-    def format_last_position(x):
-        if pd.isna(x) or x is None or x == "":
+    def build_latest(identity: str):
+        model = model_lookup.get(identity)
+        pos = model.get("latestPostion") if model else None
+        if not pos:
+            return None
+
+        return {
+            "symbol": pos.get("symbol"),
+            "direction": pos.get("direction"),
+            "pnl": pos.get("pnl"),
+        }
+
+    df["Latest"] = df["Identity"].map(build_latest)
+
+    # -----------------------------
+    # 4. Status (STRUCTURAL)
+    # -----------------------------
+    def build_status(identity: str):
+        job = identity_job.get(identity)
+        if not job:
+            return {"state": "none", "label": "No Job"}
+
+        return {
+            "state": "active" if job["active"] else "inactive",
+            "label": job["description"],
+        }
+
+    df["Status"] = df["Identity"].map(build_status)
+
+    # -----------------------------
+    # 5. Datetime normalization
+    # -----------------------------
+    def fmt_time(v):
+        if not v:
             return "-"
         try:
-            # Parse the timestamp and convert to UTC
-            dt = pd.to_datetime(x)
-            # Format as UTC string
-            return dt.strftime("%Y-%m-%d %H:%M UTC")
-        except:
-            return str(x)
+            return pd.to_datetime(v).strftime("%Y-%m-%d %H:%M UTC")
+        except Exception:
+            return str(v)
 
-    # Format latest position info (symbol, direction, PNL) like signals
-    def format_latest_position(row):
-        identity = row["Identity"]
-        model = models_dict.get(identity)
+    for col in ["Last Position Time", "Created At"]:
+        df[col] = df[col].map(fmt_time)
 
-        if not model or "latestPostion" not in model:
-            return "-"
-
-        latest_pos = model.get("latestPostion")
-        if not latest_pos:
-            return "-"
-
-        symbol = latest_pos.get("symbol", "")
-        direction = latest_pos.get("direction", "")
-        pnl = latest_pos.get("pnl")
-
-        if not symbol or not direction:
-            return "-"
-
-        # Color symbol based on direction (BUY = green, SELL = red)
-        if direction.upper() in ["BUY", "LONG"]:
-            symbol_colored = f"<span style='color: #28a745; font-weight: bold;'>{symbol}</span>"
-        elif direction.upper() in ["SELL", "SHORT"]:
-            symbol_colored = f"<span style='color: #dc3545; font-weight: bold;'>{symbol}</span>"
-        else:
-            symbol_colored = f"**{symbol}**"
-
-        # Format PNL with colored arrow - convert to float for comparison
-        if pnl is not None:
-            try:
-                pnl_value = float(pnl)
-                if pnl_value > 0:
-                    pnl_str = f"<span style='color: #28a745;'>↗ +${pnl_value:.5f}</span>"
-                elif pnl_value < 0:
-                    pnl_str = f"<span style='color: #dc3545;'>↘ ${pnl_value:.5f}</span>"
-                else:
-                    pnl_str = "$0"
-            except (ValueError, TypeError):
-                pnl_str = "-"
-        else:
-            pnl_str = "-"
-
-        return f"{symbol_colored} {pnl_str}"
-    def parse_pnl_html(pnl_html: str) -> float:
-        import re
-
-        text = re.sub(r"<[^>]*>", "", str(pnl_html))
-        text = text.replace("↗", "").replace("↘", "").replace("$", "").strip()
-        return float(text)
-
-    # Format status based on job existence and active status
-    def format_status(row):
-        identity = row["Identity"]
-        job_info = identity_job_map.get(identity)
-
-        if not job_info:
-            # No job found for this identity
-            return "<span style='color: #6c757d;'>⊘ No Job</span>"
-
-        job_name = job_info["description"]
-        is_active = job_info["active"]
-
-        if is_active:
-            return f"<span style='color: #28a745;'>✓ Active ({job_name})</span>"
-        else:
-            return f"<span style='color: #ffc107;'>⏸ Inactive ({job_name})</span>"
-
-    df["PNL"] = df["PNL"].apply(format_pnl_with_color)
-    df["Last Position Time"] = df["Last Position Time"].apply(format_last_position)
-    df["Status"] = df.apply(format_status, axis=1)
-    df["Latest Position"] = df.apply(format_latest_position, axis=1)
-    df["Created At"] = df["Created At"].apply(format_last_position)
-
-    # Reorder columns to put Created At at the end
-    df = df[["Model", "Identity", "PNL", "Last Position Time", "Status", "Latest Position", "Created At"]]
-
-    df = df.fillna("N/A")
-    total_models = len(df)
-    total_pnl = sum(parse_pnl_html(x) for x in df["PNL"].tolist())
-
+    # -----------------------------
+    # 6. Summary (RAW NUMBERS ONLY)
+    # -----------------------------
     summary = {
-        "total_models": total_models,
-        "total_pnl": total_pnl,
+        "total_models": len(df),
+        "total_pnl": float(df["PNL"].fillna(0).sum()),
     }
+
+    # -----------------------------
+    # 7. Final column order
+    # -----------------------------
+    df = df[["Model", "Identity", "PNL", "Status", "Latest", "Last Position Time", "Created At"]]
+
     return df, summary
+
+
+def fmt_pnl(v):
+    if v is None:
+        return "-"
+    if v > 0:
+        return f"<span style='color:#28a745;font-weight:600;'>↗ +${v:.4f}</span>"
+    if v < 0:
+        return f"<span style='color:#dc3545;font-weight:600;'>↘ ${v:.4f}</span>"
+    return "<span style='color:#6c757d;'>$0.0000</span>"
+
+
+def fmt_status(v):
+    if not v:
+        return "-"
+    if v["state"] == "active":
+        return f"<span style='color:#28a745;'>✓ Active ({v['label']})</span>"
+    if v["state"] == "inactive":
+        return f"<span style='color:#ffc107;'>⏸ Inactive ({v['label']})</span>"
+    return "<span style='color:#6c757d;'>⊘ No Job</span>"
+
+
+def fmt_latest(v):
+    if not v or not v["symbol"]:
+        return "-"
+
+    sym = v["symbol"]
+    dir = v["direction"]
+    pnl = v["pnl"]
+
+    color = "#28a745" if dir in ("BUY", "LONG") else "#dc3545"
+    sym_html = f"<span style='color:{color};font-weight:600;'>{sym}</span>"
+
+    return f"{sym_html} {fmt_pnl(pnl)}"
 
 
 def parse_table_message(message: str) -> Optional[Dict[str, Any]]:
@@ -414,8 +417,13 @@ def get_signal_comparison(
         identity_to_job = {}
         for job in jobs_list:
             import json
+
             try:
-                job_config = json.loads(job.get("config", "{}")) if isinstance(job.get("config"), str) else job.get("config", {})
+                job_config = (
+                    json.loads(job.get("config", "{}"))
+                    if isinstance(job.get("config"), str)
+                    else job.get("config", {})
+                )
                 model_key = job_config.get("model_key")
                 if model_key:
                     identity_to_job[model_key] = job
@@ -430,7 +438,7 @@ def get_signal_comparison(
             if job:
                 matched_jobs.append(
                     {
-                        "job_id": job.get('id'),
+                        "job_id": job.get("id"),
                         "model_name": model.get("modelName", ""),
                         "identity": identity,
                         "pnl": model.get("totalPnl", 0),
@@ -557,9 +565,7 @@ def get_signal_comparison(
 
         # Reorder columns to match the input models order
         ordered_columns = [
-            job["identity"]
-            for job in matched_jobs
-            if job["identity"] in pivot.columns
+            job["identity"] for job in matched_jobs if job["identity"] in pivot.columns
         ]
         pivot = pivot[ordered_columns]
 
@@ -603,6 +609,9 @@ class Plugin:
         "get_running_models": get_running_models,
         "format_pnl_table": format_pnl_table,
         "get_signal_comparison": get_signal_comparison,
+        "fmt_pnl": fmt_pnl,
+        "fmt_status": fmt_status,
+        "fmt_latest": fmt_latest,
     }
 
     @hookimpl
