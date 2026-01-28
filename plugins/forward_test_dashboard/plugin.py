@@ -3,6 +3,8 @@ import logging
 from typing import Any, Callable, Dict
 from jinja2 import Environment
 
+from .pnl import build_pnl_table
+from .signals import build_signal_comparison
 from .api import get_running_models
 from .config import Config
 from .formatters import fmt_pnl, fmt_status, fmt_latest
@@ -14,6 +16,8 @@ hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
 class Plugin:
     _env = {
         "get_running_models": get_running_models,
+        "build_pnl_table": build_pnl_table,
+        "build_signal_comparison": build_signal_comparison,
         "fmt_pnl": fmt_pnl,
         "fmt_status": fmt_status,
         "fmt_latest": fmt_latest,

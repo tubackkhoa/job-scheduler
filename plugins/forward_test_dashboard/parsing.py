@@ -11,10 +11,8 @@ def parse_table_message(message: str) -> Optional[Dict[str, Any]]:
 
     header_idx = None
     for i, line in enumerate(lines):
-        # skip banner / separator lines like "ranking table ::::"
-        if ":" in line:
+        if ":" in line:  # skip banner lines
             continue
-
         cols = line.split()
         if len(cols) >= 2:
             header_idx = i
@@ -27,14 +25,6 @@ def parse_table_message(message: str) -> Optional[Dict[str, Any]]:
     rows = []
 
     for line in lines[header_idx + 1 :]:
-        cells = line.split()
-
-        # merge date + time if needed
-        if len(cells) > len(header):
-            cells = [" ".join(cells[:2])] + cells[2:]
-
-        rows.append((cells + [""] * len(header))[: len(header)])
-
         cells = line.split()
 
         # merge date + time
