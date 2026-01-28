@@ -1,5 +1,7 @@
 import pandas as pd
 from typing import List, Dict, Any
+
+from sphinx import ret
 from log_service import LogService
 
 
@@ -91,10 +93,15 @@ def build_signal_comparison(
         df["_identity"] = identity
         records.append(df)
 
-    if not records:
-        return pd.DataFrame({"message": ["No signals found"]})
+    df = (
+        pd.concat(records, ignore_index=True)
+        if records
+        else pd.DataFrame({"message": ["No signals found"]})
+    )
 
-    df = pd.concat(records, ignore_index=True)
+    if not records:
+        return df
+
     df["pred_time"] = pd.to_datetime(df["pred_time"], errors="coerce")
     df = df.dropna(subset=["pred_time"])
 
@@ -156,12 +163,11 @@ def build_signal_comparison(
         index=["pred_time", "base_asset"],
         columns="_identity",
         values="signal",
-        aggfunc="first",
+        aggfunc=lambda x: x.iloc[0],
     ).fillna("-")
 
     pivot = pivot.reset_index()
     pivot["pred_time"] = pivot["pred_time"].dt.strftime("%Y-%m-%d %H:%M")
-
     pivot = pivot.rename(columns={"pred_time": "Time", "base_asset": "Symbol"})
 
     # visually group repeated times
