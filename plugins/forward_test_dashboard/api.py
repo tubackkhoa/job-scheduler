@@ -51,3 +51,11 @@ def fetch_positions(base_url: str, api_key: str, start_time: Optional[str]) -> L
         timeout=API_TIMEOUT_LONG,
     )
     return data.get("positions", [])
+
+def fetch_stats_running_models(base_url: str, api_key: str) -> List[Dict[str, Any]]:
+    data = _get(
+        f"{base_url}/api/test-system/models/stats",
+        api_key,
+        params={"status": "running"},
+    )
+    return sorted(data.get("stats", []), key=lambda m: m.get("startedAt") or "")
