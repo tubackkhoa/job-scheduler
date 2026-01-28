@@ -1,10 +1,9 @@
 from typing import Any, Dict, Optional
-from pydantic import BaseModel, Field, PositiveInt
+from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 
 load_dotenv()
-import os
 
 
 class ConfigPayload(BaseModel):
@@ -13,9 +12,7 @@ class ConfigPayload(BaseModel):
     config: Optional[Dict[str, Any]] = None  # Use correct type if known
     description: Optional[str] = None
 
-    class Config:
-        validate_by_name = True
-        extra = "forbid"
+    model_config = ConfigDict(validate_by_name=True, extra="forbid")
 
 
 class TemplateCodePayload(BaseModel):
@@ -32,8 +29,7 @@ class DownloadPayload(BaseModel):
         ],
     )
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 
 class PluginCreatePayload(BaseModel):
@@ -41,8 +37,7 @@ class PluginCreatePayload(BaseModel):
     interval: PositiveInt = Field(60)
     description: Optional[str] = None
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 
 class TemplatePayload(BaseModel):
@@ -51,8 +46,7 @@ class TemplatePayload(BaseModel):
     )
     params: Dict[str, Any]
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 
 class Settings(BaseSettings):

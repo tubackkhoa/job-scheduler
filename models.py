@@ -67,6 +67,7 @@ class Job(Base):
 
     def to_dict(self):
         import json
+
         return {
             "id": self.id,
             "session_id": self.session_id,
@@ -308,21 +309,30 @@ class DAO:
         async with self.session_factory() as session:
             result = await session.execute(select(Job).where(Job.plugin_id == plugin_id))
             return result.scalars().all()
-    
+
     @global_permission("system")
     async def get_jobs_by_filters(self, ctx: ExecutionContext, filters: Dict[str, Any]):
         async with self.session_factory() as session:
             conditions = []
             if filters.get("search_text") is not None:
-                conditions.append(cast(Job.config, JSONB)["model_key"].astext.ilike(f"%{filters['search_text']}%") | Job.description.ilike(f"%{filters['search_text']}%"))
+                conditions.append(
+                    cast(Job.config, JSONB)["model_key"].astext.ilike(f"%{filters['search_text']}%")
+                    | Job.description.ilike(f"%{filters['search_text']}%")
+                )
             if filters.get("active") is not None:
                 conditions.append(Job.active == filters["active"])
             if filters.get("plugin_id") is not None:
                 conditions.append(Job.plugin_id.in_([int(x) for x in filters["plugin_id"]]))
             if filters.get("model_key") is not None:
-                conditions.append(cast(Job.config, JSONB)["model_key"].astext.in_(filters["model_key"]))
+                conditions.append(
+                    cast(Job.config, JSONB)["model_key"].astext.in_(filters["model_key"])
+                )
             if filters.get("sql_id") is not None:
-                conditions.append(cast(Job.config, JSONB)["sql_id"].astext.in_([str(x) for x in filters["sql_id"]]))
+                conditions.append(
+                    cast(Job.config, JSONB)["sql_id"].astext.in_(
+                        [str(x) for x in filters["sql_id"]]
+                    )
+                )
             if filters.get("session_id") is not None:
                 conditions.append(Job.session_id.in_([int(x) for x in filters["session_id"]]))
 
@@ -336,8 +346,8 @@ class DAO:
             stmt = select(Job)
             if conditions:
                 stmt = stmt.where(*conditions)
-            
-            if filters.get("order_by") is not None: 
+
+            if filters.get("order_by") is not None:
                 if filters.get("sort") == "desc":
                     stmt = stmt.order_by(getattr(Job, filters["order_by"]).desc())
                 else:
@@ -346,12 +356,9 @@ class DAO:
                 stmt = stmt.limit(filters["limit"])
             if filters.get("offset") is not None:
                 stmt = stmt.offset(filters["offset"])
-                
+
             result = await session.execute(stmt)
-            return {
-                "items": result.scalars().all(),
-                "total": total
-            }
+            return {"items": result.scalars().all(), "total": total}
 
     # ---------- permissions ----------
 
@@ -465,8 +472,12 @@ class DAO:
             if dialect == "postgresql":
                 field_expr = func.split_part(ValueVersion.field_id, ".", 2)
             elif dialect == "sqlite":
-                field_expr = func.substr(ValueVersion.field_id, func.instr(ValueVersion.field_id, ".") + 1)
-            
+                field_expr = func.substr(
+                    ValueVersion.field_id, func.instr(ValueVersion.field_id, ".") + 1
+                )
+            else:
+                raise NotImplementedError(f"Unsupported dialect: {dialect}")
+
             stmt = select(ValueVersion).where(field_expr == field_name)
             if search:
                 stmt = stmt.where(ValueVersion.name.ilike(f"%{search}%"))
@@ -478,7 +489,7 @@ class DAO:
 
             result = await session.execute(stmt)
             versions = result.scalars().all()
-            
+
             return {
                 "versions": [v.to_dict() for v in versions],
                 "count": len(versions),
@@ -495,7 +506,7 @@ class DAO:
             stmt = select(ValueVersion)
             if ids:
                 stmt = stmt.where(ValueVersion.id.in_(ids))
-            
+
             result = await session.execute(stmt)
             versions = result.scalars().all()
             return [v.to_dict() for v in versions]
@@ -710,6 +721,7 @@ class DAO:
         created_at: datetime,
     ) -> int:
         import json
+
         async with self.session_factory() as session:
             try:
                 job = await session.get(Job, job_id)
@@ -719,7 +731,7 @@ class DAO:
                 config = job.config
                 if isinstance(config, str):
                     config = json.loads(config)
-                
+
                 model_key = config.get("model_key", None) if config else None
                 signal = SignalMessage(
                     job_id=job_id,
@@ -734,6 +746,7 @@ class DAO:
                 return signal.id
             except Exception as e:
                 print(f"Failed to save signal message: {str(e)}")
+                return 0
 
     async def get_signal_messages(
         self,
@@ -774,26 +787,27 @@ class DAO:
     ) -> Dict[int, List[dict]]:
         if not job_ids:
             return {}
-            
+
         async with self.session_factory() as session:
             subq = (
                 select(
                     SignalMessage,
                     func.row_number()
-                    .over(partition_by=SignalMessage.job_id, order_by=SignalMessage.captured_at.desc())
+                    .over(
+                        partition_by=SignalMessage.job_id, order_by=SignalMessage.captured_at.desc()
+                    )
                     .label("rn"),
                 )
                 .where(SignalMessage.job_id.in_(job_ids))
                 .subquery()
             )
-            
+
             stmt = select(subq).where(subq.c.rn <= limit_per_job)
-            
-            
+
             try:
                 result = await session.execute(stmt)
                 rows = result.all()
-                
+
                 # Group by job_id
                 signals_by_job: Dict[int, List[dict]] = {jid: [] for jid in job_ids}
                 for row in rows:
@@ -807,9 +821,9 @@ class DAO:
                     }
                     if row.job_id in signals_by_job:
                         signals_by_job[row.job_id].append(sig_dict)
-                        
+
                 return signals_by_job
-                
+
             except Exception:
                 stmt = (
                     select(SignalMessage)
@@ -819,13 +833,13 @@ class DAO:
                 )
                 result = await session.execute(stmt)
                 signals = result.scalars().all()
-                
+
                 signals_by_job = {jid: [] for jid in job_ids}
                 counts = {jid: 0 for jid in job_ids}
-                
+
                 for sig in signals:
                     if counts[sig.job_id] < limit_per_job:
                         signals_by_job[sig.job_id].append(sig.to_dict())
                         counts[sig.job_id] += 1
-                        
+
                 return signals_by_job

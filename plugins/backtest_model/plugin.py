@@ -1,4 +1,5 @@
 import logging
+from networkx import display
 import pluggy
 from pydantic import BaseModel, Field
 from typing import Any, List, Optional
@@ -9,8 +10,12 @@ from .data import (
     compute_accumulated_pnl,
     compute_performance_kpis,
     create_signals_for_backtest,
+    fmt_latest,
+    fmt_pnl,
+    fmt_status,
     generate_pnl_chart_data,
     generate_ohlcv_chart_data,
+    display_df,
 )
 
 from plugins import ui_schema
@@ -170,6 +175,10 @@ class Plugin:
         "compute_accumulated_pnl": compute_accumulated_pnl,
         "generate_pnl_chart_data": generate_pnl_chart_data,
         "generate_ohlcv_chart_data": generate_ohlcv_chart_data,
+        "signals": display_df,
+        "fmt_pnl": fmt_pnl,
+        "fmt_status": fmt_status,
+        "fmt_latest": fmt_latest,
     }
 
     @hookimpl

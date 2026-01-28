@@ -2,6 +2,11 @@ import asyncio
 import logging
 import dotenv
 from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from models import DAO
 from .create_data import create_data
@@ -15,7 +20,10 @@ dotenv.load_dotenv()
 
 @pytest.mark.asyncio
 async def test_plugin_manager_with_sample_plugin():
-    db_engine = create_engine("sqlite:///:memory:?check_same_thread=false")
+
+    db_engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:?check_same_thread=false", echo=False
+    )
 
     # Prepare test data for a sample plugin package
     package = "plugins.sample_plugin.Plugin"
@@ -27,11 +35,21 @@ async def test_plugin_manager_with_sample_plugin():
         }
     ]
 
-    create_data(db_engine, session_ids=[1], plugin_data=plugin_data)
+    await create_data(
+        db_engine,
+        session_ids=[1],
+        plugin_data=plugin_data,
+    )
+
+    session_factory = async_sessionmaker(
+        db_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
 
     # Setup PluginManager with in-memory DB and basic logging
     plugin_manager = PluginManager(
-        DAO(db_engine),
+        DAO(session_factory),
         log_handler=logging.StreamHandler(),
         scheduler_kwargs={
             # You can configure jobstores here if needed for integration tests
@@ -40,7 +58,7 @@ async def test_plugin_manager_with_sample_plugin():
     )
 
     # Load plugins and start the scheduler
-    plugin_manager.reload_all_jobs()
+    await plugin_manager.reload_all_jobs()
     plugin_manager.start()
 
     # Run the scheduler for a short period to simulate activity (e.g., 2 seconds)

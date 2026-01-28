@@ -124,7 +124,7 @@ class SecureBaseModel(BaseModel):
         allowed: set[str] = set()
         is_admin = ctx.is_admin()
 
-        for name, field in self.model_fields.items():
+        for name, field in self.__class__.model_fields.items():
             extra = field.json_schema_extra
 
             # ⬅️ Not a SecureField → always include

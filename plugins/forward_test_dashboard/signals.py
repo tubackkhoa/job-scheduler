@@ -1,0 +1,175 @@
+import pandas as pd
+from typing import List, Dict, Any
+from log_service import LogService
+
+
+from .theme import THEME, color_span
+from .parsing import parse_table_message, extract_model_key
+from .api import fetch_positions
+from .pnl import build_pnl_map
+from .config import Config
+
+logger = LogService(useIndexer=False)
+
+
+def extract_signals(job_id: int, keyword: str) -> pd.DataFrame:
+    scheduler_id = f"job-scheduler.job.{job_id}"
+    result = logger.search_logs_with_following(
+        job_id=scheduler_id,
+        keyword=keyword,
+        n_following=2,
+        limit=50,
+        sort="desc",
+    )
+
+    records = []
+
+    for group in result.get("groups", []):
+        msg = group["following_entries"][-1].get("message", "")
+        parsed = parse_table_message(msg)
+        if not parsed:
+            continue
+
+        df = pd.DataFrame(parsed["rows"], columns=parsed["header"])
+        if {"pred_time", "base_asset"}.issubset(df.columns):
+
+            if "new_mu" in df.columns:
+                df["new_mu"] = pd.to_numeric(df["new_mu"], errors="coerce").fillna(0)
+            else:
+                df["new_mu"] = 0
+
+            df["direction"] = "NONE"  # Default for == 0 or missing
+            df.loc[df["new_mu"] > 0, "direction"] = "LONG"
+            df.loc[df["new_mu"] < 0, "direction"] = "SHORT"
+
+            if "gated_flag" in df.columns:
+                df["is_gated"] = df["gated_flag"].astype(str).isin({"1", "True", "1.0"})
+            else:
+                df["is_gated"] = False
+
+            records.append(df)
+
+    result_df = pd.concat(records, ignore_index=True) if records else pd.DataFrame()
+
+    return result_df
+
+
+def coerce_float(value) -> float:
+    if isinstance(value, bool):
+        return 0.0
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def build_signal_comparison(
+    config: Dict[str, Any],
+    models: List[Dict[str, Any]],
+    jobs: List[Dict[str, Any]],
+) -> pd.DataFrame:
+
+    # Map identity → job
+    identity_job = {}
+    for job in jobs:
+        model_key = extract_model_key(job)
+        if model_key:
+            identity_job[model_key] = job
+
+    records = []
+
+    for m in models:
+        identity = m.get("identity")
+        job = identity_job.get(identity)
+        if not job:
+            continue
+
+        df = extract_signals(job["id"], config['signal_keyword'])
+        if df.empty:
+            continue
+
+        df["_identity"] = identity
+        records.append(df)
+
+    df = (
+        pd.concat(records, ignore_index=True)
+        if records
+        else pd.DataFrame({"message": ["No signals found"]})
+    )
+
+    if not records:
+        return df
+
+    df["pred_time"] = pd.to_datetime(df["pred_time"], errors="coerce")
+    df = df.dropna(subset=["pred_time"])
+
+    if df.empty:
+        return pd.DataFrame({"message": ["No valid timestamps"]})
+
+    start_time = df["pred_time"].min().isoformat() + "Z"
+
+    positions = fetch_positions(
+        config['webhook_url'],
+        config['webhook_api_key'],
+        start_time,
+    )
+
+    pnl_map = build_pnl_map(positions)
+
+    def render_signal(row) -> str:
+        # Normalize prediction hour
+        pred_time = row["pred_time"]
+        pred_hour = pred_time.floor("h")
+        # Convert to naive datetime (remove timezone) then to ISO string
+        pred_hour_naive = pred_hour.tz_localize(None) if pred_hour.tz is not None else pred_hour
+        hour = pred_hour_naive.isoformat()
+        key = (row["base_asset"], row["_identity"], hour)
+
+        # Safely coerce PNL
+        pnl = coerce_float(pnl_map.get(key))
+
+        # Marker if order exists
+        marker = "*" if key in pnl_map else ""
+        symbol = f"{marker}{row['base_asset']}"
+
+        # Direction-colored symbol
+        direction = row.get("direction")
+        if direction == "LONG":
+            sym = color_span(symbol, THEME["positive"], bold=True)
+        elif direction == "SHORT":
+            sym = color_span(symbol, THEME["negative"], bold=True)
+        else:
+            sym = color_span(symbol, THEME["neutral"], bold=True)
+
+        # PNL formatting
+        if pnl > 0:
+                pnl_str = color_span(f"↗ +${pnl:.4f}", THEME["positive"])
+        elif pnl < 0:
+                pnl_str = color_span(f"↘ ${pnl:.4f}", THEME["negative"])
+        else:
+            pnl_str = color_span("$0.0000", THEME["neutral"])
+
+        txt = f"{sym} {pnl_str}"
+
+        # Gated signals are struck through
+        return f"~~{txt}~~" if bool(row.get("is_gated")) else txt
+
+    df["signal"] = df.apply(render_signal, axis=1)
+
+    pivot = df.pivot_table(
+        index=["pred_time", "base_asset"],
+        columns="_identity",
+        values="signal",
+        aggfunc=lambda x: x.iloc[0],
+    ).fillna("-")
+
+    pivot = pivot.reset_index()
+    pivot["pred_time"] = pivot["pred_time"].dt.strftime("%Y-%m-%d %H:%M")  # type: ignore
+    pivot = pivot.rename(columns={"pred_time": "Time", "base_asset": "Symbol"})
+
+    time_col = pivot["Time"].copy()
+    for i in range(1, len(time_col)):
+        if time_col.iloc[i] == time_col.iloc[i - 1]:
+            pivot.at[i, "Time"] = ""
+
+    return pivot
