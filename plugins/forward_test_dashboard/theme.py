@@ -6,6 +6,8 @@ THEME = {
 }
 
 
+from markupsafe import Markup
+
 def color_span(text: str, color: str, bold: bool = False) -> str:
     weight = "font-weight:bold;" if bold else ""
-    return f"<span style='color:{color};{weight}'>{text}</span>"
+    return Markup(f"<span style='color:{color};{weight}'>{text}</span>")

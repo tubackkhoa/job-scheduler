@@ -18,10 +18,7 @@ def parse_table_message(message: str) -> Optional[Dict[str, Any]]:
     header_index = -1
     header = []
     
-    # Identify header line by looking for PRED_TIME
     for i, line in enumerate(lines):
-        # Determine if this line looks like a header
-        # We look for specific known columns
         if "PRED_TIME" in line.upper() or "BASE_ASSET" in line.upper():  
             header = [h for h in line.split() if h]
             if "PRED_TIME" in [h.upper() for h in header]:
