@@ -68,6 +68,11 @@ def extract_signals_from_job(job_id: int, keyword: str) -> pd.DataFrame:
                     row[gated_flag_idx] if gated_flag_idx >= 0 and gated_flag_idx < len(row) else ""
                 )
 
+                # Normalize timestamp: if only date (no time), append 00:00:00
+                # Example: "2026-01-29" -> "2026-01-29 00:00:00"
+                if pred_time and ' ' not in pred_time:
+                    pred_time = f"{pred_time} 00:00:00"
+
                 # Parse new_mu to determine direction
                 try:
                     new_mu = float(new_mu_str) if new_mu_str and new_mu_str.lower() != "none" else 0
