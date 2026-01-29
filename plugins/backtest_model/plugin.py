@@ -67,6 +67,21 @@ class Config(BaseModel):
             }
         ),
     )
+    data_table: str = Field(
+        """
+<pre data-table hidden>
+{{ signals.to_json(orient="records") }}
+</pre>
+        """,
+        json_schema_extra=ui_schema(
+            {
+                "ui:field": "Template",
+                "type": "markdown",
+                # "code": Path(__file__).with_name("md_code.js").read_text(),
+                "url": "TableMarkdown.tsx",
+            }
+        ),
+    )
     report: str = Field(
         """
 
@@ -157,8 +172,6 @@ class Config(BaseModel):
             {
                 "ui:field": "Template",
                 "type": "markdown",
-                # "code": Path(__file__).with_name("md_code.js").read_text(),
-                "url": "TableMarkdown.tsx",
             }
         ),
     )

@@ -310,4 +310,4 @@ display_df = display_df.assign(
         ),
         axis=1,
     )
-)
+)[["Model", "Identity", "PNL", "Job Status", "Latest", "Created At"]]
