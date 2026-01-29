@@ -9,14 +9,26 @@ def parse_table_message(message: str) -> Optional[Dict[str, Any]]:
     import re
 
     cleaned = message.strip()
-    cleaned = re.sub(r"^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s+\[.*?\]\s+", "", cleaned)
-
+    
+    # Try to find the line that contains the header
     lines = [line.strip() for line in cleaned.split("\n") if line.strip()]
-    if len(lines) < 2:
+    if not lines:
         return None
 
-    header = [h for h in lines[0].split() if h]
-    if len(header) < 2:
+    header_index = -1
+    header = []
+    
+    # Identify header line by looking for PRED_TIME
+    for i, line in enumerate(lines):
+        # Determine if this line looks like a header
+        # We look for specific known columns
+        if "PRED_TIME" in line.upper() or "BASE_ASSET" in line.upper():  
+            header = [h for h in line.split() if h]
+            if "PRED_TIME" in [h.upper() for h in header]:
+                header_index = i
+                break
+    
+    if header_index == -1 or len(header) < 2:
         return None
 
     pred_time_index = -1
@@ -26,7 +38,8 @@ def parse_table_message(message: str) -> Optional[Dict[str, Any]]:
             break
 
     data_rows = []
-    for i in range(1, len(lines)):
+    # Start usually from next line
+    for i in range(header_index + 1, len(lines)):
         line = lines[i]
         if not line or len(line) < 3:
             continue
@@ -45,7 +58,8 @@ def parse_table_message(message: str) -> Optional[Dict[str, Any]]:
             ):
                 cells[pred_time_index] = f"{cells[pred_time_index]} {cells[pred_time_index + 1]}"
                 cells.pop(pred_time_index + 1)
-
+        
+        # Adjust cell count to match header length
         while len(cells) < len(header):
             cells.append("")
         cells = cells[: len(header)]
