@@ -1,190 +1,118 @@
 import pandas as pd
 from typing import List, Dict, Any
-from log_service import LogService
-
 
 from .theme import THEME, color_span
-from .parsing import parse_table_message, extract_model_key
+from .parsing import parse_table_message
 from .api import fetch_positions
 from .pnl import build_pnl_map
-from .config import Config
 
-logger = LogService(useIndexer=False)
-
-
-def extract_signals_from_job(job_id: int, keyword: str) -> pd.DataFrame:
-    """Extract and parse signals from a single job's logs, returning DataFrame with formatted signals."""
-    try:
-        scheduler_id = f"job-scheduler.job.{job_id}"
-        result = logger.search_logs_with_following(
-            job_id=scheduler_id,
-            keyword=keyword,
-            n_following=2,
-            limit=50,
-            sort="desc",
-        )
-
-        all_table_data = []
-
-        for group in result.get("groups", []):
-            entry = group.get("following_entries", [])
-            message = entry[-1].get("message", "")
-
-            # Parse the table message
-            parsed = parse_table_message(message)
-            if not parsed:
-                continue
-
-            header = parsed["header"]
-            rows = parsed["rows"]
-
-            # Find important column indices
-            pred_time_idx = -1
-            base_asset_idx = -1
-            new_mu_idx = -1
-            gated_flag_idx = -1
-
-            for i, col in enumerate(header):
-                col_lower = col.lower()
-                if col_lower == "pred_time":
-                    pred_time_idx = i
-                elif col_lower == "base_asset":
-                    base_asset_idx = i
-                elif col_lower == "new_mu":
-                    new_mu_idx = i
-                elif col_lower in ["gated_flag", "effective_gated_flag"]:
-                    gated_flag_idx = i
-
-            # Extract data from each row
-            for row in rows:
-                if pred_time_idx < 0 or base_asset_idx < 0:
-                    continue
-
-                # Extract values
-                pred_time = row[pred_time_idx] if pred_time_idx < len(row) else ""
-                base_asset = row[base_asset_idx] if base_asset_idx < len(row) else ""
-                new_mu_str = row[new_mu_idx] if new_mu_idx >= 0 and new_mu_idx < len(row) else ""
-                gated_flag = (
-                    row[gated_flag_idx] if gated_flag_idx >= 0 and gated_flag_idx < len(row) else ""
-                )
-
-                # Normalize timestamp: if only date (no time), append 00:00:00
-                # Example: "2026-01-29" -> "2026-01-29 00:00:00"
-                if pred_time and ' ' not in pred_time:
-                    pred_time = f"{pred_time} 00:00:00"
-
-                # Parse new_mu to determine direction
-                try:
-                    new_mu = float(new_mu_str) if new_mu_str and new_mu_str.lower() != "none" else 0
-                except:
-                    new_mu = 0
-
-                is_gated = gated_flag == "1" or gated_flag == "1.0" or gated_flag == "True"
-
-                if new_mu > 0:
-                    direction = "LONG"
-                elif new_mu < 0:
-                    direction = "SHORT"
-                else:
-                    direction = "NONE"
-
-                all_table_data.append(
-                    {
-                        "pred_time": pred_time,
-                        "base_asset": base_asset,
-                        "direction": direction,
-                        "new_mu": new_mu,
-                        "is_gated": is_gated,
-                        "gated_flag": gated_flag,
-                    }
-                )
-
-        if not all_table_data:
-            return pd.DataFrame()
-
-        # Convert to DataFrame - keep individual signals, don't group yet
-        df = pd.DataFrame(all_table_data)
-        return df
-
-    except Exception as e:
-        print(f"Error extracting signals: {e}")
-        import traceback
-
-        traceback.print_exc()
-        return pd.DataFrame()
-
-
-def coerce_float(value) -> float:
-    if isinstance(value, bool):
-        return 0.0
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.0
-
-def build_signal_comparison(
+async def build_signal_comparison(
     config: Dict[str, Any],
     models: List[Dict[str, Any]],
-    jobs: List[Dict[str, Any]],
+    messages: List[Dict[str, Any]],
 ) -> pd.DataFrame:
-
-    # Create mapping of identity -> job for quick lookup
-    identity_job = {}
-    for job in jobs:
-        model_key = extract_model_key(job)
-        if model_key:
-            identity_job[model_key] = job
-
-    # # Match models with jobs
-    # matched_jobs = []
-    # for model in models:
-    #     identity = model.get("identity", "")
-    #     job = identity_job.get(identity)
-    #     if job:
-    #         matched_jobs.append(
-    #             {
-    #                 "job_id": job.get('id'),
-    #                 "model_name": model.get("modelName", ""),
-    #                 "identity": identity,
-    #                 "pnl": model.get("totalPnl", 0),
-    #             }
-    #         )
-
-    # if not matched_jobs:
-    #     return pd.DataFrame({"message": ["No jobs matched with running models."]})
-
-    records = []
-
+    
+    model_keys = []
+    identity_map = {}
     for m in models:
         identity = m.get("identity")
-        job = identity_job.get(identity)
-        if not job:
+        if identity:
+            model_keys.append(identity)
+            identity_map[identity] = identity
+
+    if not model_keys:
+        return pd.DataFrame({"message": ["No models provided"]})
+
+    # 3. Process messages into rows
+    all_table_data = []
+
+    for msg in messages:
+        raw_text = msg.get("message", "")
+        model_key = msg.get("model_key")
+        
+        # Parse the table message
+        parsed = parse_table_message(raw_text)
+        if not parsed:
             continue
 
-        df = extract_signals_from_job(job["id"], config['signal_keyword'])
-        if df.empty:
-            continue
+        header = parsed["header"]
+        rows = parsed["rows"]
 
-        df["_identity"] = identity
-        records.append(df)
+        # Find important column indices
+        pred_time_idx = -1
+        base_asset_idx = -1
+        new_mu_idx = -1
+        gated_flag_idx = -1
 
-    df = (
-        pd.concat(records, ignore_index=True)
-        if records
-        else pd.DataFrame({"message": ["No signals found"]})
-    )
+        for i, col in enumerate(header):
+            col_lower = col.lower()
+            if col_lower == "pred_time":
+                pred_time_idx = i
+            elif col_lower == "base_asset":
+                base_asset_idx = i
+            elif col_lower == "new_mu":
+                new_mu_idx = i
+            elif col_lower in ["gated_flag", "effective_gated_flag"]:
+                gated_flag_idx = i
 
-    if not records:
-        return df
+        # Extract data from each row of the message
+        for row in rows:
+            if pred_time_idx < 0 or base_asset_idx < 0:
+                continue
 
+            # Extract values
+            pred_time = row[pred_time_idx] if pred_time_idx < len(row) else ""
+            base_asset = row[base_asset_idx] if base_asset_idx < len(row) else ""
+            new_mu_str = row[new_mu_idx] if new_mu_idx >= 0 and new_mu_idx < len(row) else ""
+            gated_flag = (
+                row[gated_flag_idx] if gated_flag_idx >= 0 and gated_flag_idx < len(row) else ""
+            )
+
+            # Normalize timestamp: if only date (no time), append 00:00:00
+            if pred_time and ' ' not in pred_time:
+                pred_time = f"{pred_time} 00:00:00"
+
+            # Parse new_mu to determine direction
+            try:
+                new_mu = float(new_mu_str) if new_mu_str and new_mu_str.lower() != "none" else 0
+            except:
+                new_mu = 0
+
+            is_gated = gated_flag == "1" or gated_flag == "1.0" or gated_flag == "True"
+
+            if new_mu > 0:
+                direction = "LONG"
+            elif new_mu < 0:
+                direction = "SHORT"
+            else:
+                direction = "NONE"
+
+            all_table_data.append(
+                {
+                    "pred_time": pred_time,
+                    "base_asset": base_asset,
+                    "direction": direction,
+                    "new_mu": new_mu,
+                    "is_gated": is_gated,
+                    "_identity": model_key, # Link back to column identity
+                }
+            )
+
+    if not all_table_data:
+        return pd.DataFrame({"message": ["No valid signals parsed"]})
+
+    df = pd.DataFrame(all_table_data)
+
+    # 4. Filter empty timestamps & format
     df["pred_time"] = pd.to_datetime(df["pred_time"], errors="coerce")
     df = df.dropna(subset=["pred_time"])
 
     if df.empty:
         return pd.DataFrame({"message": ["No valid timestamps"]})
 
+    # 5. Fetch PNL positions (same as before)
     start_time = df["pred_time"].min().isoformat() + "Z"
-
+    
     positions = fetch_positions(
         config['webhook_url'],
         config['webhook_api_key'],
@@ -193,13 +121,16 @@ def build_signal_comparison(
 
     pnl_map = build_pnl_map(positions)
 
+    # 6. Render Signal Cell
     def render_signal(row) -> str:
         # Normalize prediction hour
         pred_time = row["pred_time"]
         pred_hour = pred_time.floor("h")
-        # Convert to naive datetime (remove timezone) then to ISO string
+        # Convert to naive datetime then to ISO string
         pred_hour_naive = pred_hour.tz_localize(None) if pred_hour.tz is not None else pred_hour
         hour = pred_hour_naive.isoformat()
+        
+        # PNL key: (Symbol, ModelIdentity, HourISO)
         key = (row["base_asset"], row["_identity"], hour)
 
         # Safely coerce PNL
@@ -220,9 +151,9 @@ def build_signal_comparison(
 
         # PNL formatting
         if pnl > 0:
-                pnl_str = color_span(f"↗ +${pnl:.4f}", THEME["positive"])
+            pnl_str = color_span(f"↗ +${pnl:.4f}", THEME["positive"])
         elif pnl < 0:
-                pnl_str = color_span(f"↘ ${pnl:.4f}", THEME["negative"])
+            pnl_str = color_span(f"↘ ${pnl:.4f}", THEME["negative"])
         else:
             pnl_str = color_span("$0.0000", THEME["neutral"])
 
@@ -233,6 +164,7 @@ def build_signal_comparison(
 
     df["signal"] = df.apply(render_signal, axis=1)
 
+    # 7. Pivot table
     pivot = df.pivot_table(
         index=["pred_time", "base_asset"],
         columns="_identity",
@@ -240,24 +172,35 @@ def build_signal_comparison(
         aggfunc="first",
     )
 
+    # Reorder columns based on input models list
     ordered_columns = [
         model["identity"]
         for model in models
         if model["identity"] in pivot.columns
     ]
     pivot = pivot[ordered_columns]
-
     pivot = pivot.fillna("-")
-
+    
+    # Sort by time desc
     pivot = pivot.sort_index(level="pred_time", ascending=False)
 
+    # Flatten index for display
     pivot = pivot.reset_index()
-    pivot["pred_time"] = pivot["pred_time"].dt.strftime("%Y-%m-%d %H:%M")  # type: ignore
+    pivot["pred_time"] = pivot["pred_time"].dt.strftime("%Y-%m-%d %H:%M")
     pivot = pivot.rename(columns={"pred_time": "Time", "base_asset": "Symbol"})
 
+    # Hide duplicate timestamps for cleaner view
     time_col = pivot["Time"].copy()
     for i in range(1, len(time_col)):
         if time_col.iloc[i] == time_col.iloc[i - 1]:
             pivot.at[i, "Time"] = ""
 
     return pivot
+
+def coerce_float(value) -> float:
+    if isinstance(value, bool):
+        return 0.0
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0

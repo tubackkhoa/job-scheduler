@@ -8,6 +8,18 @@ from .stats import build_stats_table
 from .api import get_running_models, fetch_stats_running_models
 from .config import Config
 from .formatters import fmt_pnl, fmt_status, fmt_latest, fmt_winrate, fmt_drawdown
+from enforcer import GLOBAL_PERMISSION_REGISTRY
+
+async def fetch_signal_messages(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    dao = GLOBAL_PERMISSION_REGISTRY.get("dao")
+    if not dao:
+        return []
+    
+    model_keys = [m.get("identity") for m in models if m.get("identity")]
+    if not model_keys:
+        return []
+
+    return await dao.get_signal_messages_by_keys(model_keys, limit=1000)
 
 PROJECT_NAME = "alpha-miner"
 hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
@@ -20,6 +32,7 @@ class Plugin:
         "build_pnl_table": build_pnl_table,
         "build_stats_table": build_stats_table,
         "build_signal_comparison": build_signal_comparison,
+        "fetch_signal_messages": fetch_signal_messages,
         "fmt_pnl": fmt_pnl,
         "fmt_status": fmt_status,
         "fmt_latest": fmt_latest,

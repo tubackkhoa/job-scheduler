@@ -780,6 +780,25 @@ class DAO:
             signals = result.scalars().all()
             return [s.to_dict() for s in signals]
 
+    async def get_signal_messages_by_keys(
+        self,
+        model_keys: List[str],
+        limit: int = 1000,
+    ) -> List[dict]:
+        if not model_keys:
+            return []
+
+        async with self.session_factory() as session:
+            stmt = (
+                select(SignalMessage)
+                .where(SignalMessage.model_key.in_(model_keys))
+                .order_by(SignalMessage.captured_at.desc())
+                .limit(limit)
+            )
+            result = await session.execute(stmt)
+            signals = result.scalars().all()
+            return [s.to_dict() for s in signals]
+
     async def get_signals_for_jobs(
         self,
         job_ids: List[int],
