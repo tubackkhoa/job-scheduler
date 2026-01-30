@@ -209,12 +209,16 @@ def generate_ohlcv_chart_data(df: pd.DataFrame, symbol: str) -> dict:
     volume = []
     volume_colors = []
     signals = []
+    pnl = []
+
+    cumulative_pnl = 0.0
 
     for row in filtered_df.itertuples():
         # convert pandas Timestamp to epoch ms
         timestamp: pd.Timestamp = row.timestamp  # type: ignore
         ts_ms = timestamp.value // 10**6
 
+        # ───────── OHLC ─────────
         ohlc.append(
             {
                 "x": ts_ms,
@@ -225,6 +229,7 @@ def generate_ohlcv_chart_data(df: pd.DataFrame, symbol: str) -> dict:
             }
         )
 
+        # ───────── VOLUME ─────────
         volume.append(
             {
                 "x": ts_ms,
@@ -232,10 +237,10 @@ def generate_ohlcv_chart_data(df: pd.DataFrame, symbol: str) -> dict:
             }
         )
 
-        # Conditional color: green if close > open, else red (with some transparency)
-        color = "rgba(0, 200, 0, 0.5)" if row.close > row.open else "rgba(200, 0, 0, 0.5)"  # type: ignore
+        color = "rgba(0, 200, 0, 0.5)" if row.close > row.open else "rgba(200, 0, 0, 0.5)"
         volume_colors.append(color)
 
+        # ───────── SIGNALS ─────────
         if row.prediction != 0:
             signals.append(
                 {
@@ -243,6 +248,20 @@ def generate_ohlcv_chart_data(df: pd.DataFrame, symbol: str) -> dict:
                     "y": row.close,
                 }
             )
+
+        # ───────── FAKE PNL (cumulative) ─────────
+        # Simple rule: up candle = +1, down candle = -1
+        if row.close > row.open:
+            cumulative_pnl += 1.0
+        elif row.close < row.open:
+            cumulative_pnl -= 1.0
+
+        pnl.append(
+            {
+                "x": ts_ms,
+                "y": cumulative_pnl,
+            }
+        )
 
     return {
         "datasets": [
@@ -264,6 +283,14 @@ def generate_ohlcv_chart_data(df: pd.DataFrame, symbol: str) -> dict:
                 "data": signals,
                 "yAxisID": "price",
                 "pointRadius": 5,
+            },
+            {
+                "label": "PnL",
+                "type": "line",
+                "data": pnl,
+                "yAxisID": "pnl",
+                "borderWidth": 2,
+                "pointRadius": 0,
             },
         ]
     }
