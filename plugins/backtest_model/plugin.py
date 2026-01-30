@@ -5,16 +5,12 @@ from typing import Any, List, Optional
 import pandas as pd
 
 from enforcer import ExecutionContext
+
 from .data import (
-    compute_accumulated_pnl,
-    compute_performance_kpis,
-    create_signals_for_backtest,
-    generate_pnl_chart_data,
-    generate_ohlcv_chart_data,
     display_df,
 )
 
-from plugins import ui_schema
+from plugins import ui_schema, CodeSchema
 
 # --------------------------------------------------
 # Pluggy setup
@@ -69,9 +65,9 @@ class Config(BaseModel):
     )
     data_table: str = Field(
         """
-<pre data-table hidden>
+```module
 {{ signals.to_json(orient="records") }}
-</pre>
+```
         """,
         json_schema_extra=ui_schema(
             {
@@ -83,95 +79,12 @@ class Config(BaseModel):
         ),
     )
     report: str = Field(
-        """
-
-{# -------------------------------------------------- #}
-{# 1. Generate signals programmatically (Option A)     #}
-{# -------------------------------------------------- #}
-
-{% set data_df = create_signals(base_assets) %}
-{% set grouped = data_df.groupby("asset") %}
-
-{% for asset_unique in data_df['asset'].unique() %}
-{% set chart = generate_ohlcv_chart_data(data_df, asset_unique) %}
-## OHLCV chart for {{ asset_unique }}  
-```chart
-{
-  type: "candlestick",
-  data: {{ chart }},
-  options: {
-    parsing: false,
-    responsive: true,
-    scales: {
-      x: {
-        type: "time",
-        time: { unit: "day" },
-      },
-      price: {
-        position: "right",            
-        grid: { drawOnChartArea: false },
-      },
-      volume: {        
-        position: "left",        
-        grid: { drawOnChartArea: false },
-      },
-    },
-    plugins: {
-      legend: { display: true },
-    },
-  },
-}
-```
-{% endfor %}
-
-{# -------------------------------------------------- #}
-{# 2. Run analytics                                   #}
-{# -------------------------------------------------- #}
-
-{% set performance_kpis = compute_performance_kpis(data_df, fees) %}
-{% set accumulated_pnl = compute_accumulated_pnl(data_df, bootstrap_windows) %}
-
-## Performance KPI
-```json
-{{ performance_kpis | tojson(indent=2) }}
-```
-
-{% set worst = data_df.nsmallest(10, "prediction") %}
-{% set worst_cases = worst[["timestamp", "asset", "prediction"]] %}
-
-## Worst case
-{{ worst_cases.to_markdown(index=False) }}
-
-{% set per_asset_analysis = [] %}
-{% for asset, df in grouped %}
-    {% set _ = per_asset_analysis.append(
-        dict({"asset": asset}, **compute_performance_kpis(df, fees))
-    )%}
-{% endfor %}
-{% set per_asset_analysis = DataFrame(per_asset_analysis) %}
-
-## Per asset
-{{ per_asset_analysis.to_markdown(index=False) }}
-
-{% set chart = generate_pnl_chart_data(accumulated_pnl) %}
-
-## PNL chart
-```chart
-{
-  type: "line",
-  data: {{ chart }},
-  options: {
-      responsive: true,
-      plugins: {legend: {display: true}},
-  }
-}
-```
-
-""",
+        "",
         json_schema_extra=ui_schema(
             {
                 "ui:field": "Template",
                 "type": "markdown",
+                "url": "LightweighChart.tsx",
             }
         ),
     )
@@ -186,11 +99,6 @@ class Plugin:
 
     _env = {
         "DataFrame": pd.DataFrame,
-        "create_signals": create_signals_for_backtest,
-        "compute_performance_kpis": compute_performance_kpis,
-        "compute_accumulated_pnl": compute_accumulated_pnl,
-        "generate_pnl_chart_data": generate_pnl_chart_data,
-        "generate_ohlcv_chart_data": generate_ohlcv_chart_data,
         "signals": display_df,
     }
 
@@ -208,6 +116,11 @@ class Plugin:
     @classmethod
     def roles(cls):
         return {}
+
+    @hookimpl
+    @classmethod
+    def routes(cls) -> list[tuple[str, CodeSchema]]:
+        return [("dashboard/jobs/:job_jd", {"url": "backtest/Dashboard.tsx"})]
 
     @hookimpl
     @classmethod

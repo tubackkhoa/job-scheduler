@@ -17,7 +17,9 @@ from enforcer import (
     ExecutionContext,
 )
 from models import DAO
+from plugins import CodeSchema
 from renderer import Renderer
+
 
 PROJECT_NAME = "job-scheduler"
 
@@ -59,6 +61,9 @@ class PluginSpec:
 
     @hookspec
     def roles(cls) -> dict[str, set[str]]: ...
+
+    @hookspec
+    def routes(cls) -> list[tuple[str, CodeSchema]]: ...
 
     @hookspec
     async def install(cls) -> bool: ...

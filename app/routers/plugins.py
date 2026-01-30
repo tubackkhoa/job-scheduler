@@ -1,12 +1,23 @@
 from fastapi import APIRouter, Body, HTTPException
 from app.deps import PluginManagerState, UserState
-from models import Job, Plugin
+from models import Job
 from package_downloader import download_package
 from renderer import Renderer
 from schemas import DownloadPayload, PluginCreatePayload
 from plugin_manager import scheduler_logger
 
 router = APIRouter(prefix="/plugins", tags=["plugins"])
+
+
+def get_plugin(plugin_manager: PluginManagerState, plugin_id: int):
+    plugin_item = plugin_manager.dao.plugin_cache.get(plugin_id)
+    if not plugin_item:
+        raise HTTPException(status_code=404, detail="Plugin not found")
+    package = plugin_item[1]
+    plugin = plugin_manager.get_plugin_instance(package)
+    if not plugin:
+        raise HTTPException(status_code=404, detail="Plugin instance not found")
+    return plugin, package
 
 
 @router.get("")
@@ -61,6 +72,16 @@ async def delete_plugin(plugin_manager: PluginManagerState, plugin_id: int):
         raise HTTPException(status_code=500, detail=f"Failed to delete plugin: {str(e)}")
 
 
+@router.get("/routes/{plugin_id}")
+async def routes(
+    plugin_manager: PluginManagerState,
+    user: UserState,
+    plugin_id: int,
+):
+    plugin, _ = get_plugin(plugin_manager, plugin_id)
+    return plugin.routes()
+
+
 @router.get("/schema/{session_id}/{plugin_id}")
 async def schema(
     plugin_manager: PluginManagerState,
@@ -68,13 +89,8 @@ async def schema(
     session_id: int,
     plugin_id: int,
 ):
-    plugin_item = plugin_manager.dao.plugin_cache.get(plugin_id)
-    if not plugin_item:
-        raise HTTPException(status_code=404, detail="Plugin not found")
-    package = plugin_item[1]
-    plugin = plugin_manager.get_plugin_instance(package)
-    if not plugin:
-        raise HTTPException(status_code=404, detail="Plugin instance not found")
+
+    plugin, package = get_plugin(plugin_manager, plugin_id)
 
     try:
         ctx = plugin_manager.create_ctx(user, package)
