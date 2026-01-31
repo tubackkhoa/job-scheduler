@@ -31,9 +31,8 @@ async def list_jobs(
                 [job.id for job in jobs], limit_per_job=1
             )
 
+        collected_ids = defaultdict(set)
         if version_id:
-
-            collected_ids = defaultdict(set)
             for job in jobs:
 
                 for key in version_id:
@@ -55,6 +54,11 @@ async def list_jobs(
                     key: [versions_map[vid] for vid in ids if vid in versions_map]
                     for key, ids in collected_ids.items()
                 }
+
+        # now filter only needed config
+        for job in jobs:
+            if job.config:
+                job.config = {k: v for k, v in job.config.items() if k in collected_ids}
 
         return results
 
