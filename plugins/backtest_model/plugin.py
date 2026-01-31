@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 import pluggy
 from pydantic import BaseModel, Field
 from typing import Any, List, Optional
@@ -73,8 +74,8 @@ class Config(BaseModel):
             {
                 "ui:field": "Template",
                 "type": "markdown",
-                # "code": Path(__file__).with_name("md_code.js").read_text(),
-                "url": "TableMarkdown.tsx",
+                "code": Path(__file__).with_name("md_code.js").read_text(),
+                # "url": "TableMarkdown.tsx",
             }
         ),
     )
@@ -84,7 +85,8 @@ class Config(BaseModel):
             {
                 "ui:field": "Template",
                 "type": "markdown",
-                "url": "LightweighChart.tsx",
+                # "url": "LightweighChart.tsx",
+                "code": Path(__file__).with_name("lightweight_chart.js").read_text(),
             }
         ),
     )
@@ -120,7 +122,13 @@ class Plugin:
     @hookimpl
     @classmethod
     def routes(cls) -> list[tuple[str, CodeSchema]]:
-        return [("dashboard/jobs/:job_jd", {"url": "backtest/Dashboard.tsx"})]
+        # using function so that it will delete memory because page can be huge
+        return [
+            (
+                "dashboard/jobs/:job_jd",
+                {"code": Path(__file__).parent.joinpath("backtest/dashboard.js").read_text()},
+            )
+        ]
 
     @hookimpl
     @classmethod

@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, Body, HTTPException
 from app.deps import PluginManagerState, UserState
 from models import Job
@@ -80,6 +81,30 @@ async def routes(
 ):
     plugin, _ = get_plugin(plugin_manager, plugin_id)
     return plugin.routes()
+
+
+@router.get("/value_versions")
+async def value_versions(
+    plugin_manager: PluginManagerState,
+    user: UserState,
+    field_id: str,
+    plugin_id: Optional[int] = None,
+    search: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+):
+    try:
+        ctx = plugin_manager.create_ctx(user)
+        result = await plugin_manager.dao.get_value_versions(
+            ctx,
+            f"{plugin_id or "*"}.{field_id}",
+            search,
+            limit=limit,
+            offset=offset,
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list value versions: {str(e)}")
 
 
 @router.get("/schema/{session_id}/{plugin_id}")

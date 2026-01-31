@@ -1,7 +1,9 @@
+from collections import defaultdict
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from app.deps import PluginManagerState, UserState
 from typing import Annotated
+from schemas import JobFilters
 
 
 router = APIRouter(prefix="/stats", tags=["stats"])
@@ -11,78 +13,48 @@ router = APIRouter(prefix="/stats", tags=["stats"])
 async def list_jobs(
     plugin_manager: PluginManagerState,
     user: UserState,
-    search_text: Optional[str] = None,
-    active: Optional[bool] = None,
-    plugin_id: Annotated[list[int] | None, Query()] = None,
-    model_key: Annotated[list[str] | None, Query()] = None,
-    sql_id: Annotated[list[int] | None, Query()] = None,
-    session_id: Annotated[list[int] | None, Query()] = None,
-    order_by: Optional[str] = "id",
-    sort: Optional[str] = "desc",
-    limit: Optional[int] = 20,
-    offset: Optional[int] = 0,
+    filters: JobFilters = Depends(),
+    version_id: Annotated[list[str] | None, Query()] = None,
     include_signals: Optional[bool] = False,
 ):
     try:
         ctx = plugin_manager.create_ctx(user)
-        result = await plugin_manager.dao.get_jobs_by_filters(
-            ctx,
-            {
-                "search_text": search_text,
-                "active": active,
-                "plugin_id": plugin_id,
-                "model_key": model_key,
-                "sql_id": sql_id,
-                "session_id": session_id,
-                "order_by": order_by,
-                "sort": sort,
-                "limit": limit,
-                "offset": offset,
-            },
-        )
+        jobs, total = await plugin_manager.dao.get_jobs_by_filters(ctx, filters)
 
-        items = [job.to_dict() for job in result["items"]]
-
-        if include_signals:
-            job_ids = [job["id"] for job in items]
-            signals_map = await plugin_manager.dao.get_signals_for_jobs(job_ids, limit_per_job=1)
-
-            for job in items:
-                job_signals = signals_map.get(job["id"], [])
-                job["signals"] = job_signals
-                job["last_signal"] = job_signals[0]["captured_at"] if job_signals else None
-                job["model_key"] = job["config"]["model_key"] if "model_key" in job["config"] else None
-                job["sql_id"] = job["config"]["sql_id"] if "sql_id" in job["config"] else None
-
-
-        sql_ids = set()
-        for job in items:
-            config = job.get("config") or {}
-            if config.get("sql_id") and int(config["sql_id"]) > 0:
-                try:
-                    sql_ids.add(int(config["sql_id"]))
-                except (ValueError, TypeError):
-                    pass
-            del job["config"]
-
-        if sql_ids:
-            versions = await plugin_manager.dao.get_value_versions_by_filters(ids=list(sql_ids))
-            versions_map = {v["id"]: v for v in versions}
-            for job in items:
-                try:
-                    v = versions_map.get(int((job.get("sql_id") or 0)))
-                except (TypeError, ValueError):
-                    continue
-                
-                if v:
-                    job["sql_version"] = {"id": v["id"], "name": v["name"]}
-
-        return {
-            "items": items,
-            "total": result["total"],
-            "limit": limit,
-            "offset": offset,
+        results = {
+            "jobs": jobs,
+            "total": total,
         }
 
+        if include_signals:
+            results["signals_map"] = await plugin_manager.dao.get_signals_for_jobs(
+                [job.id for job in jobs], limit_per_job=1
+            )
+
+        if version_id:
+
+            collected_ids = defaultdict(set)
+            for job in jobs:
+
+                for key in version_id:
+                    vid: Optional[int] = job.config.get(key) if job.config else None
+                    if vid:
+                        collected_ids[key].add(vid)
+
+            all_version_ids = {vid for ids in collected_ids.values() for vid in ids}
+
+            if all_version_ids:
+                versions = await plugin_manager.dao.get_value_versions_by_filters(
+                    ids=list(all_version_ids)
+                )
+                versions_map = {v["id"]: v for v in versions}
+
+                results["versions"] = {
+                    key: {vid: versions_map[vid] for vid in ids if vid in versions_map}
+                    for key, ids in collected_ids.items()
+                }
+
+        return results
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to list jobs: {str(e)}")
+        raise HTTPException(500, f"Failed to list jobs: {str(e)}")
