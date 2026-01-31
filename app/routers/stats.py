@@ -47,10 +47,12 @@ async def list_jobs(
                 versions = await plugin_manager.dao.get_value_versions_by_filters(
                     ids=list(all_version_ids)
                 )
+
+                # cache for search
                 versions_map = {v["id"]: v for v in versions}
 
                 results["versions"] = {
-                    key: {vid: versions_map[vid] for vid in ids if vid in versions_map}
+                    key: [versions_map[vid] for vid in ids if vid in versions_map]
                     for key, ids in collected_ids.items()
                 }
 
