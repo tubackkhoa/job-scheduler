@@ -80,6 +80,8 @@ async def routes(
     plugin_id: int,
 ):
     plugin, _ = get_plugin(plugin_manager, plugin_id)
+    if not hasattr(plugin, "routes"):
+        return []
     return [key for key, _ in plugin.routes()]
 
 
@@ -91,6 +93,8 @@ async def route_schema(
     route: str,
 ):
     plugin, _ = get_plugin(plugin_manager, plugin_id)
+    if not hasattr(plugin, "routes"):
+        return
     for key, code_schema in plugin.routes():
         if key == route:
             return code_schema
