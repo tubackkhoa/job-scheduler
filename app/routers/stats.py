@@ -1,9 +1,9 @@
 from collections import defaultdict
+import json
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.deps import PluginManagerState, UserState
 from typing import Annotated
-from schemas import JobFilters
 
 
 router = APIRouter(prefix="/stats", tags=["stats"])
@@ -13,13 +13,33 @@ router = APIRouter(prefix="/stats", tags=["stats"])
 async def list_jobs(
     plugin_manager: PluginManagerState,
     user: UserState,
-    filters: JobFilters = Depends(),
+    search_text: str | None = None,
+    active: bool | None = None,
+    plugin_id: Annotated[list[int], Query()] = [],
+    session_id: Annotated[list[int], Query()] = [],
+    order_by: str = "id",
+    sort: str = "desc",
+    limit: int = 20,
+    offset: int = 0,
     version_id: Annotated[list[str] | None, Query()] = None,
+    config: Optional[str] = None,
     include_signals: Optional[bool] = False,
 ):
+
     try:
         ctx = plugin_manager.create_ctx(user)
-        jobs, total = await plugin_manager.dao.get_jobs_by_filters(ctx, filters)
+        jobs, total = await plugin_manager.dao.get_jobs_by_filters(
+            ctx,
+            search_text=search_text,
+            active=active,
+            plugin_id=plugin_id,
+            session_id=session_id,
+            order_by=order_by,
+            sort=sort,
+            limit=limit,
+            offset=offset,
+            config=json.loads(config) if config else None,
+        )
 
         results = {
             "jobs": jobs,

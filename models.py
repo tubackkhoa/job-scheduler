@@ -23,10 +23,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
 )
 
-from sqlalchemy.dialects.postgresql import JSONB
-
 from enforcer import ADMIN_ROLE, ExecutionContext, global_permission
-from schemas import JobFilters
 
 
 class Base(DeclarativeBase):
@@ -314,32 +311,37 @@ class DAO:
 
     @global_permission("system")
     async def get_jobs_by_filters(
-        self, ctx: ExecutionContext, filters: JobFilters
+        self,
+        ctx: ExecutionContext,
+        search_text: Optional[str] = None,
+        active: Optional[bool] = None,
+        plugin_id: Optional[list[int]] = None,
+        session_id: Optional[list[int]] = None,
+        order_by: Optional[str] = None,
+        sort: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+        config: Optional[dict[str, list[int]]] = None,
     ) -> tuple[list[Job], int]:
         async with self.session_factory() as session:
             conditions = []
             # should avoid this kind of search
-            if filters.search_text:
-                conditions.append(Job.description.ilike(f"%{filters.search_text}%"))
-            if filters.active is not None:
-                conditions.append(Job.active == filters.active)
-            if filters.plugin_id:
-                conditions.append(Job.plugin_id.in_(filters.plugin_id))
-            if filters.session_id:
-                conditions.append(Job.session_id.in_(filters.session_id))
+            if search_text:
+                conditions.append(Job.description.ilike(f"%{search_text}%"))
+            if active is not None:
+                conditions.append(Job.active == active)
+            if plugin_id:
+                conditions.append(Job.plugin_id.in_(plugin_id))
+            if session_id:
+                conditions.append(Job.session_id.in_(session_id))
 
             # -----------------------------
             # JSONB filters (fully generic)
             # Anything here must exist in Job.config
             # -----------------------------
-            if filters.config:
+            if config:
                 conditions.append(
-                    or_(
-                        *(
-                            cast(Job.config, JSONB)[key].astext.in_(value)
-                            for key, value in filters.config.items()
-                        )
-                    )
+                    or_(*(Job.config[key].as_string().in_(value) for key, value in config.items()))
                 )
 
             where = [*conditions] if conditions else []
@@ -351,15 +353,15 @@ class DAO:
             # Data query
             stmt = select(Job).where(*where)
 
-            if filters.order_by:
-                col = getattr(Job, filters.order_by)
-                stmt = stmt.order_by(col.desc() if filters.sort == "desc" else col)
+            if order_by:
+                col = getattr(Job, order_by)
+                stmt = stmt.order_by(col.desc() if sort == "desc" else col)
 
-            if filters.limit:
-                stmt = stmt.limit(filters.limit)
+            if limit:
+                stmt = stmt.limit(limit)
 
-            if filters.offset:
-                stmt = stmt.offset(filters.offset)
+            if offset:
+                stmt = stmt.offset(offset)
 
             result = await session.execute(stmt)
             return list(result.scalars().all()), total
@@ -399,12 +401,7 @@ class DAO:
             return []
 
         async with self.session_factory() as session:
-            dialect = session.get_bind().dialect.name
-
-            if dialect == "postgresql":
-                condition = cast(Job.config, JSONB)["model_key"].astext.in_(model_keys)
-            else:  # sqlite
-                condition = func.json_extract(Job.config, "$.model_key").in_(model_keys)
+            condition = Job.config["model_key"].as_string().in_(model_keys)
 
             stmt = select(Job).where(condition)
             result = await session.execute(stmt)
@@ -592,15 +589,11 @@ class DAO:
         field_name = parts[1]
         try:
             async with self.session_factory() as session:
-                cfg = cast(Job.config, JSONB)
                 stmt = select(Job).where(Job.config.isnot(None))
-
-                if version_id is None:
-                    # config ? 'field_name'
-                    stmt = stmt.where(cfg.has_key(field_name))
-                else:
-                    cfg_text = cfg.op("->>")(field_name)
-                    stmt = stmt.where(cast(cfg_text, Integer) == version_id)
+                expr = Job.config[field_name]
+                stmt = stmt.where(
+                    expr.as_integer() == version_id if version_id else expr.isnot(None)
+                )
 
                 result = await session.execute(stmt)
                 jobs = result.scalars().all()
@@ -608,9 +601,7 @@ class DAO:
                     {
                         "job_id": j.id,
                         "description": j.description or "No description",
-                        "config_value": (
-                            (j.config or {}).get(field_name) if isinstance(j.config, dict) else None
-                        ),
+                        "config_value": (j.config or {}).get(field_name),
                         "session_id": j.session_id,
                         "plugin_id": j.plugin_id,
                     }

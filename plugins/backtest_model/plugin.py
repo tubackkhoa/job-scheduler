@@ -109,16 +109,18 @@ class Plugin:
             "dashboard",
             {
                 "url": "backtest/Dashboard.tsx"
-                # "code": Path(__file__).parent.joinpath("backtest/dashboard.js").read_text()
+                # "code": Path(__file__)
+                # .parent.joinpath("backtest/dashboard.js")
+                # .read_text()
             },
         ),
-        (
-            "dashboard/jobs/:job_jd",
-            {
-                "url": "backtest/Job.tsx"
-                # "code": Path(__file__).parent.joinpath("backtest/job.js").read_text()
-            },
-        ),
+        # (
+        #     "dashboard/jobs/:job_jd",
+        #     {
+        #         "url": "backtest/Job.tsx"
+        #         # "code": Path(__file__).parent.joinpath("backtest/job.js").read_text()
+        #     },
+        # ),
     ]
 
     @hookimpl

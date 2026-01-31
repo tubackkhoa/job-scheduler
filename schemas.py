@@ -49,18 +49,6 @@ class TemplatePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class JobFilters(BaseModel):
-    search_text: Optional[str] = None
-    active: Optional[bool] = None
-    plugin_id: Optional[list[int]] = None
-    session_id: Optional[list[int]] = None
-    config: Optional[dict[str, list[str]]] = None
-    order_by: str = "id"
-    sort: str = "desc"
-    limit: int = 20
-    offset: int = 0
-
-
 class Settings(BaseSettings):
 
     # Field names match ENV_VAR names (case-insensitive by default)
