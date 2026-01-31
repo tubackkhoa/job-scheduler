@@ -80,7 +80,20 @@ async def routes(
     plugin_id: int,
 ):
     plugin, _ = get_plugin(plugin_manager, plugin_id)
-    return plugin.routes()
+    return [key for key, _ in plugin.routes()]
+
+
+@router.get("/routes/{plugin_id}/schema")
+async def route_schema(
+    plugin_manager: PluginManagerState,
+    user: UserState,
+    plugin_id: int,
+    route: str,
+):
+    plugin, _ = get_plugin(plugin_manager, plugin_id)
+    for key, code_schema in plugin.routes():
+        if key == route:
+            return code_schema
 
 
 @router.get("/value_versions")

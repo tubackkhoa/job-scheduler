@@ -104,6 +104,23 @@ class Plugin:
         "signals": display_df,
     }
 
+    _routes: list[tuple[str, CodeSchema]] = [
+        (
+            "dashboard",
+            {
+                "url": "backtest/Dashboard.tsx"
+                # "code": Path(__file__).parent.joinpath("backtest/dashboard.js").read_text()
+            },
+        ),
+        (
+            "dashboard/jobs/:job_jd",
+            {
+                "url": "backtest/Job.tsx"
+                # "code": Path(__file__).parent.joinpath("backtest/job.js").read_text()
+            },
+        ),
+    ]
+
     @hookimpl
     @classmethod
     def env(cls):
@@ -123,12 +140,7 @@ class Plugin:
     @classmethod
     def routes(cls) -> list[tuple[str, CodeSchema]]:
         # using function so that it will delete memory because page can be huge
-        return [
-            (
-                "dashboard/jobs/:job_jd",
-                {"code": Path(__file__).parent.joinpath("backtest/dashboard.js").read_text()},
-            )
-        ]
+        return cls._routes
 
     @hookimpl
     @classmethod
