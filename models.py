@@ -14,7 +14,6 @@ from sqlalchemy import (
     or_,
     select,
     text,
-    cast,
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -24,6 +23,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from enforcer import ADMIN_ROLE, ExecutionContext, global_permission
+from schemas import JobQuery
 
 
 class Base(DeclarativeBase):
@@ -313,27 +313,20 @@ class DAO:
     async def get_jobs_by_filters(
         self,
         ctx: ExecutionContext,
-        search_text: Optional[str] = None,
-        active: Optional[bool] = None,
-        plugin_id: Optional[list[int]] = None,
-        session_id: Optional[list[int]] = None,
-        order_by: Optional[str] = None,
-        sort: Optional[str] = None,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
+        query: JobQuery,
         config: Optional[dict[str, list[int]]] = None,
     ) -> tuple[list[Job], int]:
         async with self.session_factory() as session:
             conditions = []
             # should avoid this kind of search
-            if search_text:
-                conditions.append(Job.description.ilike(f"%{search_text}%"))
-            if active is not None:
-                conditions.append(Job.active == active)
-            if plugin_id:
-                conditions.append(Job.plugin_id.in_(plugin_id))
-            if session_id:
-                conditions.append(Job.session_id.in_(session_id))
+            if query.search_text:
+                conditions.append(Job.description.ilike(f"%{query.search_text}%"))
+            if query.active is not None:
+                conditions.append(Job.active == query.active)
+            if query.plugin_id:
+                conditions.append(Job.plugin_id.in_(query.plugin_id))
+            if query.session_id:
+                conditions.append(Job.session_id.in_(query.session_id))
 
             # -----------------------------
             # JSONB filters (fully generic)
@@ -353,15 +346,15 @@ class DAO:
             # Data query
             stmt = select(Job).where(*where)
 
-            if order_by:
-                col = getattr(Job, order_by)
-                stmt = stmt.order_by(col.desc() if sort == "desc" else col)
+            if query.order_by:
+                col = getattr(Job, query.order_by)
+                stmt = stmt.order_by(col.desc() if query.sort == "desc" else col)
 
-            if limit:
-                stmt = stmt.limit(limit)
+            if query.limit:
+                stmt = stmt.limit(query.limit)
 
-            if offset:
-                stmt = stmt.offset(offset)
+            if query.offset:
+                stmt = stmt.offset(query.offset)
 
             result = await session.execute(stmt)
             return list(result.scalars().all()), total
