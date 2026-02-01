@@ -318,6 +318,8 @@ class PluginManager:
             # update routes cache
             if hasattr(plugin, "routes"):
                 cls.routes_cache[package] = frozenset(key for key, _ in plugin.routes())
+            else:
+                cls.routes_cache[package] = frozenset()
 
             return plugin
 
