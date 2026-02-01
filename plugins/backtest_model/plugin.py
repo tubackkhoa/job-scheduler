@@ -108,10 +108,10 @@ class Plugin:
         (
             "dashboard",
             {
-                "url": "backtest/Dashboard.tsx"
-                # "code": Path(__file__)
-                # .parent.joinpath("backtest/dashboard.js")
-                # .read_text()
+                # "url": "backtest/Dashboard.tsx"
+                "code": Path(__file__)
+                .parent.joinpath("backtest/dashboard.js")
+                .read_text()
             },
         ),
         # (

@@ -73,6 +73,11 @@ async def delete_plugin(plugin_manager: PluginManagerState, plugin_id: int):
         raise HTTPException(status_code=500, detail=f"Failed to delete plugin: {str(e)}")
 
 
+@router.get("/routes")
+async def all_routes(plugin_manager: PluginManagerState):
+    return plugin_manager.routes_cache
+
+
 @router.get("/routes/{plugin_id}")
 async def routes(
     plugin_manager: PluginManagerState,
