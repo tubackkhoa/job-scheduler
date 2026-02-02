@@ -74,19 +74,64 @@ class Config(BaseModel):
             {
                 "ui:field": "Template",
                 "type": "markdown",
-                "code": Path(__file__).with_name("md_code.js").read_text(),
-                # "url": "TableMarkdown.tsx",
+                # "code": Path(__file__).with_name("md_code.js").read_text(),
+                "url": "TableMarkdown.tsx",
             }
         ),
     )
     report: str = Field(
-        "",
+        """
+```module
+function generateRandomRows(
+  symbol,
+  candles = 200,
+  startPrice = 100,
+) {
+  const rows = [];
+  let price = startPrice;
+  let ts = Date.now() - candles * 60_000;
+
+  for (let i = 0; i < candles; i++) {
+    const open = price;
+    const change = (Math.random() - 0.5) * 0.02;
+    const close = open * (1 + change);
+    const high = Math.max(open, close) * (1 + Math.random() * 0.003);
+    const low = Math.min(open, close) * (1 - Math.random() * 0.003);
+
+    price = close;
+
+    rows.push({
+      timestamp: ts,
+      asset: symbol,
+      open,
+      high,
+      low,
+      close,
+      volume: Math.random() * 100,
+      prediction: [-1, 0, 1][Math.floor(Math.random() * 3)],
+    });
+
+    ts += 60_000;
+  }
+
+  return rows;
+}
+return [
+      ...generateRandomRows('BTC', 300, 42000),
+      ...generateRandomRows('ETH', 300, 2800),
+      ...generateRandomRows('SOL', 300, 120),
+      ...generateRandomRows('AVAX', 300, 35),
+      ...generateRandomRows('LINK', 300, 15),
+      ...generateRandomRows('DOGE', 300, 0.12),
+    ]
+```
+        """,
         json_schema_extra=ui_schema(
             {
                 "ui:field": "Template",
                 "type": "markdown",
-                # "url": "LightweighChart.tsx",
-                "code": Path(__file__).with_name("lightweight_chart.js").read_text(),
+                "url": "LightweighChart.tsx",
+                # "code": Path(__file__).with_name("lightweight_chart.js").read_text(),
             }
         ),
     )
@@ -108,10 +153,10 @@ class Plugin:
         (
             "dashboard",
             {
-                # "url": "backtest/Dashboard.tsx"
-                "code": Path(__file__)
-                .parent.joinpath("backtest/dashboard.js")
-                .read_text()
+                "url": "backtest/Dashboard.tsx"
+                # "code": Path(__file__)
+                # .parent.joinpath("backtest/dashboard.js")
+                # .read_text()
             },
         ),
         # (
