@@ -56,6 +56,6 @@ def fetch_stats_running_models(base_url: str, api_key: str) -> List[Dict[str, An
     data = _get(
         f"{base_url}/api/test-system/models/stats",
         api_key,
-        params={"status": "running"},
+        # params={"status": "running"},
     )
     return sorted(data.get("stats", []), key=lambda m: m.get("startedAt") or "")

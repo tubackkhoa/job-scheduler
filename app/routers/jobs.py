@@ -2,20 +2,67 @@ from fastapi import APIRouter, Body, HTTPException
 
 from app.deps import PluginManagerState, UserState
 from schemas import ConfigPayload
+from constants import ModelEnv
+from utils.trade_models import activate_forwardtest_model, deactivate_trade_model
+from schemas import settings
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
+def _activate_forwardtest_model(ctx, model_identity):
+    try:
+        webhook_url = settings.uat_endpoint_api
+        webhook_test_apikey = settings.test_system_api_key
+        if not webhook_url or not webhook_test_apikey:
+            raise HTTPException(status_code=400, detail="webhook_url or webhook_test_apikey is missing")
+        activate_forwardtest_model(ctx, model_identity, webhook_url, webhook_test_apikey, ModelEnv.uat_test)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to activate forwardtest model: {str(e)}")
+
+def _deactivate_forwardtest_model(ctx, model_identity):
+    try:
+        webhook_url = settings.uat_endpoint_api
+        webhook_test_apikey = settings.test_system_api_key
+        if not webhook_url or not webhook_test_apikey:
+            raise HTTPException(status_code=400, detail="webhook_url or webhook_test_apikey is missing")
+        deactivate_trade_model(ctx, model_identity, webhook_url, webhook_test_apikey, ModelEnv.uat_test)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to deactivate forwardtest model: {str(e)}")
+
+
 
 @router.post("/{job_id}/activate")
-async def activate_job(plugin_manager: PluginManagerState, job_id: int):
+async def activate_job(plugin_manager: PluginManagerState, user: UserState, job_id: int):
+    
+    job_item = await plugin_manager.dao.get_job(job_id)
+    if not job_item:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
     await plugin_manager.activate_job(job_id)
+    config = job_item.to_dict().get("config", {})
+
+    if config.get("model_tag", "") == ModelEnv.uat_test and config.get("model_key", ""):
+       ctx = plugin_manager.create_ctx(user)
+       _activate_forwardtest_model(ctx, config.get("model_key", ""))
+    
     return {"success": True}
 
 
 @router.post("/{job_id}/deactivate")
-async def deactivate_job(plugin_manager: PluginManagerState, job_id: int):
-    await plugin_manager.deactivate_job(job_id)
+async def deactivate_job(plugin_manager: PluginManagerState, user: UserState, job_id: int):
+    job_item = await plugin_manager.dao.get_job(job_id)
+    if not job_item:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    try:
+        await plugin_manager.deactivate_job(job_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to deactivate job: {str(e)}")
+    
+    config = job_item.to_dict().get("config", {})
+    if config.get("model_tag", "") == ModelEnv.uat_test and config.get("model_key", ""):
+       ctx = plugin_manager.create_ctx(user)
+       _deactivate_forwardtest_model(ctx, config.get("model_key", ""))
+    
     return {"success": True}
+    
 
 
 @router.delete("/{job_id}")
