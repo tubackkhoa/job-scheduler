@@ -92,7 +92,7 @@ export default function ({
       />
 
       <Button variant="contained" onClick={handleRun} disabled={loading}>
-        {loading ? 'Running…' : 'Run ok'}
+        {loading ? 'Running…' : 'Run'}
       </Button>
 
       <Typography variant="subtitle1">Output (JSON)</Typography>
