@@ -17,7 +17,9 @@ from enforcer import (
     ExecutionContext,
 )
 from models import DAO
+from plugins import CodeSchema
 from renderer import Renderer
+
 
 PROJECT_NAME = "job-scheduler"
 
@@ -61,6 +63,9 @@ class PluginSpec:
     def roles(cls) -> dict[str, set[str]]: ...
 
     @hookspec
+    def routes(cls) -> list[tuple[str, CodeSchema]]: ...
+
+    @hookspec
     async def install(cls) -> bool: ...
 
     @hookspec
@@ -94,6 +99,7 @@ class PluginManager:
     manager = pluggy.PluginManager(PROJECT_NAME)
     manager.add_hookspecs(PluginSpec)
 
+    routes_cache: dict[str, frozenset[str]] = {}
     _failed_plugins: dict[str, Exception] = {}
 
     def __init__(
@@ -145,25 +151,44 @@ class PluginManager:
             self.scheduler.shutdown()
 
     @classmethod
+    def _iter_plugin_permissions(cls, package: str, plugin_cls: PluginSpec):
+        mapping = plugin_cls.roles()
+        if not isinstance(mapping, dict):
+            return
+
+        for permission_key, roles in mapping.items():
+            permission = f"{package}:{permission_key}"
+            for role in roles:
+                if role != ADMIN_ROLE:
+                    yield role, permission
+
+    @classmethod
     def register_plugin_permissions(cls, package: str, plugin_cls: PluginSpec):
         if not cls.enforcer:
             return
         try:
-            mapping = plugin_cls.roles()
-            if not isinstance(mapping, dict):
-                return
             enforcer = cls.enforcer
-            for permission_key, roles in mapping.items():
-                # with : to avoid name collision
-                permission = f"{package}:{permission_key}"
-                for role in roles:
-                    # make sure not override by mistake in plugin, even we have make permission non-conflict
-                    if role != ADMIN_ROLE and not enforcer.has_policy(role, permission):
-                        enforcer.add_policy(role, permission)
-
-        except Exception as ex:
+            for role, permission in cls._iter_plugin_permissions(package, plugin_cls):
+                if not enforcer.has_policy(role, permission):
+                    enforcer.add_policy(role, permission)
+        except Exception:
             scheduler_logger.exception(
                 "Failed to register plugin permissions",
+                extra={"package": package},
+            )
+
+    @classmethod
+    def unregister_plugin_permissions(cls, package: str, plugin_cls: PluginSpec):
+        if not cls.enforcer:
+            return
+        try:
+            enforcer = cls.enforcer
+            for role, permission in cls._iter_plugin_permissions(package, plugin_cls):
+                if enforcer.has_policy(role, permission):
+                    enforcer.remove_policy(role, permission)
+        except Exception:
+            scheduler_logger.exception(
+                "Failed to unregister plugin permissions",
                 extra={"package": package},
             )
 
@@ -257,6 +282,9 @@ class PluginManager:
 
         existing_plugin = cls.manager.get_plugin(package)
         if existing_plugin:
+            # clear data
+            cls.unregister_plugin_permissions(package, existing_plugin)
+            cls.routes_cache.pop(package, None)
             cls.manager.unregister(existing_plugin, package)
 
     @classmethod
@@ -286,6 +314,13 @@ class PluginManager:
             assert plugin
             cls.manager.register(plugin, package)
             cls.register_plugin_permissions(package, plugin)
+
+            # update routes cache
+            if hasattr(plugin, "routes"):
+                cls.routes_cache[package] = frozenset(key for key, _ in plugin.routes())
+            else:
+                cls.routes_cache[package] = frozenset()
+
             return plugin
 
         except Exception as e:

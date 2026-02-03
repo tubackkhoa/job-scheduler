@@ -11,9 +11,9 @@ from sqlalchemy import (
     String,
     Text,
     delete,
+    or_,
     select,
     text,
-    cast,
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -22,9 +22,8 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
 )
 
-from sqlalchemy.dialects.postgresql import JSONB
-
 from enforcer import ADMIN_ROLE, ExecutionContext, global_permission
+from schemas import JobQuery
 
 
 class Base(DeclarativeBase):
@@ -311,54 +310,54 @@ class DAO:
             return result.scalars().all()
 
     @global_permission("system")
-    async def get_jobs_by_filters(self, ctx: ExecutionContext, filters: Dict[str, Any]):
+    async def get_jobs_by_filters(
+        self,
+        ctx: ExecutionContext,
+        query: JobQuery,
+        config: Optional[dict[str, list[int]]] = None,
+    ) -> tuple[list[Job], int]:
         async with self.session_factory() as session:
             conditions = []
-            if filters.get("search_text") is not None:
+            # should avoid this kind of search
+            if query.search_text:
+                conditions.append(Job.description.ilike(f"%{query.search_text}%"))
+            if query.active is not None:
+                conditions.append(Job.active == query.active)
+            if query.plugin_id:
+                conditions.append(Job.plugin_id.in_(query.plugin_id))
+            if query.session_id:
+                conditions.append(Job.session_id.in_(query.session_id))
+
+            # -----------------------------
+            # JSONB filters (fully generic)
+            # Anything here must exist in Job.config
+            # -----------------------------
+            if config:
                 conditions.append(
-                    cast(Job.config, JSONB)["model_key"].astext.ilike(f"%{filters['search_text']}%")
-                    | Job.description.ilike(f"%{filters['search_text']}%")
+                    or_(*(Job.config[key].as_string().in_(value) for key, value in config.items()))
                 )
-            if filters.get("active") is not None:
-                conditions.append(Job.active == filters["active"])
-            if filters.get("plugin_id") is not None:
-                conditions.append(Job.plugin_id.in_([int(x) for x in filters["plugin_id"]]))
-            if filters.get("model_key") is not None:
-                conditions.append(
-                    cast(Job.config, JSONB)["model_key"].astext.in_(filters["model_key"])
-                )
-            if filters.get("sql_id") is not None:
-                conditions.append(
-                    cast(Job.config, JSONB)["sql_id"].astext.in_(
-                        [str(x) for x in filters["sql_id"]]
-                    )
-                )
-            if filters.get("session_id") is not None:
-                conditions.append(Job.session_id.in_([int(x) for x in filters["session_id"]]))
+
+            where = [*conditions] if conditions else []
 
             # Count query
-            count_stmt = select(func.count()).select_from(Job)
-            if conditions:
-                count_stmt = count_stmt.where(*conditions)
+            count_stmt = select(func.count()).select_from(Job).where(*where)
             total = (await session.execute(count_stmt)).scalar() or 0
 
             # Data query
-            stmt = select(Job)
-            if conditions:
-                stmt = stmt.where(*conditions)
+            stmt = select(Job).where(*where)
 
-            if filters.get("order_by") is not None:
-                if filters.get("sort") == "desc":
-                    stmt = stmt.order_by(getattr(Job, filters["order_by"]).desc())
-                else:
-                    stmt = stmt.order_by(getattr(Job, filters["order_by"]))
-            if filters.get("limit") is not None:
-                stmt = stmt.limit(filters["limit"])
-            if filters.get("offset") is not None:
-                stmt = stmt.offset(filters["offset"])
+            if query.order_by:
+                col = getattr(Job, query.order_by)
+                stmt = stmt.order_by(col.desc() if query.sort == "desc" else col)
+
+            if query.limit:
+                stmt = stmt.limit(query.limit)
+
+            if query.offset:
+                stmt = stmt.offset(query.offset)
 
             result = await session.execute(stmt)
-            return {"items": result.scalars().all(), "total": total}
+            return list(result.scalars().all()), total
 
     # ---------- permissions ----------
 
@@ -388,19 +387,14 @@ class DAO:
 
             return plugins
 
-    # ---------- JSON / raw SQL ----------
+    # ---------- JSON / raw Value ----------
 
     async def get_jobs_by_model_keys(self, model_keys: List[str]) -> List[dict]:
         if not model_keys:
             return []
 
         async with self.session_factory() as session:
-            dialect = session.get_bind().dialect.name
-
-            if dialect == "postgresql":
-                condition = cast(Job.config, JSONB)["model_key"].astext.in_(model_keys)
-            else:  # sqlite
-                condition = func.json_extract(Job.config, "$.model_key").in_(model_keys)
+            condition = Job.config["model_key"].as_string().in_(model_keys)
 
             stmt = select(Job).where(condition)
             result = await session.execute(stmt)
@@ -432,7 +426,7 @@ class DAO:
         async with self.session_factory() as session:
             version = await session.get(ValueVersion, version_id)
             if not version:
-                raise Exception(f"SQL version {version_id} not found")
+                raise Exception(f"Value version {version_id} not found")
 
             return version.to_dict()
 
@@ -449,7 +443,7 @@ class DAO:
             version = result.scalar_one_or_none()
 
             if not version:
-                raise Exception(f"No SQL version found for field_id: {field_id}")
+                raise Exception(f"No Value version found for field_id: {field_id}")
 
             return version.to_dict()
 
@@ -459,44 +453,41 @@ class DAO:
         ctx: ExecutionContext,
         field_id: str,
         search: Optional[str] = None,
-        id: Optional[int] = None,
+        version_id: Optional[int] = None,
         limit: int = 100,
         offset: int = 0,
     ) -> dict:
         try:
-            _, field_name = field_id.rsplit(".", 1)
+            plugin_part, field_name = field_id.rsplit(".", 1)
         except ValueError:
-            raise ValueError('field_id must be in format "{plugin_id}.{field_name}"')
-        async with self.session_factory() as session:
-            dialect = session.get_bind().dialect.name
-            if dialect == "postgresql":
-                field_expr = func.split_part(ValueVersion.field_id, ".", 2)
-            elif dialect == "sqlite":
-                field_expr = func.substr(
-                    ValueVersion.field_id, func.instr(ValueVersion.field_id, ".") + 1
-                )
-            else:
-                raise NotImplementedError(f"Unsupported dialect: {dialect}")
+            raise ValueError(
+                'field_id must be in format "{plugin_id}.{field_name}" or *.{field_name}'
+            )
 
-            stmt = select(ValueVersion).where(field_expr == field_name)
+        async with self.session_factory() as session:
+            stmt = select(ValueVersion).where(
+                ValueVersion.field_id.like(f"%.{field_name}")
+                if plugin_part == "*"
+                else ValueVersion.field_id == field_id
+            )
+
             if search:
                 stmt = stmt.where(ValueVersion.name.ilike(f"%{search}%"))
 
-            if id:
-                stmt = stmt.where(ValueVersion.id == id)
+            if version_id:
+                stmt = stmt.where(ValueVersion.id == version_id)
 
             stmt = stmt.order_by(ValueVersion.created_at.desc()).limit(limit).offset(offset)
 
             result = await session.execute(stmt)
             versions = result.scalars().all()
 
-            return {
-                "versions": [v.to_dict() for v in versions],
-                "count": len(versions),
-                "search": search,
-                "limit": limit,
-                "offset": offset,
-            }
+        return {
+            "versions": [v.to_dict() for v in versions],
+            "search": search,
+            "limit": limit,
+            "offset": offset,
+        }
 
     async def get_value_versions_by_filters(
         self,
@@ -521,7 +512,7 @@ class DAO:
         async with self.session_factory() as session:
             version = await session.get(ValueVersion, version_id)
             if not version:
-                raise Exception(f"SQL version {version_id} not found")
+                raise Exception(f"Value version {version_id} not found")
 
             for field, value in payload.items():
                 setattr(version, field, value)
@@ -591,15 +582,11 @@ class DAO:
         field_name = parts[1]
         try:
             async with self.session_factory() as session:
-                cfg = cast(Job.config, JSONB)
                 stmt = select(Job).where(Job.config.isnot(None))
-
-                if version_id is None:
-                    # config ? 'field_name'
-                    stmt = stmt.where(cfg.has_key(field_name))
-                else:
-                    cfg_text = cfg.op("->>")(field_name)
-                    stmt = stmt.where(cast(cfg_text, Integer) == version_id)
+                expr = Job.config[field_name]
+                stmt = stmt.where(
+                    expr.as_integer() == version_id if version_id else expr.isnot(None)
+                )
 
                 result = await session.execute(stmt)
                 jobs = result.scalars().all()
@@ -607,9 +594,7 @@ class DAO:
                     {
                         "job_id": j.id,
                         "description": j.description or "No description",
-                        "config_value": (
-                            (j.config or {}).get(field_name) if isinstance(j.config, dict) else None
-                        ),
+                        "config_value": (j.config or {}).get(field_name),
                         "session_id": j.session_id,
                         "plugin_id": j.plugin_id,
                     }
@@ -635,43 +620,48 @@ class DAO:
         return dependent_jobs
 
     # ---------- delete ----------
-
     async def delete_value_version(self, version_id: int) -> dict:
-        dependent_jobs = await self.get_jobs_depending_on_version(version_id)
-
-        updated_job_count = 0
-        if dependent_jobs:
-            field_name = dependent_jobs[0]["field_name"]
-
-            async with self.session_factory() as session:
-                for job_info in dependent_jobs:
-                    job = await session.get(Job, job_info["job_id"])
-                    if not job:
-                        continue
-
-                    config = job.config or {}
-
-                    config[field_name] = 0
-                    job.config = config
-                    if job.active:
-                        self.job_config_cache[job.id] = config
-                    updated_job_count += 1
-
-                await session.commit()
-
         async with self.session_factory() as session:
+            # 1️⃣ Load version ONCE
             version = await session.get(ValueVersion, version_id)
             if not version:
-                raise Exception(f"SQL version {version_id} not found")
+                raise Exception(f"Value version {version_id} not found")
 
+            try:
+                _, field_name = version.field_id.split(".", 1)
+            except ValueError:
+                raise Exception(f"Invalid field_id format: {version.field_id}")
+
+            # 2️⃣ Load all affected jobs in ONE query
+            stmt = select(Job).where(
+                Job.config.isnot(None),
+                Job.config[field_name].as_integer() == version_id,
+            )
+
+            result = await session.execute(stmt)
+            jobs = result.scalars().all()
+
+            updated_job_count = 0
+
+            for job in jobs:
+                config = job.config or {}
+                config[field_name] = 0
+                job.config = config
+
+                if job.active:
+                    self.job_config_cache[job.id] = config
+
+                updated_job_count += 1
+
+            # 3️⃣ Delete version in SAME transaction
             await session.delete(version)
             await session.commit()
 
-            return {
-                "success": True,
-                "message": f"SQL version {version_id} deleted",
-                "updated_jobs": updated_job_count,
-            }
+        return {
+            "success": True,
+            "message": f"Value version {version_id} deleted",
+            "updated_jobs": updated_job_count,
+        }
 
     @global_permission("job")
     async def apply_value_version_all_jobs(
