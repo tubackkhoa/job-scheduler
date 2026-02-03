@@ -217,11 +217,11 @@ class PluginManager:
     @classmethod
     def get_plugin_instance(cls, package: str) -> Optional[PluginSpec]:
         if not cls.manager.has_plugin(package):
-            scheduler_logger.info(f"Loading plugin: {package}")
             try:
-                cls.load_plugin(package)
+                scheduler_logger.info(f"Loading plugin: {package}")
+                return cls.load_plugin(package)
             except Exception as e:
-                logging.error(f"Error loading plugin: {e}", exc_info=True)
+                scheduler_logger.exception(f"Error loading plugin: {e}")
                 return None
 
         return cls.manager.get_plugin(package)
@@ -274,7 +274,7 @@ class PluginManager:
             # logger.info(f"Job executed successfully (return value: {retval})")
             return retval
         except Exception as e:
-            logger.error(f"Job failed with exception: {e}", exc_info=True)
+            logger.exception(f"Job failed with exception: {e}")
 
     @classmethod
     def unload_plugin(cls, package: str):
@@ -327,7 +327,7 @@ class PluginManager:
             err = RuntimeError(f"Failed to load plugin '{package}': {e}")
             cls._failed_plugins[package] = err
             # show error to terminal to check but keep running
-            scheduler_logger.error(err, exc_info=True)
+            scheduler_logger.exception(err)
             # Raise exception to prevent saving invalid plugin to database
             raise err
 
