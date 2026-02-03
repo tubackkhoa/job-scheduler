@@ -229,9 +229,6 @@ async def fetch_data(ctx: ExecutionContext):
     return ctx.user
 
 
-P = ParamSpec("P")
-
-
 class Plugin:
 
     _env = {
