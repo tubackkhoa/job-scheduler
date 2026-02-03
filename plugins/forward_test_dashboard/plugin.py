@@ -9,6 +9,8 @@ from .api import get_running_models, fetch_stats_running_models, update_model_co
 from .config import Config
 from .formatters import fmt_pnl, fmt_status, fmt_latest, fmt_winrate, fmt_drawdown
 from enforcer import GLOBAL_PERMISSION_REGISTRY
+from pathlib import Path
+
 
 async def fetch_signal_messages(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
     dao = GLOBAL_PERMISSION_REGISTRY.get("dao")
@@ -41,6 +43,21 @@ class Plugin:
         "fmt_drawdown": fmt_drawdown,
         "get_equity_curve_forward_test": get_equity_curve_forward_test,
     }
+    _routes: list[tuple[str, Any]] = [
+        (
+            "dashboard",
+            {
+                "code": Path(__file__).with_name("dashboard.js").read_text(),
+            },
+        ),
+    ]
+
+    @hookimpl
+    @classmethod
+    def routes(cls) -> list[tuple[str, Any]]:
+        # using function so that it will delete memory because page can be huge
+        return cls._routes
+    
 
     @hookimpl
     @classmethod
