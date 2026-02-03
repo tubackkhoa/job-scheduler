@@ -75,7 +75,8 @@ def build_stats_table(
             "Latest Position": fmt_latest(last_pos_formatted),
             "Latest Position Time": last_pos_time,
             "Status": fmt_status(identity_job.get(identity)),
-            "Started": stat.get("startedAt"),
+            "Hide Status": identity_job.get(identity).get("state") if identity_job.get(identity) else "",
+            "Started": format_utc_time(stat.get("startedAt")),
             "Total Positions": positions,
             "Total Runtime": stat.get("totalRunningTime") or "-",
         })

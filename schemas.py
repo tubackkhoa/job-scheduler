@@ -77,5 +77,8 @@ class Settings(BaseSettings):
     chatbot_enabled: bool = False
     jinja_cache_path: str = "cache/jinja"
 
+    uat_endpoint_api: str = ""
+    test_system_api_key: str = ""
+
 
 settings = Settings()
