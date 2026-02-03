@@ -70,11 +70,10 @@ def build_stats_table(
             "PNL 1H": fmt_pnl(stat.get("pnlDelta1h") or 0.0),
             "PNL 4H": fmt_pnl(stat.get("pnlDelta4h") or 0.0),
             "PNL 1D": fmt_pnl(stat.get("pnlDelta1d") or 0.0),
-           
             "Winrate": fmt_winrate(stat.get("winrate")),
             "Max Drawdown": stat.get("maxDrawdown"),
             "Latest Position": fmt_latest(last_pos_formatted),
-            "Latest Position Time": format_utc_time(last_pos_time),
+            "Latest Position Time": last_pos_time,
             "Status": fmt_status(identity_job.get(identity)),
             "Hide Status": identity_job.get(identity).get("state") if identity_job.get(identity) else "",
             "Started": format_utc_time(stat.get("startedAt")),
