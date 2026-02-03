@@ -46,6 +46,7 @@ class ModelEnv(str, Enum):
     production = "production"
     uat = "uat"
     uat_test = "forward_test"
+
     def __str__(self):
         return self.value
 
@@ -69,7 +70,7 @@ class Config(BaseModel):
         "",
         title="Model Type",
         json_schema_extra=ui_schema_crud(
-            field_url=Path(__file__).with_name("crud.js").read_text(),
+            field_code=Path(__file__).with_name("crud.js").read_text(),
             # field_url="CrudField.tsx",
             field_path=["model_type"],
             crud_exprs={
@@ -124,17 +125,17 @@ class Plugin:
     ):
         if isinstance(json, str):
             import json as json_module
+
             json = json_module.loads(json)
         return Config.model_validate(json or {})
-    
 
     @hookimpl
     @classmethod
     def roles(cls):
         return {"admin"}
 
-    @hookimpl   
-    @classmethod    
+    @hookimpl
+    @classmethod
     async def run(
         cls,
         config: Config,
