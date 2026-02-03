@@ -18,6 +18,7 @@ class Config(BaseModel):
         "",
         title="PNL Dashboard",
         json_schema_extra=ui_schema({"ui:field": "Template", "type": "markdown",  "code": Path(__file__).with_name("pnl_preview.js").read_text(),}),
+        # json_schema_extra=ui_schema({"ui:field": "Template", "type": "markdown",  "url": "MarkdownTable.tsx"}),
     )
 
     signal_keyword: str = Field(

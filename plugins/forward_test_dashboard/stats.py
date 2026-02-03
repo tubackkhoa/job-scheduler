@@ -29,6 +29,14 @@ def build_stats_table(
             "total_positions": 0
         }
     
+    # Deduplicate stats by identity, keeping the latest one
+    seen_identities = {}
+    for stat in stats:
+        identity = stat.get("identity")
+        if identity:
+            seen_identities[identity] = stat
+    stats = list(seen_identities.values())
+    
     # Map model identity → job info
     identity_job = {}
     for job in jobs:
