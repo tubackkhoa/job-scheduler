@@ -99,4 +99,20 @@ def update_model_config(
         logger.exception("Unexpected API failure: %s", url)
 
     return {}
-    
+
+
+def get_equity_curve_forward_test(identity: str, start_time: Optional[str], end_time: Optional[str]) -> List[Dict[str, Any]]:
+    base_url = settings.uat_endpoint_api
+    api_key = settings.test_system_api_key
+    params = {}
+    if start_time:
+        params["startDate"] = start_time
+    if end_time:
+        params["endDate"] = end_time
+    data = _get(
+        f"{base_url}/api/test-system/models/{identity}/equity",
+        api_key,
+        params=params,
+        timeout=API_TIMEOUT_LONG,
+    )
+    return data.get("data", [])
