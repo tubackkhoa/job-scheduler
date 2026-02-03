@@ -33,33 +33,33 @@ def _deactivate_forwardtest_model(ctx, model_identity):
 @router.post("/{job_id}/activate")
 async def activate_job(plugin_manager: PluginManagerState, user: UserState, job_id: int):
     
-    job_item = await plugin_manager.dao.get_job(job_id)
-    if not job_item:
-        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    # job_item = await plugin_manager.dao.get_job(job_id)
+    # if not job_item:
+    #     raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
     await plugin_manager.activate_job(job_id)
-    config = job_item.to_dict().get("config", {})
+    # config = job_item.to_dict().get("config", {})
 
-    if config.get("model_tag", "") == ModelEnv.uat_test and config.get("model_key", ""):
-       ctx = plugin_manager.create_ctx(user)
-       _activate_forwardtest_model(ctx, config.get("model_key", ""))
+    # if config.get("model_tag", "") == ModelEnv.uat_test and config.get("model_key", ""):
+    #    ctx = plugin_manager.create_ctx(user)
+    #    _activate_forwardtest_model(ctx, config.get("model_key", ""))
     
     return {"success": True}
 
 
 @router.post("/{job_id}/deactivate")
 async def deactivate_job(plugin_manager: PluginManagerState, user: UserState, job_id: int):
-    job_item = await plugin_manager.dao.get_job(job_id)
-    if not job_item:
-        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    # job_item = await plugin_manager.dao.get_job(job_id)
+    # if not job_item:
+    #     raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
     try:
         await plugin_manager.deactivate_job(job_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to deactivate job: {str(e)}")
     
-    config = job_item.to_dict().get("config", {})
-    if config.get("model_tag", "") == ModelEnv.uat_test and config.get("model_key", ""):
-       ctx = plugin_manager.create_ctx(user)
-       _deactivate_forwardtest_model(ctx, config.get("model_key", ""))
+    # config = job_item.to_dict().get("config", {})
+    # if config.get("model_tag", "") == ModelEnv.uat_test and config.get("model_key", ""):
+    #    ctx = plugin_manager.create_ctx(user)
+    #    _deactivate_forwardtest_model(ctx, config.get("model_key", ""))
     
     return {"success": True}
     

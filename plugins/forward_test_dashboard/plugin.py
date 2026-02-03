@@ -5,7 +5,7 @@ from jinja2 import Environment
 from .pnl import build_pnl_table
 from .signals import build_signal_comparison
 from .stats import build_stats_table
-from .api import get_running_models, fetch_stats_running_models
+from .api import get_running_models, fetch_stats_running_models, update_model_config
 from .config import Config
 from .formatters import fmt_pnl, fmt_status, fmt_latest, fmt_winrate, fmt_drawdown
 from enforcer import GLOBAL_PERMISSION_REGISTRY
@@ -29,6 +29,7 @@ class Plugin:
     _env = {
         "get_running_models": get_running_models,
         "fetch_stats_running_models": fetch_stats_running_models,
+        "update_model_config": update_model_config,
         "build_pnl_table": build_pnl_table,
         "build_stats_table": build_stats_table,
         "build_signal_comparison": build_signal_comparison,
