@@ -1,4 +1,6 @@
-from typing import Any, Dict, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, Optional, Annotated
+from fastapi import Query
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
@@ -47,6 +49,20 @@ class TemplatePayload(BaseModel):
     params: Dict[str, Any]
 
     model_config = ConfigDict(extra="forbid")
+
+
+@dataclass(frozen=True)
+class JobQuery:
+    search_text: Optional[str] = None
+    active: Optional[bool] = None
+
+    plugin_id: Annotated[Optional[list[int]], Query()] = None
+    session_id: Annotated[Optional[list[int]], Query()] = None
+
+    order_by: str = "id"
+    sort: str = "desc"
+    limit: int = 20
+    offset: int = 0
 
 
 class Settings(BaseSettings):

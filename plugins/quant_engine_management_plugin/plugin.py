@@ -46,6 +46,7 @@ class ModelEnv(str, Enum):
     production = "production"
     uat = "uat"
     uat_test = "forward_test"
+
     def __str__(self):
         return self.value
 
@@ -123,17 +124,17 @@ class Plugin:
     ):
         if isinstance(json, str):
             import json as json_module
+
             json = json_module.loads(json)
         return Config.model_validate(json or {})
-    
 
     @hookimpl
     @classmethod
     def roles(cls):
         return {"admin"}
 
-    @hookimpl   
-    @classmethod    
+    @hookimpl
+    @classmethod
     async def run(
         cls,
         config: Config,
