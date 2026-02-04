@@ -620,43 +620,48 @@ class DAO:
         return dependent_jobs
 
     # ---------- delete ----------
-
     async def delete_value_version(self, version_id: int) -> dict:
-        dependent_jobs = await self.get_jobs_depending_on_version(version_id)
-
-        updated_job_count = 0
-        if dependent_jobs:
-            field_name = dependent_jobs[0]["field_name"]
-
-            async with self.session_factory() as session:
-                for job_info in dependent_jobs:
-                    job = await session.get(Job, job_info["job_id"])
-                    if not job:
-                        continue
-
-                    config = job.config or {}
-
-                    config[field_name] = 0
-                    job.config = config
-                    if job.active:
-                        self.job_config_cache[job.id] = config
-                    updated_job_count += 1
-
-                await session.commit()
-
         async with self.session_factory() as session:
+            # 1️⃣ Load version ONCE
             version = await session.get(ValueVersion, version_id)
             if not version:
                 raise Exception(f"Value version {version_id} not found")
 
+            try:
+                _, field_name = version.field_id.split(".", 1)
+            except ValueError:
+                raise Exception(f"Invalid field_id format: {version.field_id}")
+
+            # 2️⃣ Load all affected jobs in ONE query
+            stmt = select(Job).where(
+                Job.config.isnot(None),
+                Job.config[field_name].as_integer() == version_id,
+            )
+
+            result = await session.execute(stmt)
+            jobs = result.scalars().all()
+
+            updated_job_count = 0
+
+            for job in jobs:
+                config = job.config or {}
+                config[field_name] = 0
+                job.config = config
+
+                if job.active:
+                    self.job_config_cache[job.id] = config
+
+                updated_job_count += 1
+
+            # 3️⃣ Delete version in SAME transaction
             await session.delete(version)
             await session.commit()
 
-            return {
-                "success": True,
-                "message": f"Value version {version_id} deleted",
-                "updated_jobs": updated_job_count,
-            }
+        return {
+            "success": True,
+            "message": f"Value version {version_id} deleted",
+            "updated_jobs": updated_job_count,
+        }
 
     @global_permission("job")
     async def apply_value_version_all_jobs(

@@ -1,6 +1,7 @@
 import httpx
 import logging
 from typing import Optional, List, Dict, Any
+from schemas import settings
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +35,11 @@ def _get(
     return {}
 
 
-def get_running_models(base_url: str, api_key: str) -> List[Dict[str, Any]]:
+def get_running_models(base_url: str, api_key: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     data = _get(
         f"{base_url}/api/test-system/models",
         api_key,
-        params={"status": "running"},
+        params=params,
     )
     return sorted(data.get("models", []), key=lambda m: m.get("createdAt") or "")
 
@@ -56,6 +57,62 @@ def fetch_stats_running_models(base_url: str, api_key: str) -> List[Dict[str, An
     data = _get(
         f"{base_url}/api/test-system/models/stats",
         api_key,
-        params={"status": "running"},
+        # params={"status": "running"},
     )
     return sorted(data.get("stats", []), key=lambda m: m.get("startedAt") or "")
+
+
+def update_model_config(
+    identity: str,
+    config: Dict[str, Any],
+    config_name: Optional[str] = None,
+) -> Dict[str, Any]:
+    base_url = settings.uat_endpoint_api
+    api_key = settings.test_system_api_key
+    if not identity:
+        raise ValueError("identity is required")
+    payload = {
+        "identity": identity,
+        "config": config,
+    }
+    if config_name:
+        payload["configName"] = config_name
+
+    url = f"{base_url}/api/test-system/model/config"
+    timeout = API_TIMEOUT_SHORT
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.put(
+                url,
+                headers={
+                    "test-system-api-key": api_key,
+                    "accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.HTTPError as e:
+        logger.warning("API error %s: %s", url, e)
+    except Exception:
+        logger.exception("Unexpected API failure: %s", url)
+
+    return {}
+
+
+def get_equity_curve_forward_test(identity: str, start_time: Optional[str], end_time: Optional[str]) -> List[Dict[str, Any]]:
+    base_url = settings.uat_endpoint_api
+    api_key = settings.test_system_api_key
+    params = {}
+    if start_time:
+        params["startDate"] = start_time
+    if end_time:
+        params["endDate"] = end_time
+    data = _get(
+        f"{base_url}/api/test-system/models/{identity}/equity",
+        api_key,
+        params=params,
+        timeout=API_TIMEOUT_LONG,
+    )
+    return data.get("data", [])

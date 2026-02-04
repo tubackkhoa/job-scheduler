@@ -60,6 +60,20 @@ def describe_callable(obj: Any) -> dict[str, Any]:
     }
 
 
+def pick(items: list[Any], *fields: str):
+    result = []
+    for item in items:
+        if isinstance(item, dict):
+            result.append({f: item.get(f) for f in fields})
+        else:
+            result.append({f: getattr(item, f, None) for f in fields})
+    return result
+
+
+def in_clause(values: list[object]):
+    return "()" if not values else f"({','.join(map(repr, values))})"
+
+
 class Renderer:
     _templates = LRUDict()
     _sandbox = SandboxedEnvironment(
@@ -75,12 +89,12 @@ class Renderer:
     )
 
     _sandbox.globals.update({"datetime": datetime, "timedelta": timedelta, "timezone": timezone})
+    _sandbox.policies["json.dumps_kwargs"] = {"sort_keys": False}
 
     _sandbox.filters.update(
         {
-            "in_clause": lambda values: (
-                "()" if not values else f"({','.join(map(repr, values))})"
-            ),
+            "in_clause": in_clause,
+            "pick": pick,
         }
     )
 
