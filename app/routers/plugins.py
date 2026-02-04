@@ -32,7 +32,7 @@ def plugins(
 
 
 @router.post("")
-def create_plugin(plugin_manager: PluginManagerState, payload: PluginCreatePayload = Body(...)):
+async def create_plugin(plugin_manager: PluginManagerState, payload: PluginCreatePayload = Body(...)):
     """
     Create a plugin record and load it into the PluginManager.
 
@@ -45,7 +45,7 @@ def create_plugin(plugin_manager: PluginManagerState, payload: PluginCreatePaylo
     """
     # Load into manager
     try:
-        plugin_id = plugin_manager.add_plugin(
+        plugin_id = await plugin_manager.add_plugin(
             payload.package, payload.interval, payload.description
         )
         return {
