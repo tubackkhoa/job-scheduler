@@ -36,6 +36,11 @@ dependencies = [
     "sqlglot",
     "casbin-redis-adapter>=1.5.0",
     "greenlet>=3.3.0",
+    "pydantic-settings>=2.12.0",
+    "jinja2>=3.1.6",
+    "httpx>=0.28.1",
+    "psycopg2>=2.9.11",
+    "psycopg2-binary>=2.9.11",
 ]
 
 [project.urls]
