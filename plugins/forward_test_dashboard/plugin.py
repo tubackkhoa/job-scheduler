@@ -2,15 +2,14 @@ import pluggy
 import logging
 from typing import Any, Callable, Dict, Optional
 from jinja2 import Environment
-from .pnl import build_pnl_table
-from .signals import build_signal_comparison
-from .stats import build_stats_table
-from .api import get_running_models, fetch_stats_running_models, update_model_config, get_equity_curve_forward_test
+from .api import (
+    get_running_models,
+    fetch_stats_running_models,
+    update_model_config,
+    get_equity_curve_forward_test,
+)
 from .config import Config
-from .formatters import fmt_pnl, fmt_status, fmt_latest, fmt_winrate, fmt_drawdown
-from enforcer import GLOBAL_PERMISSION_REGISTRY
 from pathlib import Path
-
 
 
 # {% set model_keys = models | map(attribute='map(attribute='name')') %}
@@ -27,14 +26,6 @@ class Plugin:
         "get_equity_curve_forward_test": get_equity_curve_forward_test,
         "fetch_stats_running_models": fetch_stats_running_models,
         "update_model_config": update_model_config,
-        "build_pnl_table": build_pnl_table,
-        "build_stats_table": build_stats_table,
-        "build_signal_comparison": build_signal_comparison,
-        "fmt_pnl": fmt_pnl,
-        "fmt_status": fmt_status,
-        "fmt_latest": fmt_latest,
-        "fmt_winrate": fmt_winrate,
-        "fmt_drawdown": fmt_drawdown,
         "get_equity_curve_forward_test": get_equity_curve_forward_test,
     }
     _routes: list[tuple[str, Any]] = [
@@ -51,7 +42,6 @@ class Plugin:
     def routes(cls) -> list[tuple[str, Any]]:
         # using function so that it will delete memory because page can be huge
         return cls._routes
-    
 
     @hookimpl
     @classmethod

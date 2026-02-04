@@ -37,5 +37,12 @@ class Config(BaseModel):
     signal_preview: str = Field(
         "",
         title="Signal Comparison",
-        json_schema_extra=ui_schema({"ui:field": "Template", "type": "markdown"}),
+        json_schema_extra=ui_schema(
+            # {"ui:field": "Template", "type": "markdown", "url": "TableMarkdown.tsx"}
+            {
+                "ui:field": "Template",
+                "type": "markdown",
+                "code": Path(__file__).with_name("signal_comparison.js").read_text(),
+            }
+        ),
     )

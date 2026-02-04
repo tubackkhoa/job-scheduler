@@ -65,13 +65,12 @@ class Job(Base):
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
 
     def to_dict(self):
-        import json
 
         return {
             "id": self.id,
             "session_id": self.session_id,
             "plugin_id": self.plugin_id,
-            "config": json.loads(self.config) if isinstance(self.config, str) else self.config,
+            "config": self.config or {},
             "description": self.description,
             "active": self.active,
         }

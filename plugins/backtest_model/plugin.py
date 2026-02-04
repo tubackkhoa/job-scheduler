@@ -7,9 +7,6 @@ import pandas as pd
 
 from enforcer import ExecutionContext
 
-from .data import (
-    display_df,
-)
 
 from plugins import ui_schema, CodeSchema
 
@@ -61,21 +58,6 @@ class Config(BaseModel):
                 "ui:field": "Select",
                 "default": [10, 20, 30, 60],
                 "ui:options": {"multiple": True, "size": 6},
-            }
-        ),
-    )
-    data_table: str = Field(
-        """
-```module
-{{ signals.to_json(orient="records") }}
-```
-        """,
-        json_schema_extra=ui_schema(
-            {
-                "ui:field": "Template",
-                "type": "markdown",
-                # "code": Path(__file__).with_name("md_code.js").read_text(),
-                "url": "TableMarkdown.tsx",
             }
         ),
     )
@@ -146,7 +128,6 @@ class Plugin:
 
     _env = {
         "DataFrame": pd.DataFrame,
-        "signals": display_df,
     }
 
     _routes: list[tuple[str, CodeSchema]] = [
