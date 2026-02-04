@@ -37,5 +37,7 @@ class Config(BaseModel):
     signal_preview: str = Field(
         "",
         title="Signal Comparison",
-        json_schema_extra=ui_schema({"ui:field": "Template", "type": "markdown"}),
+        json_schema_extra=ui_schema(
+            {"ui:field": "Template", "type": "markdown", "url": "TableMarkdown.tsx"}
+        ),
     )
