@@ -168,3 +168,26 @@ def deactivate_trade_model(
 
     resp.raise_for_status()
     return {"success": True, "message": f"Trade model {key} deactivated"}
+
+
+@global_permission("job")
+def activate_forwardtest_model(
+    ctx: ExecutionContext,
+    key: str,
+    api_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    env: str = "production",
+):
+    url, api_key_resolved = _get_api_config(env, api_url, api_key)
+    if _is_test_env(env):
+        # Test env: POST /api/test-system/model/start
+        resp = httpx.post(
+            f"{url}/api/test-system/model/start",
+            headers={"test-system-api-key": api_key_resolved, "Content-Type": "application/json"},
+            json={"identity": key},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return {"success": True, "message": f"Trade model {key} activated"}
+    else:
+        raise ValueError("Environment must be 'forward_test' for activate_forwardtest_model")

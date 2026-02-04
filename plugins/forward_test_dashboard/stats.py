@@ -29,6 +29,14 @@ def build_stats_table(
             "total_positions": 0
         }
     
+    # Deduplicate stats by identity, keeping the latest one
+    seen_identities = {}
+    for stat in stats:
+        identity = stat.get("identity")
+        if identity:
+            seen_identities[identity] = stat
+    stats = list(seen_identities.values())
+    
     # Map model identity → job info
     identity_job = {}
     for job in jobs:
@@ -75,7 +83,8 @@ def build_stats_table(
             "Latest Position": fmt_latest(last_pos_formatted),
             "Latest Position Time": last_pos_time,
             "Status": fmt_status(identity_job.get(identity)),
-            "Started": stat.get("startedAt"),
+            "Hide Status": identity_job.get(identity).get("state") if identity_job.get(identity) else "",
+            "Started": format_utc_time(stat.get("startedAt")),
             "Total Positions": positions,
             "Total Runtime": stat.get("totalRunningTime") or "-",
         })

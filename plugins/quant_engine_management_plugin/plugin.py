@@ -71,7 +71,6 @@ class Config(BaseModel):
         title="Model Type",
         json_schema_extra=ui_schema_crud(
             field_code=Path(__file__).with_name("crud.js").read_text(),
-            # field_url="CrudField.tsx",
             field_path=["model_type"],
             crud_exprs={
                 "list": "{{ list_trade_models(env, webhook_url, webhook_api_key) | tojson }}",

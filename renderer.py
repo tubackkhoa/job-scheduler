@@ -89,6 +89,7 @@ class Renderer:
     )
 
     _sandbox.globals.update({"datetime": datetime, "timedelta": timedelta, "timezone": timezone})
+    _sandbox.policies["json.dumps_kwargs"] = {"sort_keys": False}
 
     _sandbox.filters.update(
         {
