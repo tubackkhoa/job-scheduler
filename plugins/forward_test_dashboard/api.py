@@ -53,6 +53,7 @@ def fetch_positions(base_url: str, api_key: str, start_time: Optional[str]) -> L
     )
     return data.get("positions", [])
 
+
 def fetch_stats_running_models(base_url: str, api_key: str) -> List[Dict[str, Any]]:
     data = _get(
         f"{base_url}/api/test-system/models/stats",
@@ -63,12 +64,12 @@ def fetch_stats_running_models(base_url: str, api_key: str) -> List[Dict[str, An
 
 
 def update_model_config(
+    base_url: str,
+    api_key: str,
     identity: str,
     config: Dict[str, Any],
     config_name: Optional[str] = None,
 ) -> Dict[str, Any]:
-    base_url = settings.uat_endpoint_api
-    api_key = settings.test_system_api_key
     if not identity:
         raise ValueError("identity is required")
     payload = {
@@ -101,9 +102,13 @@ def update_model_config(
     return {}
 
 
-def get_equity_curve_forward_test(identity: str, start_time: Optional[str], end_time: Optional[str]) -> List[Dict[str, Any]]:
-    base_url = settings.uat_endpoint_api
-    api_key = settings.test_system_api_key
+def get_equity_curve_forward_test(
+    base_url: str,
+    api_key: str,
+    identity: str,
+    start_time: Optional[str],
+    end_time: Optional[str],
+) -> List[Dict[str, Any]]:
     params = {}
     if start_time:
         params["startDate"] = start_time

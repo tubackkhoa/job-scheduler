@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from plugins import ui_schema
 from pathlib import Path
 
+
 class Config(BaseModel):
     webhook_url: str = Field(
         "https://api-quantsigengine-uat.orai.network",
@@ -17,8 +18,14 @@ class Config(BaseModel):
     pnl_preview: str = Field(
         "",
         title="PNL Dashboard",
-        json_schema_extra=ui_schema({"ui:field": "Template", "type": "markdown",  "code": Path(__file__).with_name("pnl_preview.js").read_text(),}),
-        # json_schema_extra=ui_schema({"ui:field": "Template", "type": "markdown",  "url": "MarkdownTable.tsx"}),
+        json_schema_extra=ui_schema(
+            {
+                "ui:field": "Template",
+                "type": "markdown",
+                # "url": "PnlPreview.tsx",
+                "code": Path(__file__).with_name("pnl_preview.js").read_text(),
+            }
+        ),
     )
 
     signal_keyword: str = Field(
