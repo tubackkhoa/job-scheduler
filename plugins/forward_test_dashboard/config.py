@@ -22,8 +22,8 @@ class Config(BaseModel):
             {
                 "ui:field": "Template",
                 "type": "markdown",
-                "url": "PnlPreview.tsx",
-                # "code": Path(__file__).with_name("pnl_preview.js").read_text(),
+                # "url": "PnlPreview.tsx",
+                "code": Path(__file__).with_name("pnl_preview.js").read_text(),
             }
         ),
     )
@@ -38,6 +38,11 @@ class Config(BaseModel):
         "",
         title="Signal Comparison",
         json_schema_extra=ui_schema(
-            {"ui:field": "Template", "type": "markdown", "url": "TableMarkdown.tsx"}
+            # {"ui:field": "Template", "type": "markdown", "url": "TableMarkdown.tsx"}
+            {
+                "ui:field": "Template",
+                "type": "markdown",
+                "code": Path(__file__).with_name("signal_comparison.js").read_text(),
+            }
         ),
     )

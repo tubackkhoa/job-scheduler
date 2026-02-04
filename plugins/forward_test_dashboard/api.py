@@ -34,32 +34,30 @@ def _get(
     return {}
 
 
-def get_running_models(
-    base_url: str, api_key: str, params: Optional[Dict[str, Any]] = None
-) -> List[Dict[str, Any]]:
+def get_running_models(base_url: str, api_key: str, **kwargs: Any) -> List[Dict[str, Any]]:
     data = _get(
         f"{base_url}/api/test-system/models",
         api_key,
-        params=params,
+        params=kwargs,
     )
     return sorted(data.get("models", []), key=lambda m: m.get("createdAt") or "")
 
 
-def fetch_positions(base_url: str, api_key: str, start_time: Optional[str]) -> List[Dict[str, Any]]:
+def fetch_positions(base_url: str, api_key: str, **kwargs: Any) -> List[Dict[str, Any]]:
     data = _get(
         f"{base_url}/api/test-system/models/positions",
         api_key,
-        params={"startTime": start_time} if start_time else None,
+        params=kwargs,
         timeout=API_TIMEOUT_LONG,
     )
     return data.get("positions", [])
 
 
-def fetch_stats_running_models(base_url: str, api_key: str) -> List[Dict[str, Any]]:
+def fetch_stats_running_models(base_url: str, api_key: str, **kwargs: Any) -> List[Dict[str, Any]]:
     data = _get(
         f"{base_url}/api/test-system/models/stats",
         api_key,
-        # params={"status": "running"},
+        params=kwargs,
     )
     return sorted(data.get("stats", []), key=lambda m: m.get("startedAt") or "")
 
