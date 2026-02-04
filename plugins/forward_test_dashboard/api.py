@@ -7,6 +7,9 @@ logger = logging.getLogger(__name__)
 API_TIMEOUT_SHORT = 10.0
 API_TIMEOUT_LONG = 30.0
 
+base_url = "https://api-quantsigengine-uat.orai.network"
+api_key = "**********"
+
 
 def _get(
     url: str,
@@ -34,7 +37,7 @@ def _get(
     return {}
 
 
-def get_running_models(base_url: str, api_key: str, **kwargs: Any) -> List[Dict[str, Any]]:
+def get_running_models(**kwargs: Any) -> List[Dict[str, Any]]:
     data = _get(
         f"{base_url}/api/test-system/models",
         api_key,
@@ -43,7 +46,7 @@ def get_running_models(base_url: str, api_key: str, **kwargs: Any) -> List[Dict[
     return sorted(data.get("models", []), key=lambda m: m.get("createdAt") or "")
 
 
-def fetch_positions(base_url: str, api_key: str, **kwargs: Any) -> List[Dict[str, Any]]:
+def fetch_positions(**kwargs: Any) -> List[Dict[str, Any]]:
     data = _get(
         f"{base_url}/api/test-system/models/positions",
         api_key,
@@ -53,7 +56,7 @@ def fetch_positions(base_url: str, api_key: str, **kwargs: Any) -> List[Dict[str
     return data.get("positions", [])
 
 
-def fetch_stats_running_models(base_url: str, api_key: str, **kwargs: Any) -> List[Dict[str, Any]]:
+def fetch_stats_running_models(**kwargs: Any) -> List[Dict[str, Any]]:
     data = _get(
         f"{base_url}/api/test-system/models/stats",
         api_key,
@@ -63,8 +66,6 @@ def fetch_stats_running_models(base_url: str, api_key: str, **kwargs: Any) -> Li
 
 
 def update_model_config(
-    base_url: str,
-    api_key: str,
     identity: str,
     config: Dict[str, Any],
     config_name: Optional[str] = None,
@@ -102,8 +103,6 @@ def update_model_config(
 
 
 def get_equity_curve_forward_test(
-    base_url: str,
-    api_key: str,
     identity: str,
     start_time: Optional[str],
     end_time: Optional[str],

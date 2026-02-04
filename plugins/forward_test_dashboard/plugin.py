@@ -35,6 +35,12 @@ class Plugin:
                 "code": Path(__file__).with_name("dashboard.js").read_text(),
             },
         ),
+        (
+            "marketplace",
+            {
+                "url": "forwardtest/MarketPlace.tsx",
+            },
+        ),
     ]
 
     @hookimpl
