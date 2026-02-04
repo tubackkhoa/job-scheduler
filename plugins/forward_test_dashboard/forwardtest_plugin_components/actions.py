@@ -103,21 +103,21 @@ def get_running_models() -> List[Dict[str, Any]]:
         
     return result
 
-def get_running_models_list() -> List[str]:
+def get_running_models_list() -> dict:
     """
     Get all running (active) models from DB.
-    Output 'start_date' in conversion: Timestamp -> 'YYYY-MM-DD'.
-    Format: [model_name]
+    Format: [{"id": model_name, "name": model_name}]
     """
     repo = ConfigRepository()
     models = repo.get_all_models()
     
     result = []
     for m in models:
+        # Assuming status='active' is what we want, consistent with other methods
         if m.status != "active":
             continue
-            
-        result.append(m.model_name)
         
-    print ("vinhdeptrai1", result)
-    return result
+        result.append({"id": m.model_name, "name": m.model_name})
+    
+    print ("vinhdeptrai", result)
+    return {"versions": result}
