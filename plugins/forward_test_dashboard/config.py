@@ -22,7 +22,7 @@ class Config(BaseModel):
             {
                 "ui:field": "Template",
                 "type": "markdown",
-                "url": "MarkdownTable.tsx",
+                "url": "PnlPreview.tsx",
                 # "code": Path(__file__).with_name("pnl_preview.js").read_text(),
             }
         ),
