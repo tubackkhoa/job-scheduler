@@ -1,54 +1,59 @@
 import asyncio
 import os
 import sys
-from pathlib import Path
 from typing import AsyncIterator
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, SecretStr
 
 # Required for macOS + FAISS
 if sys.platform == "darwin":
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-from langchain_core.runnables import RunnableSerializable, RunnableLambda, RunnablePassthrough
+from langchain_core.runnables import RunnableSerializable, RunnablePassthrough
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import FAISS
-from langchain_ollama import OllamaEmbeddings, ChatOllama
+from langchain_openai import ChatOpenAI
 
 
-# ---------------------------------------------------------
-# Load schema + vector store (ONCE)
-# ---------------------------------------------------------
-def load_schema_docs(path: str) -> list[Document]:
-    text = Path(path).read_text(encoding="utf-8")
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=400,
-        chunk_overlap=50,
-    )
-    return [Document(page_content=c) for c in splitter.split_text(text)]
+# from langchain_core.runnables import RunnableLambda
+# from pathlib import Path
+# from langchain_text_splitters import RecursiveCharacterTextSplitter
+# from langchain_community.vectorstores import FAISS
+# from langchain_huggingface import HuggingFaceEmbeddings
+# # ---------------------------------------------------------
+# # Load schema + vector store (ONCE)
+# # ---------------------------------------------------------
+# def load_schema_docs(path: str) -> list[Document]:
+#     text = Path(path).read_text(encoding="utf-8")
+#     splitter = RecursiveCharacterTextSplitter(
+#         chunk_size=400,
+#         chunk_overlap=50,
+#     )
+#     return [Document(page_content=c) for c in splitter.split_text(text)]
 
 
-SCHEMA_PATH = ".cursorrules"
-INDEX_PATH = Path("cache/faiss")
+# SCHEMA_PATH = ".cursorrules"
+# INDEX_PATH = Path("cache/faiss")
 
-docs = load_schema_docs(SCHEMA_PATH)
+# docs = load_schema_docs(SCHEMA_PATH)
 
-embeddings = OllamaEmbeddings(model="nomic-embed-text")
+# embeddings = HuggingFaceEmbeddings(
+#     model_name="nomic-ai/nomic-embed-text-v1.5",
+#     model_kwargs={"trust_remote_code": True},
+# )
 
-if INDEX_PATH.exists():
-    vectorstore = FAISS.load_local(
-        str(INDEX_PATH),
-        embeddings,
-        allow_dangerous_deserialization=True,
-    )
-else:
-    INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
-    vectorstore = FAISS.from_documents(docs, embeddings)
-    vectorstore.save_local(str(INDEX_PATH))
+# if INDEX_PATH.exists():
+#     vectorstore = FAISS.load_local(
+#         str(INDEX_PATH),
+#         embeddings,
+#         allow_dangerous_deserialization=True,
+#     )
+# else:
+#     INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
+#     vectorstore = FAISS.from_documents(docs, embeddings)
+#     vectorstore.save_local(str(INDEX_PATH))
 
-retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
+# retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
 
 
 # ---------------------------------------------------------
@@ -67,12 +72,11 @@ generate_prompt = ChatPromptTemplate.from_messages(
             "RULES:\n"
             "- No markdown\n"
             "- No explanations\n"
-            "- No extra text\n"
-            "- Use ONLY provided schema context",
+            "- No extra text\n",
         ),
         (
             "human",
-            "Schema context:\n{context}\n\nTask:\n{question}",
+            "Task:\n{question}",
         ),
     ]
 )
@@ -101,10 +105,15 @@ edit_prompt = ChatPromptTemplate.from_messages(
 # ---------------------------------------------------------
 # LLM
 # ---------------------------------------------------------
-llm = ChatOllama(
+llm = ChatOpenAI(
+    base_url="http://localhost:11434/v1",
+    api_key=SecretStr("ollama"),
+    streaming=True,
     model="qwen2.5-coder:7b",
     temperature=0,
 )
+
+# ./build/bin/llama-server   -m ./models/Llama3-8B-1.58-100B-GGUF/Llama3-8B-1.58-100B-tokens-TQ1_0.gguf   -t $(nproc)   -c 4096   -b 768   --host 0.0.0.0   --port 11434   --no-mmap   --mlock   --numa distribute
 
 
 # ---------------------------------------------------------
@@ -150,7 +159,6 @@ router = APIRouter(prefix="/chatbot", tags=["chatbot"])
 async def generate(req: GenerateRequest):
     chain = (
         {
-            "context": retriever | RunnableLambda(join_docs),
             "question": RunnablePassthrough(),
         }
         | generate_prompt

@@ -49,6 +49,11 @@ if TYPE_CHECKING:
     )
 
 
+class CodeSchema(TypedDict, total=False):
+    code: str
+    url: str
+
+
 def ui_schema(extra: "JSONUISchema | dict") -> dict:
     return cast(dict, extra)
 

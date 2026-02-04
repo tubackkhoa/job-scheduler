@@ -1,7 +1,6 @@
 import httpx
 import logging
 from typing import Optional, List, Dict, Any
-from schemas import settings
 
 logger = logging.getLogger(__name__)
 
@@ -35,40 +34,41 @@ def _get(
     return {}
 
 
-def get_running_models(base_url: str, api_key: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+def get_running_models(base_url: str, api_key: str, **kwargs: Any) -> List[Dict[str, Any]]:
     data = _get(
         f"{base_url}/api/test-system/models",
         api_key,
-        params=params,
+        params=kwargs,
     )
     return sorted(data.get("models", []), key=lambda m: m.get("createdAt") or "")
 
 
-def fetch_positions(base_url: str, api_key: str, start_time: Optional[str]) -> List[Dict[str, Any]]:
+def fetch_positions(base_url: str, api_key: str, **kwargs: Any) -> List[Dict[str, Any]]:
     data = _get(
         f"{base_url}/api/test-system/models/positions",
         api_key,
-        params={"startTime": start_time} if start_time else None,
+        params=kwargs,
         timeout=API_TIMEOUT_LONG,
     )
     return data.get("positions", [])
 
-def fetch_stats_running_models(base_url: str, api_key: str) -> List[Dict[str, Any]]:
+
+def fetch_stats_running_models(base_url: str, api_key: str, **kwargs: Any) -> List[Dict[str, Any]]:
     data = _get(
         f"{base_url}/api/test-system/models/stats",
         api_key,
-        # params={"status": "running"},
+        params=kwargs,
     )
     return sorted(data.get("stats", []), key=lambda m: m.get("startedAt") or "")
 
 
 def update_model_config(
+    base_url: str,
+    api_key: str,
     identity: str,
     config: Dict[str, Any],
     config_name: Optional[str] = None,
 ) -> Dict[str, Any]:
-    base_url = settings.uat_endpoint_api
-    api_key = settings.test_system_api_key
     if not identity:
         raise ValueError("identity is required")
     payload = {
@@ -101,9 +101,13 @@ def update_model_config(
     return {}
 
 
-def get_equity_curve_forward_test(identity: str, start_time: Optional[str], end_time: Optional[str]) -> List[Dict[str, Any]]:
-    base_url = settings.uat_endpoint_api
-    api_key = settings.test_system_api_key
+def get_equity_curve_forward_test(
+    base_url: str,
+    api_key: str,
+    identity: str,
+    start_time: Optional[str],
+    end_time: Optional[str],
+) -> List[Dict[str, Any]]:
     params = {}
     if start_time:
         params["startDate"] = start_time

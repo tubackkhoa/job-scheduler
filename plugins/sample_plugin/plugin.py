@@ -33,12 +33,89 @@ def ui_schema_binding(field_path: list[str]):
 
 class DynamicCode(BaseModel):
     code: str = Field(
-        "",
+        """
+import { FieldProps } from '@rjsf/utils';
+
+const { useCallback, useState } = React;
+const { Box, Button, TextField, Typography } = Mui;
+const { buildJinjaContext } = Utils;
+
+export default function ({
+  registry,
+  onChange,
+  formData,
+  fieldPathId,
+}: FieldProps<string>) {
+  const render = useCallback(
+    buildJinjaContext(
+      registry.formContext.pluginPackage,
+      registry.formContext.formData,
+    ),
+    [registry.formContext],
+  );
+
+  const [input, setInput] = useState(
+    formData || `{{ get_all_plugins() | list | tojson }}`,
+  );
+  const [output, setOutput] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleRun = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await render(input, {});
+      setOutput(JSON.stringify(result, null, 2));
+    } catch (err: any) {
+      setError(err?.message ?? 'Execution failed');
+      setOutput('');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Box display="flex" flexDirection="column" gap={2}>
+      <Typography variant="subtitle1">Jinja Input</Typography>
+
+      <TextField
+        multiline
+        minRows={4}
+        value={input}
+        onBlur={() => {
+          onChange(input, fieldPathId.path);
+        }}
+        onChange={(e) => setInput(e.target.value)}
+        fullWidth
+      />
+
+      <Button variant="contained" onClick={handleRun} disabled={loading}>
+        {loading ? 'Running…' : 'Run'}
+      </Button>
+
+      <Typography variant="subtitle1">Output (JSON)</Typography>
+
+      <TextField
+        multiline
+        minRows={6}
+        maxRows={10}
+        value={output}
+        fullWidth
+        InputProps={{ readOnly: true }}
+      />
+
+      {error && <Typography color="error">{error}</Typography>}
+    </Box>
+  );
+}
+        """,
         json_schema_extra=ui_schema(
             {
                 "ui:field": "Dynamic",
-                "url": Path(__file__).with_name("compile_plugin.js").read_text(),
-                # "url": "CompilePluginComponent.tsx",
+                # "code": Path(__file__).with_name("compile_plugin.js").read_text(),
+                "url": "CompilePluginComponent.tsx",
                 "ui:options": {
                     "size": 6,
                 },
@@ -150,9 +227,6 @@ class MyClass:
 @job_permission("fetch_data")
 async def fetch_data(ctx: ExecutionContext):
     return ctx.user
-
-
-P = ParamSpec("P")
 
 
 class Plugin:

@@ -2,24 +2,19 @@ import pluggy
 import logging
 from typing import Any, Callable, Dict, Optional
 from jinja2 import Environment
-from .pnl import build_pnl_table
-from .signals import build_signal_comparison
-from .stats import build_stats_table
-from .api import get_running_models, fetch_stats_running_models, update_model_config, get_equity_curve_forward_test
+from .api import (
+    get_running_models,
+    fetch_stats_running_models,
+    update_model_config,
+    get_equity_curve_forward_test,
+)
 from .config import Config
-from .formatters import fmt_pnl, fmt_status, fmt_latest, fmt_winrate, fmt_drawdown
-from enforcer import GLOBAL_PERMISSION_REGISTRY
+from pathlib import Path
 
-async def fetch_signal_messages(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    dao = GLOBAL_PERMISSION_REGISTRY.get("dao")
-    if not dao:
-        return []
-    
-    model_keys = [m.get("identity") for m in models if m.get("identity")]
-    if not model_keys:
-        return []
 
-    return await dao.get_signal_messages_by_keys(model_keys, limit=1000)
+# {% set model_keys = models | map(attribute='map(attribute='name')') %}
+# {{ map(attribute='name') }}
+
 
 PROJECT_NAME = "alpha-miner"
 hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
@@ -28,19 +23,25 @@ hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
 class Plugin:
     _env = {
         "get_running_models": get_running_models,
+        "get_equity_curve_forward_test": get_equity_curve_forward_test,
         "fetch_stats_running_models": fetch_stats_running_models,
         "update_model_config": update_model_config,
-        "build_pnl_table": build_pnl_table,
-        "build_stats_table": build_stats_table,
-        "build_signal_comparison": build_signal_comparison,
-        "fetch_signal_messages": fetch_signal_messages,
-        "fmt_pnl": fmt_pnl,
-        "fmt_status": fmt_status,
-        "fmt_latest": fmt_latest,
-        "fmt_winrate": fmt_winrate,
-        "fmt_drawdown": fmt_drawdown,
         "get_equity_curve_forward_test": get_equity_curve_forward_test,
     }
+    _routes: list[tuple[str, Any]] = [
+        (
+            "dashboard",
+            {
+                "code": Path(__file__).with_name("dashboard.js").read_text(),
+            },
+        ),
+    ]
+
+    @hookimpl
+    @classmethod
+    def routes(cls) -> list[tuple[str, Any]]:
+        # using function so that it will delete memory because page can be huge
+        return cls._routes
 
     @hookimpl
     @classmethod
@@ -56,7 +57,7 @@ class Plugin:
     @classmethod
     def schema(cls, ctx):
         return Config.model_json_schema()
-    
+
     @hookimpl
     @classmethod
     def config(
@@ -67,16 +68,17 @@ class Plugin:
     ):
         if isinstance(json, str):
             import json as json_module
+
             json = json_module.loads(json)
         return Config.model_validate(json or {})
-    
+
     @hookimpl
     @classmethod
     def roles(cls):
         return {"admin"}
-    
+
     @hookimpl
-    @classmethod    
+    @classmethod
     async def run(
         cls,
         ctx,
