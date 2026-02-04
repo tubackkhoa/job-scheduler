@@ -60,13 +60,41 @@ def describe_callable(obj: Any) -> dict[str, Any]:
     }
 
 
+def _get_value(item: Any, path: str):
+    parts = path.split(".")
+    current = item
+
+    for part in parts:
+        if current is None:
+            return None
+        if isinstance(current, dict):
+            current = current.get(part)
+        else:
+            current = getattr(current, part, None)
+
+    return current
+
+
+def _set_nested(target: dict, path: str, value: Any):
+    parts = path.split(".")
+    current = target
+
+    for part in parts[:-1]:
+        current = current.setdefault(part, {})
+
+    current[parts[-1]] = value
+
+
 def pick(items: list[Any], *fields: str):
     result = []
+
     for item in items:
-        if isinstance(item, dict):
-            result.append({f: item.get(f) for f in fields})
-        else:
-            result.append({f: getattr(item, f, None) for f in fields})
+        picked = {}
+        for field in fields:
+            value = _get_value(item, field)
+            _set_nested(picked, field, value)
+        result.append(picked)
+
     return result
 
 
