@@ -39,15 +39,15 @@ class Config(BaseModel):
             # field_url="CrudField.tsx",
             field_path=["model_type"],
             crud_exprs={
-                "create": "{{ register(payload) }}",
-                "list": "",
+                "create": "{{ register_model_config(payload) }}",
+                "list": "{{ get_running_models_list()  | tojson }}",
             },
             ui_options={
                 "createSchema": {
                     "type": "object",
                     "properties": {
-                        "key": {"type": "string", "title": "Key"},
-                        "name": {"type": "string", "title": "Name"}
+                        "key": {"type": "string", "title": "Model_Name"},
+                        "name": {"type": "string", "title": "Model_Version"}
                     },
                     "required": ["key", "name"],
                 }

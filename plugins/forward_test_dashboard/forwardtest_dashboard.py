@@ -21,6 +21,7 @@ from .formatters import fmt_pnl, fmt_status, fmt_latest, fmt_winrate, fmt_drawdo
 from .theme import THEME, color_span
 from .database.db_repository import ForwardTestRepository
 from enforcer import GLOBAL_PERMISSION_REGISTRY
+from .forwardtest_plugin_components.actions import update_model_config, register_model_config, get_running_models, get_running_models_list
 
 logger = logging.getLogger(__name__)
 
@@ -253,17 +254,7 @@ def build_signal_comparison_from_db(
     df = pd.DataFrame(processed_trades)
     
     def render_signal(row) -> str:
-        # Match time key logic: 
-        # In signals.py: pred_time.floor("h")
-        # Here pred_time is already timestamp. 
-        # Assumption: Open time in OHLCV corresponds to pred_time.
-        # DB usually stores pred_time as exact timestamp. If it's 12:00:00, it matches 1h candle open 12:00:00.
-        
         t = row["pred_time"]
-        # Floor to hour just to be safe if pred_time has minutes (though usually it's hourly aligned)
-        # But wait, user said: "pred_time ... = open_time ... = updated_at"
-        # If pred_time is 12:05, and open_time is 12:00, we need to match carefully.
-        # For now assuming 1h alignment.
         t_hour = t.replace(minute=0, second=0, microsecond=0)
         
         asset = row["base_asset"]
@@ -485,6 +476,10 @@ class ForwardTestDashboardPlugin:
         "build_stats_table": build_stats_table,
         "build_signal_comparison": build_signal_comparison,
         "fetch_signal_messages": fetch_signal_messages,
+        "update_model_config": update_model_config,
+        "register_model_config": register_model_config,
+        "get_running_models": get_running_models,
+        "get_running_models_list": get_running_models_list,
         
         # Formatters
         "fmt_pnl": fmt_pnl,

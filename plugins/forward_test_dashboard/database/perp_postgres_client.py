@@ -147,12 +147,15 @@ class PerpPostgresClient:
             else:
                 result = self.connection.execute(processed_query)
 
-            columns = [desc[0] for desc in result.description]
-            rows = result.fetchall()
-
-            result_data = [dict(zip(columns, row)) for row in rows]
-            logger.info(f"Query executed successfully, returned {len(result_data)} rows")
-            return result_data
+            if result.description:
+                columns = [desc[0] for desc in result.description]
+                rows = result.fetchall()
+                result_data = [dict(zip(columns, row)) for row in rows]
+                logger.info(f"Query executed successfully, returned {len(result_data)} rows")
+                return result_data
+            else:
+                logger.info("Query executed successfully (no rows returned)")
+                return []
 
         except Exception as e:
             logger.error(f"Query execution failed: {e}")
