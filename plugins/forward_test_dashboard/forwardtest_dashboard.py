@@ -22,6 +22,7 @@ from .theme import THEME, color_span
 from .database.db_repository import ForwardTestRepository
 from enforcer import GLOBAL_PERMISSION_REGISTRY
 from .forwardtest_plugin_components.actions import update_model_config, register_model_config, get_running_models, get_running_models_list
+from .forwardtest_plugin_components.actions import get_equity_curve_forward_test_fromdb
 
 logger = logging.getLogger(__name__)
 
@@ -480,6 +481,7 @@ class ForwardTestDashboardPlugin:
         "register_model_config": register_model_config,
         "get_running_models": get_running_models,
         "get_running_models_list": get_running_models_list,
+        "get_equity_curve_forward_test": get_equity_curve_forward_test_fromdb,
         
         # Formatters
         "fmt_pnl": fmt_pnl,

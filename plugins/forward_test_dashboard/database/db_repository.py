@@ -386,6 +386,72 @@ class ForwardTestRepository:
             logger.error(f"Error fetching price deltas: {e}")
             return {}
 
+    def get_performance_history(
+        self,
+        identity: str,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all performance records for a specific identity within a time range.
+        Used for building equity curves from historical snapshots.
+        
+        Args:
+            identity: The identity to query
+            start_time: Optional start time
+            end_time: Optional end time
+            
+        Returns:
+            List of performance records ordered by time
+        """
+        if not self._ensure_connected():
+            logger.error("Failed to connect to database")
+            return []
+
+        try:
+            conditions = ["identity = ?"]
+            params = [identity]
+
+            if start_time:
+                conditions.append("updated_at >= ?")
+                params.append(start_time.strftime("%Y-%m-%d %H:%M:%S"))
+
+            if end_time:
+                conditions.append("updated_at <= ?")
+                params.append(end_time.strftime("%Y-%m-%d %H:%M:%S"))
+
+            where_clause = " AND ".join(conditions)
+
+            query = f"""
+            SELECT
+                model_id,
+                identity,
+                model_name,
+                total_running_time,
+                status,
+                total_positions,
+                total_pnl,
+                pnl_delta_1h,
+                pnl_delta_4h,
+                pnl_delta_1d,
+                winrate,
+                max_drawdown,
+                last_position,
+                started_at,
+                updated_at
+            FROM forward_test_performance
+            WHERE {where_clause}
+            ORDER BY updated_at ASC
+            """
+
+            result = self.client.fetch_all(query, tuple(params))
+            logger.info(f"Retrieved {len(result)} historical records for {identity}")
+            return result
+
+        except Exception as e:
+            logger.error(f"Error querying performance history: {e}")
+            return []
+
     def close(self):
         """Close the database connection."""
         if self.client:
