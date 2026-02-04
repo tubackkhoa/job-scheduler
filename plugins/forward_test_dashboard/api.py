@@ -1,7 +1,6 @@
 import httpx
 import logging
 from typing import Optional, List, Dict, Any
-from schemas import settings
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +34,9 @@ def _get(
     return {}
 
 
-def get_running_models(base_url: str, api_key: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+def get_running_models(
+    base_url: str, api_key: str, params: Optional[Dict[str, Any]] = None
+) -> List[Dict[str, Any]]:
     data = _get(
         f"{base_url}/api/test-system/models",
         api_key,
