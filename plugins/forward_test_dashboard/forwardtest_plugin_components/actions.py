@@ -194,7 +194,13 @@ def get_pnl_from_db(identity: str, start_time: Optional[str], end_time: Optional
     return {"pnl": pnl_list}
 
 
-def get_equity_curve_forward_test_fromdb(identity: str, start_time: Optional[str], end_time: Optional[str]) -> List[dict]:
+def get_equity_curve_forward_test_fromdb(    
+        base_url: str,
+        api_key: str,
+        identity: str,
+        start_time: Optional[str],
+        end_time: Optional[str]
+    ) -> List[dict]:
     """
     This function build equity curve for a specific model.
     it will get list of last_position from get_pnl_from_db, calculate accumulated pnl and return list of equity curve as format bellow.

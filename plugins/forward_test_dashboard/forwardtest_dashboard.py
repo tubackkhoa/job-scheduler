@@ -12,12 +12,12 @@ from typing import Any, Callable, Dict, List, Optional
 from datetime import datetime, timezone
 from jinja2 import Environment
 
-from .pnl import build_pnl_table
-from .signals import build_signal_comparison
-from .stats import build_stats_table
+# from .pnl import build_pnl_table
+# from .signals import build_signal_comparison
+# from .stats import build_stats_table
 from .api import get_running_models, fetch_stats_running_models
 from .forwardtest_plugin_components.config import Config
-from .formatters import fmt_pnl, fmt_status, fmt_latest, fmt_winrate, fmt_drawdown
+# from .formatters import fmt_pnl, fmt_status, fmt_latest, fmt_winrate, fmt_drawdown
 from .theme import THEME, color_span
 from .database.db_repository import ForwardTestRepository
 from enforcer import GLOBAL_PERMISSION_REGISTRY
@@ -113,7 +113,7 @@ def fetch_performance_from_db(
                     "maxDrawdown": r.get("max_drawdown"),
                     "totalPositions": r.get("total_positions"),
                     "totalRunningTime": r.get("total_running_time"),
-                    "startedAt": r.get("started_at"),
+                    "startedAt": r.get("started_at").strftime("%Y-%m-%d %H:%M:%S"),
                     "lastPosition": _parse_last_position(r.get("last_position")),
                 }
                 for r in records
@@ -473,9 +473,9 @@ class ForwardTestDashboardPlugin:
         # Legacy functions (backward compatibility)
         "get_running_models": get_running_models,
         "fetch_stats_running_models": fetch_stats_running_models,
-        "build_pnl_table": build_pnl_table,
-        "build_stats_table": build_stats_table,
-        "build_signal_comparison": build_signal_comparison,
+        # "build_pnl_table": build_pnl_table,
+        # "build_stats_table": build_stats_table,
+        # "build_signal_comparison": build_signal_comparison,
         "fetch_signal_messages": fetch_signal_messages,
         "update_model_config": update_model_config,
         "register_model_config": register_model_config,
@@ -484,11 +484,11 @@ class ForwardTestDashboardPlugin:
         "get_equity_curve_forward_test": get_equity_curve_forward_test_fromdb,
         
         # Formatters
-        "fmt_pnl": fmt_pnl,
-        "fmt_status": fmt_status,
-        "fmt_latest": fmt_latest,
-        "fmt_winrate": fmt_winrate,
-        "fmt_drawdown": fmt_drawdown,
+        # "fmt_pnl": fmt_pnl,
+        # "fmt_status": fmt_status,
+        # "fmt_latest": fmt_latest,
+        # "fmt_winrate": fmt_winrate,
+        # "fmt_drawdown": fmt_drawdown,
     }
 
     @hookimpl
