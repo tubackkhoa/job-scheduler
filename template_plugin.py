@@ -16,6 +16,11 @@ class TemplatePlugin:
         with open(f"{plugin_dir}/plugin.j2") as f:
             self.template_str = f.read()
 
+    @property
+    def description(self):
+        # description is optional
+        return self.meta.get("description", "")
+
     # ---------------- PluginSpec ----------------
 
     def env(self):
@@ -23,11 +28,6 @@ class TemplatePlugin:
 
     def schema(self, ctx: ExecutionContext):
         return self.meta["schema"]
-
-    @property
-    def description(self):
-        # description is optional
-        return self.meta.get("description", "")
 
     def config(
         self,
@@ -51,6 +51,7 @@ class TemplatePlugin:
     def roles(self):
         return self.meta.get("roles", {})
 
+    # utilities
     def save(
         self,
         ctx: ExecutionContext,

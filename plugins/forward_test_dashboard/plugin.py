@@ -29,6 +29,8 @@ class Plugin:
         "get_equity_curve_forward_test": get_equity_curve_forward_test,
     }
     _routes: list[tuple[str, Any]] = [
+        # empty route will be use as portal
+        ("", Config.model_config),
         (
             "dashboard",
             {

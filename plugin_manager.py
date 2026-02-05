@@ -37,9 +37,6 @@ RenderFn = Callable[
 class PluginSpec:
 
     @hookspec
-    def env(cls) -> dict[str, Any]: ...
-
-    @hookspec
     def schema(cls, ctx: ExecutionContext) -> dict[str, Any]: ...
 
     @hookspec
@@ -58,6 +55,10 @@ class PluginSpec:
         logger: logging.Logger,
         render: RenderFn,
     ) -> Any: ...
+
+    # methods that not require ctx to run
+    @hookspec
+    def env(cls) -> dict[str, Any]: ...
 
     @hookspec
     def roles(cls) -> dict[str, set[str]]: ...
