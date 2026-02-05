@@ -48,7 +48,7 @@ def list_trade_models(
     env: str = "production",
     api_url: Optional[str] = None,
     api_key: Optional[str] = None,
-    status: str = "active",
+    status: Optional[str] = "active",
 ):
     versions = []
     try:
@@ -131,6 +131,15 @@ def create_trade_model(
         headers={"quant-api-key": key},
         timeout=30,
     )
+    if "exists" in resp.text.lower() or resp.status_code == 409:
+        start_resp = httpx.put(
+                f"{url}/api/trading-models/key/{payload.get('key')}",
+                headers={"quant-api-key": key},
+                json=payload,
+                timeout=30,
+            )
+        start_resp.raise_for_status()
+        return {"id": payload.get("key"), "name": payload.get("key"), "started": True}
     resp.raise_for_status()
     result = resp.json()
     return {"id": result.get("key") or result.get("id"), "name": result.get("name", ""), **result}
