@@ -29,10 +29,18 @@ class Plugin:
         "get_equity_curve_forward_test": get_equity_curve_forward_test,
     }
     _routes: list[tuple[str, Any]] = [
+        # empty route will be use as portal
+        ("", Config.model_config.get("json_schema_extra")),
         (
             "dashboard",
             {
                 "code": Path(__file__).with_name("dashboard.js").read_text(),
+            },
+        ),
+        (
+            "marketplace",
+            {
+                "url": "forwardtest/MarketPlace.tsx",
             },
         ),
     ]

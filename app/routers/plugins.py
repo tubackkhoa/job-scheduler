@@ -84,10 +84,9 @@ async def routes(
     user: UserState,
     plugin_id: int,
 ):
-    plugin, _ = get_plugin(plugin_manager, plugin_id)
-    if not hasattr(plugin, "routes"):
-        return []
-    return [key for key, _ in plugin.routes()]
+    _, package = get_plugin(plugin_manager, plugin_id)
+    routes = plugin_manager.routes_cache[package]
+    return {"package": package, "routes": routes}
 
 
 @router.get("/routes/{plugin_id}/schema")

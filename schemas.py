@@ -67,6 +67,9 @@ class JobQuery:
 
 class Settings(BaseSettings):
 
+    # Configuration for loading from a .env file
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
     # Field names match ENV_VAR names (case-insensitive by default)
     use_log_indexer: bool = False
     log_dir: str = "logs"
@@ -80,9 +83,6 @@ class Settings(BaseSettings):
     plugin_path: str = "plugins"
     user_plugin_path: str = "plugins"
     static_files: Optional[str] = ""
-
-    # Configuration for loading from a .env file
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     redis_host: Optional[str] = None
     redis_port: Optional[int] = 0
