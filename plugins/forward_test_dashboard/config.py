@@ -1,9 +1,12 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from plugins import ui_schema
 from pathlib import Path
 
 
 class Config(BaseModel):
+
+    model_config = ConfigDict(json_schema_extra=ui_schema({"url": "forwardtest/Portal.tsx"}))
+
     webhook_url: str = Field(
         "https://api-quantsigengine-uat.orai.network",
         title="API URL",

@@ -1,8 +1,8 @@
 import logging
 from pathlib import Path
 import pluggy
-from pydantic import BaseModel, Field
-from typing import Any, List, Optional
+from pydantic import BaseModel, ConfigDict, Field
+from typing import Any, List, Optional, cast
 import pandas as pd
 
 from enforcer import ExecutionContext
@@ -40,6 +40,7 @@ TODAY_PRICE_MAP = {
 
 
 class Config(BaseModel):
+    model_config = ConfigDict(json_schema_extra=ui_schema({"url": "forwardtest/Portal.tsx"}))
     base_assets: List[str] = Field(
         default_factory=list,
         json_schema_extra=ui_schema(
@@ -131,6 +132,8 @@ class Plugin:
     }
 
     _routes: list[tuple[str, CodeSchema]] = [
+        # empty route will be use as portal
+        ("", cast(CodeSchema, Config.model_config.get("json_schema_extra"))),
         (
             "dashboard",
             {
