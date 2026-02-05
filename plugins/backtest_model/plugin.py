@@ -4,7 +4,7 @@ import pluggy
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Any, List, Optional, cast
 import pandas as pd
-
+from schemas import settings
 from enforcer import ExecutionContext
 
 
@@ -40,7 +40,17 @@ TODAY_PRICE_MAP = {
 
 
 class Config(BaseModel):
-    model_config = ConfigDict(json_schema_extra=ui_schema({"url": "forwardtest/Portal.tsx"}))
+    model_config = ConfigDict(
+        json_schema_extra=ui_schema(
+            {
+                **(
+                    {"url": "forwardtest/Portal.tsx"}
+                    if settings.env == "dev"
+                    else {"code": Path(__file__).with_name("portal.js").read_text()}
+                )
+            }
+        )
+    )
     base_assets: List[str] = Field(
         default_factory=list,
         json_schema_extra=ui_schema(
@@ -113,8 +123,11 @@ return [
             {
                 "ui:field": "Template",
                 "type": "markdown",
-                "url": "LightweighChart.tsx",
-                # "code": Path(__file__).with_name("lightweight_chart.js").read_text(),
+                **(
+                    {"url": "LightweighChart.tsx"}
+                    if settings.env == "dev"
+                    else {"code": Path(__file__).with_name("lightweight_chart.js").read_text()}
+                ),
             }
         ),
     )
@@ -136,12 +149,11 @@ class Plugin:
         ("", cast(CodeSchema, Config.model_config.get("json_schema_extra"))),
         (
             "dashboard",
-            {
-                "url": "backtest/Dashboard.tsx"
-                # "code": Path(__file__)
-                # .parent.joinpath("backtest/dashboard.js")
-                # .read_text()
-            },
+            (
+                {"url": "backtest/Dashboard.tsx"}
+                if settings.env == "dev"
+                else {"code": Path(__file__).parent.joinpath("backtest/dashboard.js").read_text()}
+            ),
         ),
         # (
         #     "dashboard/jobs/:job_jd",

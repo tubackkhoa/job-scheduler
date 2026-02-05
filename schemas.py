@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Annotated
+from typing import Any, Dict, Literal, Optional, Annotated
 from fastapi import Query
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -95,6 +95,7 @@ class Settings(BaseSettings):
 
     uat_endpoint_api: str = ""
     test_system_api_key: str = ""
+    env: Literal["prod", "dev"] = "prod"
 
 
 settings = Settings()
