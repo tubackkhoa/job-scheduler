@@ -16,7 +16,7 @@ def _activate_forwardtest_model(ctx, model_identity):
             raise HTTPException(status_code=400, detail="webhook_url or webhook_test_apikey is missing")
         activate_forwardtest_model(ctx, model_identity, webhook_url, webhook_test_apikey, ModelEnv.uat_test)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to activate forwardtest model: {str(e)}")
+        print("Failed to activate forwardtest model: ", e)
 
 def _deactivate_forwardtest_model(ctx, model_identity):
     try:
