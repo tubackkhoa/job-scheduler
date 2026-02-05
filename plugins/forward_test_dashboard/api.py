@@ -18,7 +18,7 @@ def _get(
     timeout=API_TIMEOUT_SHORT,
 ) -> dict:
     try:
-        with httpx.Client(timeout=timeout, proxy="socks5://127.0.0.1:1080") as client:
+        with httpx.Client(timeout=timeout) as client:
             resp = client.get(
                 url,
                 headers={
