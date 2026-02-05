@@ -8,7 +8,7 @@ API_TIMEOUT_SHORT = 10.0
 API_TIMEOUT_LONG = 30.0
 
 base_url = "https://api-quantsigengine-uat.orai.network"
-api_key = "**********"
+api_key = "Au4mL7ugEkD4qxxmYPe9f1bH"
 
 
 def _get(
@@ -18,7 +18,7 @@ def _get(
     timeout=API_TIMEOUT_SHORT,
 ) -> dict:
     try:
-        with httpx.Client(timeout=timeout) as client:
+        with httpx.Client(timeout=timeout, proxy="socks5://127.0.0.1:1080") as client:
             resp = client.get(
                 url,
                 headers={
