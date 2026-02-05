@@ -30,7 +30,7 @@ class Plugin:
     }
     _routes: list[tuple[str, Any]] = [
         # empty route will be use as portal
-        ("", Config.model_config),
+        ("", Config.model_config.get("json_schema_extra")),
         (
             "dashboard",
             {

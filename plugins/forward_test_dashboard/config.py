@@ -5,9 +5,7 @@ from pathlib import Path
 
 class Config(BaseModel):
 
-    model_config = ConfigDict(
-        json_schema_extra=ui_schema({"ui:field": "Dynamic", "url": "forwardtest/Portal.tsx"})
-    )
+    model_config = ConfigDict(json_schema_extra=ui_schema({"url": "forwardtest/Portal.tsx"}))
 
     webhook_url: str = Field(
         "https://api-quantsigengine-uat.orai.network",

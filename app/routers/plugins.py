@@ -84,8 +84,8 @@ async def routes(
     user: UserState,
     plugin_id: int,
 ):
-    plugin, package = get_plugin(plugin_manager, plugin_id)
-    routes = [key for key, _ in plugin.routes()] if hasattr(plugin, "routes") else []
+    _, package = get_plugin(plugin_manager, plugin_id)
+    routes = plugin_manager.routes_cache[package]
     return {"package": package, "routes": routes}
 
 

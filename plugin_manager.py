@@ -100,7 +100,7 @@ class PluginManager:
     manager = pluggy.PluginManager(PROJECT_NAME)
     manager.add_hookspecs(PluginSpec)
 
-    routes_cache: dict[str, frozenset[str]] = {}
+    routes_cache: dict[str, tuple[set[str], Optional[CodeSchema]]] = {}
     _failed_plugins: dict[str, Exception] = {}
 
     def __init__(
@@ -317,10 +317,16 @@ class PluginManager:
             cls.register_plugin_permissions(package, plugin)
 
             # update routes cache
+            routes: set[str] = set()
+            portal_code: Optional[CodeSchema] = None
             if hasattr(plugin, "routes"):
-                cls.routes_cache[package] = frozenset(key for key, _ in plugin.routes())
-            else:
-                cls.routes_cache[package] = frozenset()
+                for key, code in plugin.routes():
+                    if not key:
+                        portal_code = code
+                    else:
+                        routes.add(key)
+
+            cls.routes_cache[package] = (routes, portal_code)
 
             return plugin
 
