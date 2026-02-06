@@ -7,6 +7,7 @@ from .api import (
     fetch_stats_running_models,
     update_model_config,
     get_equity_curve_forward_test,
+    fetch_positions
 )
 from .config import Config
 from pathlib import Path
@@ -27,6 +28,7 @@ class Plugin:
         "fetch_stats_running_models": fetch_stats_running_models,
         "update_model_config": update_model_config,
         "get_equity_curve_forward_test": get_equity_curve_forward_test,
+        "fetch_positions": fetch_positions,
     }
     _routes: list[tuple[str, Any]] = [
         # empty route will be use as portal

@@ -1,11 +1,22 @@
 from pydantic import BaseModel, ConfigDict, Field
 from plugins import ui_schema
 from pathlib import Path
+from schemas import settings
 
 
 class Config(BaseModel):
 
-    model_config = ConfigDict(json_schema_extra=ui_schema({"url": "forwardtest/Portal.tsx"}))
+    model_config = ConfigDict(
+        json_schema_extra=ui_schema(
+            {
+                **(
+                    {"url": "forwardtest/Portal.tsx"}
+                    if settings.env == "dev"
+                    else {"code": Path(__file__).with_name("portal.js").read_text()}
+                ),
+            }
+        )
+    )
 
     webhook_url: str = Field(
         "https://api-quantsigengine-uat.orai.network",
@@ -25,8 +36,11 @@ class Config(BaseModel):
             {
                 "ui:field": "Template",
                 "type": "markdown",
-                # "url": "PnlPreview.tsx",
-                "code": Path(__file__).with_name("pnl_preview.js").read_text(),
+                **(
+                    {"url": "PnlPreview.tsx"}
+                    if settings.env == "dev"
+                    else {"code": Path(__file__).with_name("pnl_preview.js").read_text()}
+                ),
             }
         ),
     )
@@ -41,11 +55,14 @@ class Config(BaseModel):
         "",
         title="Signal Comparison",
         json_schema_extra=ui_schema(
-            # {"ui:field": "Template", "type": "markdown", "url": "TableMarkdown.tsx"}
             {
                 "ui:field": "Template",
                 "type": "markdown",
-                "code": Path(__file__).with_name("signal_comparison.js").read_text(),
+                **(
+                    {"url": "TableMarkdown.tsx"}
+                    if settings.env == "dev"
+                    else {"code": Path(__file__).with_name("signal_comparison.js").read_text()}
+                ),
             }
         ),
     )
