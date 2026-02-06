@@ -110,7 +110,7 @@ function z(e, o, i = !1) {
 }
 
 function Z(e) {
-    return e == null ? "-" : e > 0 ? z(`\u2197 +${e.toFixed(4)}%`, D.positive, !0) : e < 0 ? z(`\u2198 $${e.toFixed(4)}`, D.negative, !0) : z("$0.0000", D.neutral)
+    return e == null ? "-" : e > 0 ? z(`\u2197 +${e.toFixed(4)}%`, D.positive, !0) : e < 0 ? z(`\u2198 ${e.toFixed(4)}%`, D.negative, !0) : z("0.0000", D.neutral)
 }
 
 function le(e) {
