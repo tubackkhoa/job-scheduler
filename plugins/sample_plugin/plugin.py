@@ -1,11 +1,11 @@
 import logging
 from pathlib import Path
 import pluggy
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Any, Awaitable, Callable, List, Optional, ParamSpec
 from enforcer import ExecutionContext, job_permission
 from plugins import ui_schema
-from plugins.schema import SecureBaseModel, SecureField
+from plugins.schema import CodeSchema, SecureBaseModel, SecureField
 from schemas import settings
 from .data import JSON_TPL, SQL_TPL, YAML_TPL, MD_TPL, countries
 
@@ -141,6 +141,18 @@ export default function ({
 
 class Config(SecureBaseModel):
 
+    model_config = ConfigDict(
+        json_schema_extra=ui_schema(
+            {
+                **(
+                    {"url": "forwardtest/Portal.tsx"}
+                    if settings.env == "dev"
+                    else {"code": Path(__file__).with_name("portal.js").read_text()}
+                ),
+            }
+        )
+    )
+
     dynamic_code: DynamicCode = Field(
         default_factory=DynamicCode,  # type: ignore
         json_schema_extra=ui_schema({"ui:options": {"size": 12, "section": True}}),
@@ -241,6 +253,11 @@ class Plugin:
         "get_cities_by_country": lambda country_name: countries.get(country_name, []),
     }
 
+    _routes: list[tuple[str, Any]] = [
+        # empty route will be use as portal
+        ("", Config.model_config.get("json_schema_extra")),
+    ]
+
     @hookimpl
     @classmethod
     def install(cls) -> bool:
@@ -250,6 +267,11 @@ class Plugin:
     @classmethod
     def env(cls) -> dict[str, Any]:
         return cls._env
+
+    @hookimpl
+    @classmethod
+    def routes(cls) -> list[tuple[str, CodeSchema]]:
+        return cls._routes
 
     @hookimpl
     @classmethod
