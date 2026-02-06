@@ -1,13 +1,14 @@
 from enum import Enum
 from typing import Callable, Any, Optional
 import logging
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from pydantic import BaseModel, Field
 from enforcer import ExecutionContext
 from plugins import ui_schema
 from pathlib import Path
-from plugins.schema import SecureBaseModel
 import pluggy
+
+from schemas import settings
 
 PROJECT_NAME = "quant_engine_management_plugin"
 
@@ -52,6 +53,19 @@ class ModelEnv(str, Enum):
 
 
 class Config(BaseModel):
+
+    model_config = ConfigDict(
+        json_schema_extra=ui_schema(
+            {
+                **(
+                    {"url": "HealthPortal.tsx"}
+                    if settings.env == "dev"
+                    else {"code": Path(__file__).with_name("portal.js").read_text()}
+                ),
+            }
+        )
+    )
+
     webhook_url: str = Field(
         "",
         title="Webhook URL",
@@ -99,6 +113,11 @@ class Plugin:
 
     _env = {}
 
+    _routes: list[tuple[str, Any]] = [
+        # empty route will be use as portal
+        ("", Config.model_config.get("json_schema_extra")),
+    ]
+
     @hookimpl
     @classmethod
     def install(cls) -> bool:
@@ -132,6 +151,11 @@ class Plugin:
     @classmethod
     def roles(cls):
         return {"admin"}
+
+    @hookimpl
+    @classmethod
+    def routes(cls) -> list[tuple[str, Any]]:
+        return cls._routes
 
     @hookimpl
     @classmethod

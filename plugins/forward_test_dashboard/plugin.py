@@ -37,7 +37,7 @@ class Plugin:
         (
             "dashboard",
             (
-                {"url": "Dashboard.tsx"}
+                {"url": "backtest/Dashboard.tsx"}
                 if settings.env == "dev"
                 else {"code": Path(__file__).with_name("dashboard.js").read_text()}
             ),
@@ -45,7 +45,7 @@ class Plugin:
         (
             "marketplace",
             (
-                {"url": "MarketPlace.tsx"}
+                {"url": "forwardtest/MarketPlace.tsx"}
                 if settings.env == "dev"
                 else {"code": Path(__file__).with_name("marketplace.js").read_text()}
             ),
