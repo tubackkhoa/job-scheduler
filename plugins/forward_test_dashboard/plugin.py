@@ -3,6 +3,7 @@ import logging
 from typing import Any, Callable, Dict, Optional
 from jinja2 import Environment
 from .api import (
+    fetch_positions,
     get_running_models,
     fetch_stats_running_models,
     update_model_config,
@@ -24,6 +25,7 @@ hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
 class Plugin:
     _env = {
         "get_running_models": get_running_models,
+        "fetch_positions": fetch_positions,
         "get_equity_curve_forward_test": get_equity_curve_forward_test,
         "fetch_stats_running_models": fetch_stats_running_models,
         "update_model_config": update_model_config,
