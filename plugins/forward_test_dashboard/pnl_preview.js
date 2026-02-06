@@ -1,1 +1,1617 @@
-var se=Object.create;var At=Object.defineProperty;var re=Object.getOwnPropertyDescriptor;var le=Object.getOwnPropertyNames;var ce=Object.getPrototypeOf,de=Object.prototype.hasOwnProperty;var Bt=(e,o)=>()=>(o||e((o={exports:{}}).exports,o),o.exports);var ue=(e,o,i,a)=>{if(o&&typeof o=="object"||typeof o=="function")for(let c of le(o))!de.call(e,c)&&c!==i&&At(e,c,{get:()=>o[c],enumerable:!(a=re(o,c))||a.enumerable});return e};var yt=(e,o,i)=>(i=e!=null?se(ce(e)):{},ue(o||!e||!e.__esModule?At(i,"default",{value:e,enumerable:!0}):i,e));var Ft=Bt(bt=>{"use strict";var ge=Symbol.for("react.transitional.element"),pe=Symbol.for("react.fragment");function Nt(e,o,i){var a=null;if(i!==void 0&&(a=""+i),o.key!==void 0&&(a=""+o.key),"key"in o){i={};for(var c in o)c!=="key"&&(i[c]=o[c])}else i=o;return o=i.ref,{$$typeof:ge,type:e,key:a,ref:o!==void 0?o:null,props:i}}bt.Fragment=pe;bt.jsx=Nt;bt.jsxs=Nt});var dt=Bt((on,jt)=>{"use strict";jt.exports=Ft()});var r=yt(dt(),1),{useState:F,useEffect:fe}=React,{Dialog:me,DialogTitle:he,DialogContent:ye,DialogActions:be,Button:Ct,Stack:ot,Typography:it,CircularProgress:Ce,Alert:It,Box:at,TextField:zt,Chip:Ut,Divider:ve}=Mui,{CheckCircle:xe,CloudUpload:Te,Delete:Pe,Info:Se,Warning:we}=MuiIcon,{ConfigForm:an}=Components,{SESSIONS:Ot}=Constants,{buildJinjaContext:Rt}=Utils,ut="alpha_miner.plugins.LiveTradeForUserPlugin",ke="alpha_miner.plugins.LiveTradeForMonitorPlugin",vt=Ot[1].id,De="production",Et={env:De,url:null,apikey:null};function Wt({open:e,onClose:o,modelIdentity:i}){let[a,c]=F(!1),[p,d]=F(!1),[x,s]=F(null),[f,y]=F(null),[k,b]=F(null),[U,S]=F(null),[D,O]=F({}),[w,W]=F(null),[m,L]=F(!1),[M,H]=F(""),[J,A]=F("");fe(()=>{e&&i&&(z(),C())},[e,i]);let z=()=>{c(!1),d(!1),s(null),W(null),L(!1),O({}),H(""),A("")},C=async()=>{c(!0),s(null);try{let u=await api.fetchPlugins(),I=u.find(R=>R.package===ut),T=u.find(R=>R.package===ke);if(!I)throw new Error(`Plugin ${ut} not found.`);y(I.id);let V=vt,B=await api.fetchSchema(V,I.id);b(B.schema),S(await Utils.getEnvDoc(B.globals||{}));let Y={};if(T)try{let q=(await api.fetchSchema(vt,T.id)).jobs?.find($=>$.config?.model_key===i);if(q)Y={...q.config};else{let lt=(await api.fetchSchema(Ot[0].id,T.id)).jobs?.find(ht=>ht.config?.model_key===i);lt&&(Y={...lt.config})}}catch(R){console.warn("Could not fetch monitor plugin jobs",R)}let St=Object.fromEntries(Object.entries(B.schema.properties||{}).map(([R,q])=>[R,q.default]));if(O({...St,...Y,...{webhook_url:"",webhook_api_key:"",model_tag:"production",model_key:i}}),B.jobs&&Array.isArray(B.jobs)){let R=B.jobs.find(q=>q.config?.model_key===i);R&&W(R)}await tt()}catch(u){console.error(u),s(u.message||"Failed to load data")}finally{c(!1)}},tt=async()=>{try{let I=await Rt(ut,{},!0)("{{ list_trade_models(env, url, apikey) }}",Et),T=(typeof I=="string"?JSON.parse(I.replace(/'/g,'"')):I).versions,V=Array.isArray(T)?T.some(B=>B.id===i):!1;L(V)}catch(u){console.warn("Error checking registration status:",u),L(!1)}},G=async()=>{if(f){d(!0),s(null);try{await Rt(ut,{},!0)("{{ create_trade_model(payload, url, apikey, env) }}",{payload:{key:i,name:M||void 0,description:J||void 0},...Et});let V={config:Object.fromEntries(Object.entries(D).filter(([B,Y])=>Y!==void 0)),description:`Live Trading for ${i}`,pluginId:f,sessionId:vt};await api.updateConfig(0,V),await C(),L(!0)}catch(u){s(u.message||"Failed to subscribe")}finally{d(!1)}}},_=async()=>{d(!0),s(null);try{await Rt(ut,{},!0)("{{ deactivate_trade_model(key, url, apikey, env) }}",{key:i,...Et}),w&&await api.deleteJob(w.id),await C(),L(!1)}catch(u){s(u.message||"Failed to unsubscribe")}finally{d(!1)}};return(0,r.jsxs)(me,{open:e,onClose:o,maxWidth:"md",fullWidth:!0,children:[(0,r.jsxs)(he,{children:["Publish Model: ",i]}),(0,r.jsxs)(ye,{dividers:!0,children:[x&&(0,r.jsx)(It,{severity:"error",sx:{mb:2},children:x}),a?(0,r.jsx)(at,{display:"flex",justifyContent:"center",p:4,children:(0,r.jsx)(Ce,{})}):(0,r.jsx)(at,{children:m?(0,r.jsxs)(ot,{spacing:3,alignItems:"center",py:4,children:[(0,r.jsx)(xe,{color:"success",sx:{fontSize:64}}),(0,r.jsx)(it,{variant:"h5",children:"Model Published"}),(0,r.jsxs)(at,{sx:{width:"100%",maxWidth:500,my:2,p:2,bgcolor:"action.hover",borderRadius:2},children:[(0,r.jsx)(it,{variant:"subtitle2",gutterBottom:!0,children:"Production Status"}),(0,r.jsxs)(ot,{direction:"row",spacing:2,alignItems:"center",justifyContent:"space-between",children:[(0,r.jsx)(it,{variant:"body2",children:"Job State:"}),w?(0,r.jsx)(Ut,{label:w.active?"Running":"Paused",color:w.active?"success":"warning",size:"small"}):(0,r.jsx)(Ut,{label:"Missing Job",color:"error",size:"small"})]}),w&&(0,r.jsxs)(ot,{direction:"row",spacing:2,alignItems:"center",justifyContent:"space-between",mt:1,children:[(0,r.jsxs)(ot,{direction:"row",spacing:1,alignItems:"center",children:[(0,r.jsx)(it,{variant:"body2",children:"Job ID:"}),(0,r.jsx)(it,{variant:"body2",fontFamily:"monospace",children:w.id})]}),(0,r.jsx)(Ct,{size:"small",variant:"contained",onClick:()=>window.open(`/plugins/${f}/sessions/${vt}/jobs/${w.id}`,"_blank"),children:"View jobs"})]})]}),(0,r.jsx)(It,{severity:"warning",icon:(0,r.jsx)(we,{}),sx:{maxWidth:500,width:"100%"},children:"Unpublishing will deactivate the model in the marketplace and DELETE the production job."}),(0,r.jsx)(Ct,{variant:"contained",color:"error",startIcon:(0,r.jsx)(Pe,{}),onClick:_,disabled:p,size:"large",children:p?"Unpublishing...":"Unpublish Model"})]}):(0,r.jsxs)(ot,{spacing:4,children:[(0,r.jsx)(It,{severity:"info",icon:(0,r.jsx)(Se,{}),children:"Subscribe this model to the Marketplace. This will register the model and automatically create a production job using the configuration from the Monitor plugin."}),(0,r.jsxs)(at,{children:[(0,r.jsx)(it,{variant:"h6",gutterBottom:!0,sx:{fontWeight:600},children:"1. Model Details"}),(0,r.jsxs)(ot,{spacing:2,direction:"row",children:[(0,r.jsx)(zt,{fullWidth:!0,label:"Model Name",value:M,onChange:u=>H(u.target.value),placeholder:"Display name",disabled:p}),(0,r.jsx)(zt,{fullWidth:!0,label:"Description",value:J,onChange:u=>A(u.target.value),placeholder:"Description",disabled:p})]})]}),(0,r.jsx)(ve,{}),(0,r.jsx)(at,{}),(0,r.jsx)(at,{display:"flex",justifyContent:"flex-end",pt:2,children:(0,r.jsx)(Ct,{variant:"contained",color:"primary",startIcon:(0,r.jsx)(Te,{}),onClick:G,disabled:p||!f,size:"large",children:p?"Subscribing...":"Subscribe & Create Job"})})]})})]}),(0,r.jsx)(be,{children:(0,r.jsx)(Ct,{onClick:o,disabled:p,children:"Close"})})]})}var t=yt(dt(),1),{useCallback:Ie,useEffect:Q,useMemo:gt,useRef:Ht,useState:g}=React,{createChart:Re,IChartApi:rn,LineData:ln,LineSeries:Jt,MouseEventParams:cn,UTCTimestamp:dn}=LightweightChart,{ViewColumn:Ee,FilterList:Le,Clear:Gt,Settings:_e,ShowChart:Me,Storefront:Ae}=MuiIcon,{Table:Be,TableBody:Ne,TableCell:Z,TableContainer:Fe,TableHead:je,TableRow:Lt,TableSortLabel:ze,TablePagination:Ue,TextField:mt,Box:P,Checkbox:Oe,FormControlLabel:We,Stack:_t,IconButton:pt,Button:rt,Card:xt,CardContent:Tt,Typography:v,Grid:K,Popover:He,Paper:gn,MenuItem:ft,Dialog:$t,DialogTitle:Yt,DialogContent:Xt,DialogActions:Zt,CircularProgress:Je}=Mui,j={positive:"#28a745",negative:"#dc3545",neutral:"#6c757d",warning:"#ffc107"},st=({color:e,bold:o,children:i})=>(0,t.jsx)(P,{component:"span",sx:{color:e,fontWeight:o?700:400},children:i});function Kt(e){if(e==null||Number.isNaN(e))return"-";let i=new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",minimumFractionDigits:4,maximumFractionDigits:4}).format(Math.abs(e)),a=e>0?"+":e<0?"-":"",c=e>0?"\u2197":e<0?"\u2198":"",p=e>0?j.positive:e<0?j.negative:j.neutral;return(0,t.jsxs)(st,{color:p,bold:e!==0,children:[c," ",a,i]})}function Ge(e){return e?e.state==="active"?(0,t.jsxs)(st,{color:j.positive,children:["\u2713 Active (",e.label,")"]}):e.state==="inactive"?(0,t.jsxs)(st,{color:j.warning,children:["\u23F8 Inactive (",e.label,")"]}):(0,t.jsx)(st,{color:j.neutral,children:"\u2298 No Job"}):"-"}function Ve(e){if(!e)return"-";let o=e.direction==="BUY"||e.direction==="LONG"?j.positive:j.negative;return(0,t.jsxs)(t.Fragment,{children:[(0,t.jsx)(st,{color:o,bold:!0,children:e.symbol})," ",Kt(e.pnl)]})}function qe(e){if(e==null)return"-";let o=e*100,i=j.negative;return o>=50?i=j.positive:o>=40&&(i=j.neutral),(0,t.jsxs)(st,{color:i,bold:!0,children:[o.toFixed(1),"%"]})}var $e=(e,o)=>{switch(e){case"Total PNL":case"PNL 1H":case"PNL 4H":case"PNL 1D":return Kt(o);case"Winrate":return qe(o);case"Status":return Ge(o);case"Latest Position":return Ve(o);case"Started":case"Latest Position Time":return Utils.formatUtcTime(o);default:return o}};function Ye(e,o,i=[]){if(!e?.length)return{rows:[],totals:{total_models:0,total_pnl:0,total_positions:0}};let a={};for(let s of e){let f=s.identity;f&&(a[f]=s)}e=Object.values(a);let c={};for(let s of o){let f=s?.config?.model_key;f&&(c[f]={state:s.active?"active":"inactive",label:s.description||"No description",job:s})}let p=[],d=0,x=0;for(let s of e){let f=s.identity;if(!f)continue;let y=s.totalPnl??0,k=Number(s.totalPositions??0);d+=y,x+=k;let b=s.lastPosition,U=b?{symbol:b.symbol??"",direction:b.side??"",pnl:b.pnl??0}:null,S=b?.time??null,D=c[f];p.push({Identity:f,Model:s.modelName,"Total PNL":y,"PNL 1H":s.pnlDelta1h??0,"PNL 4H":s.pnlDelta4h??0,"PNL 1D":s.pnlDelta1d??0,Winrate:s.winrate??null,"Max Drawdown":s.maxDrawdown,"Latest Position":U,"Latest Position Time":S,Status:D,"Hide Status":D?.state??"",Started:s.startedAt??"","Total Positions":k,"Total Runtime":s.totalRunningTime??"-"})}return{rows:p,totals:{total_models:p.length,total_pnl:d,total_positions:x}}}function Vt(e){return e?new Date(e).toISOString().replace("T"," ").slice(0,19)+" UTC":""}var Xe=React.memo(({visible:e,x:o,y:i,data:a})=>!e||!a?null:(0,t.jsxs)(P,{sx:{position:"absolute",left:o,top:i,bgcolor:"rgba(0,0,0,0.85)",color:"#fff",px:1.5,py:1,fontSize:12,pointerEvents:"none",zIndex:10,minWidth:220,boxShadow:3},children:[(0,t.jsxs)(v,{variant:"caption",display:"block",children:[(0,t.jsx)("strong",{children:"Open time:"})," ",a.openTime]}),(0,t.jsxs)(v,{variant:"caption",display:"block",children:[(0,t.jsx)("strong",{children:"Close time:"})," ",a.time]}),(0,t.jsxs)(v,{variant:"caption",display:"block",children:[(0,t.jsx)("strong",{children:"Symbol:"})," ",a.symbol," | ",(0,t.jsx)("strong",{children:"Side:"})," ",(0,t.jsx)(P,{component:"span",sx:{color:a.side==="BUY"?"#4caf50":"#f44336",fontWeight:600},children:a.side})]}),(0,t.jsx)(P,{sx:{my:.5,borderTop:"1px solid rgba(255,255,255,0.2)"}}),(0,t.jsxs)(v,{variant:"caption",display:"block",children:[(0,t.jsx)("strong",{children:"PnL:"})," ",(0,t.jsxs)(P,{component:"span",sx:{color:a.pnl>=0?"#4caf50":"#f44336",fontWeight:600},children:[a.pnl>=0?"+":"",a.pnl.toFixed(4)]})]}),(0,t.jsxs)(v,{variant:"caption",display:"block",children:[(0,t.jsx)("strong",{children:"Accumulated:"})," ",(0,t.jsxs)(P,{component:"span",sx:{color:a.accumulatedPnl>=0?"#2962FF":"#f44336",fontWeight:600},children:[a.accumulatedPnl>=0?"+":"",a.accumulatedPnl.toFixed(4)]})]})]}));function Pt(e){if(typeof e=="number")return e;if(typeof e=="string"){let o=e.replace(/[^\d.-]/g,""),i=parseFloat(o);return isNaN(i)?0:i}return 0}function qt(e,o,i){let a=e[i],c=o[i];if(typeof a=="string"&&typeof c=="string"&&/^\d{4}-\d{2}-\d{2}T/.test(a)&&/^\d{4}-\d{2}-\d{2}T/.test(c)){let f=Date.parse(a),y=Date.parse(c);if(!isNaN(f)&&!isNaN(y))return y<f?-1:y>f?1:0}let p=Pt(a),d=Pt(c);if(p!==d)return p<d?1:-1;let x=String(a??"").toLowerCase(),s=String(c??"").toLowerCase();return s<x?-1:s>x?1:0}function Ze(e,o){return e==="desc"?(i,a)=>qt(i,a,o):(i,a)=>-qt(i,a,o)}var Ke=["num_session","num_signal","signal_direction","sl_percent","total_volume","tp_percent","volatility"],Qe=({open:e,onClose:o,editingRow:i,initialValues:a,onSave:c,saving:p})=>{let[d,x]=g(a||{});Q(()=>{x(a||{})},[a,e]);let s=(y,k)=>{x(b=>({...b,[y]:k}))},f=()=>{c(d)};return i?(0,t.jsxs)($t,{open:e,onClose:o,maxWidth:"sm",fullWidth:!0,children:[(0,t.jsxs)(Yt,{children:["Edit Config: ",i.Identity||"Unknown"]}),(0,t.jsx)(Xt,{dividers:!0,children:(0,t.jsx)(K,{container:!0,spacing:2,sx:{pt:1},children:Ke.map(y=>{let k=d[y],b=typeof k=="number";return(0,t.jsx)(K,{size:{sm:6},children:(0,t.jsx)(mt,{fullWidth:!0,size:"small",label:y,value:k??"",type:b?"number":"text",onChange:U=>{let S=b?parseFloat(U.target.value):U.target.value;s(y,S)}})},y)})})}),(0,t.jsxs)(Zt,{children:[(0,t.jsx)(rt,{onClick:o,disabled:p,color:"inherit",children:"Cancel"}),(0,t.jsx)(rt,{onClick:f,disabled:p,variant:"contained",children:p?"Saving...":"Save Changes"})]})]}):null},tn=({open:e,onClose:o,row:i,registry:a})=>{let[c,p]=g(!1),[d,x]=g(),[s,f]=g(null),[y,k]=g(""),[b,U]=g(""),S=Ht(null),D=Ht(null),[O,w]=g({visible:!1,x:0,y:0}),W=Ie(async()=>{if(i){p(!0),f(null);try{let m=Utils.buildJinjaContext(a.formContext.pluginPackage,a.formContext.formData),L=i.Identity||i.id,M=z=>z?`${z}:00Z`:"",H=M(y),J=M(b),A=await m("{{ get_equity_curve_forward_test(identity, startTime, endTime) }}",{identity:L,startTime:H,endTime:J});A&&Array.isArray(A)?x(A):x([])}catch(m){console.error("Failed to fetch equity curve",m),f("Failed to load chart data: "+m.message),x([])}finally{p(!1)}}},[i,y,b,Utils,a]);return Q(()=>{e||w(m=>({...m,visible:!1}))},[e]),Q(()=>{e&&i&&W()},[e,i,W]),Q(()=>{if(!e||!S.current||!d)return;D.current?.remove(),D.current=null;let m=Re(S.current,{width:S.current.clientWidth,height:500,layout:{background:{color:"#ffffff"},textColor:"#333"},grid:{vertLines:{color:"#e1e8ed"},horzLines:{color:"#e1e8ed"}},crosshair:{mode:1,vertLine:{width:1,color:"#758696",style:3},horzLine:{width:1,color:"#758696",style:3}},timeScale:{timeVisible:!0,secondsVisible:!1,borderColor:"#d1d4dc"},rightPriceScale:{borderColor:"#d1d4dc"}});D.current=m;let L=m.addSeries(Jt,{color:"#FF6B00",lineWidth:2,title:"PnL"}),M=m.addSeries(Jt,{color:"#2962FF",lineWidth:2,title:"Accumulated PnL"}),H=d.map(C=>({time:new Date(C.time).getTime()/1e3,value:C.pnl})),J=d.map(C=>({time:new Date(C.time).getTime()/1e3,value:C.accumulatedPnl}));L.setData(H),M.setData(J),m.timeScale().fitContent();let A=Utils._.throttle(C=>{if(!C?.time||!C?.point){w(T=>({...T,visible:!1}));return}if(C.point.x<0||C.point.y<0){w(T=>({...T,visible:!1}));return}let tt=C.seriesData.get(M);if(!tt){w(T=>({...T,visible:!1}));return}let G=tt.time*1e3,_=d.find(T=>Math.abs(new Date(T.time).getTime()-G)<1e3);if(!_)return;let u=S.current.clientWidth-240,I=S.current.clientHeight-120;w({visible:!0,x:Math.min(C.point.x+15,u),y:Math.min(C.point.y+15,I),data:{time:Vt(_.time),openTime:Vt(_.openTime),symbol:_.symbol,side:_.side,pnl:_.pnl,accumulatedPnl:_.accumulatedPnl}})},40);m.subscribeCrosshairMove(A);let z=()=>{!D.current||!S.current||D.current.applyOptions({width:S.current.clientWidth})};return window.addEventListener("resize",z),()=>{window.removeEventListener("resize",z),m.unsubscribeCrosshairMove(A),m.remove(),D.current=null}},[d,e]),(0,t.jsxs)($t,{open:e,onClose:o,maxWidth:"xl",fullWidth:!0,children:[(0,t.jsxs)(Yt,{children:["Equity Curve: ",i?.Identity||"Unknown"]}),(0,t.jsxs)(Xt,{children:[(0,t.jsxs)(_t,{direction:"row",spacing:2,sx:{mb:2,mt:1},children:[(0,t.jsx)(mt,{label:"Start Time",type:"datetime-local",value:y,onChange:m=>k(m.target.value),size:"small",InputLabelProps:{shrink:!0},sx:{flex:1}}),(0,t.jsx)(mt,{label:"End Time",type:"datetime-local",value:b,onChange:m=>U(m.target.value),size:"small",InputLabelProps:{shrink:!0},sx:{flex:1}}),(0,t.jsx)(rt,{variant:"contained",onClick:W,disabled:c,sx:{height:40,alignSelf:"flex-start"},children:"Refresh"})]}),(0,t.jsxs)(P,{sx:{display:"flex",gap:3,mb:2,justifyContent:"center"},children:[(0,t.jsxs)(P,{sx:{display:"flex",alignItems:"center",gap:1},children:[(0,t.jsx)(P,{sx:{width:20,height:3,bgcolor:"#FF6B00"}}),(0,t.jsx)(v,{variant:"body2",children:"PnL (Individual Trade)"})]}),(0,t.jsxs)(P,{sx:{display:"flex",alignItems:"center",gap:1},children:[(0,t.jsx)(P,{sx:{width:20,height:3,bgcolor:"#2962FF"}}),(0,t.jsx)(v,{variant:"body2",children:"Accumulated PnL"})]})]}),c&&(0,t.jsx)(P,{display:"flex",justifyContent:"center",alignItems:"center",minHeight:400,children:(0,t.jsx)(Je,{})}),s&&(0,t.jsx)(P,{minHeight:400,display:"flex",alignItems:"center",justifyContent:"center",children:(0,t.jsx)(v,{color:"error",children:s})}),d&&(d.length?(0,t.jsx)(P,{ref:S,sx:{position:"relative",width:"100%",height:540,mt:2},children:(0,t.jsx)(Xe,{...O})}):(0,t.jsx)(P,{minHeight:400,display:"flex",alignItems:"center",justifyContent:"center",children:(0,t.jsx)(v,{color:"text.secondary",children:"No data available"})}))]}),(0,t.jsx)(Zt,{children:(0,t.jsx)(rt,{variant:"contained",color:"warning",onClick:o,children:"Close"})})]})},pn=({formData:e,registry:o})=>{let[i,a]=g("desc"),[c,p]=g(""),[d,x]=g(""),[s,f]=g("All"),[y,k]=g(0),[b,U]=g(10),[S,D]=g(null),[O,w]=g(null),[W,m]=g(!1),[L,M]=g(!1),[H,J]=g({}),[A,z]=g(!1),[C,tt]=g(null),[G,_]=g({}),[u,I]=g([]),[T,V]=g(!1),[B,Y]=g(null),St=n=>{Y({identity:n.Identity}),V(!0)},[et,R]=g([]),q=async()=>{try{let l=await Utils.buildJinjaContext("alpha_miner.plugins.LiveTradeForUserPlugin",{},!0)("{{ list_trade_models(env, url, apikey) }}",{env:"production",url:null,apikey:null}),h=(typeof l=="string"?JSON.parse(l.replace(/'/g,'"')):l).versions;Array.isArray(h)&&R(h.map(E=>E.id))}catch(n){console.warn("Failed to fetch published models",n)}};Q(()=>{q()},[T]),Q(()=>{if(e)try{let{models:n,jobList:l,stats:h}=Utils.convertByType(e,"object"),{rows:E}=Ye(h,l,et),Dt=Object.fromEntries(n.map(X=>[X.identity,X.currentConfig])),N=E.map(X=>({...X,"Hide currentConfig":Dt[X.Identity]}));I(N)}catch(n){console.error(n)}},[e,et]);let $=gt(()=>u.length===0?[]:Object.keys(u[0]).filter(n=>!n.includes("Hide")&&n!=="config"),[u]),[lt,ht]=g({});Q(()=>{$.length>0&&ht(n=>{let l={...n},h=!1;return $.forEach(E=>{l[E]===void 0&&(l[E]=!0,h=!0)}),h?l:n})},[$]);let nt=gt(()=>{if(!u)return[];let n=u;if(n=n.filter(l=>!G[l.Identity||l.id]),d){let l=d.toLowerCase();n=n.filter(h=>Object.values(h).some(E=>String(E).toLowerCase().includes(l)))}return s!=="All"&&(s==="Published"?n=n.filter(l=>et.includes(l.Identity)):s==="Unpublished"?n=n.filter(l=>!et.includes(l.Identity)):n=n.filter(l=>{let h=String(l["Hide Status"]).toLowerCase();return s==="active"?h==="active"||et.includes(l.Identity):h?h===s:!1})),n},[u,d,G,s]),wt=gt(()=>c?[...nt].sort(Ze(i,c)):nt,[nt,i,c]),Mt=gt(()=>{let n=y*b;return wt.slice(n,n+b)},[wt,y,b]),ct=gt(()=>{let n=nt.length,l=0,h=0;return nt.forEach(E=>{l+=Pt(E["Total PNL"]),h+=Pt(E["Total Positions"])}),{totalModels:n,totalPnl:l,totalPositions:h}},[nt]),Qt=n=>{a(c===n&&i==="asc"?"desc":"asc"),p(n)},te=n=>{ht(l=>({...l,[n]:!l[n]}))},ee=n=>{let l=n.Identity||JSON.stringify(n);_(h=>({...h,[l]:!0}))},ne=n=>{w(n);let l=n["Hide currentConfig"]||n.config||{};J(l.config),m(!0)},oe=n=>{tt(n),z(!0)},ie=async n=>{if(!(!O||!o)){M(!0);try{let l=Utils.buildJinjaContext(o.formContext.pluginPackage,o.formContext.formData),h={...n},E=O.Identity;await l("{{ update_model_config(webhook_url, webhook_api_key,identity, payload) }}",{identity:E,payload:h}),I(Dt=>Dt.map(N=>{let X=N.Identity,ae=O.Identity;if(X===ae){if(N["Hide currentConfig"])return{...N,"Hide currentConfig":{...N["Hide currentConfig"],config:{...N["Hide currentConfig"].config,...n}}};if(N.config)return{...N,config:{...N.config,...n}}}return N})),m(!1),w(null),alert("Update config completed")}catch(l){console.error("Failed to update config",l),alert("Failed to update config: "+l.message)}finally{M(!1)}}},kt=$.filter(n=>lt[n]);return(0,t.jsxs)(P,{children:[(0,t.jsxs)(K,{container:!0,spacing:2,sx:{mb:2},children:[(0,t.jsx)(K,{size:{xs:6,md:3},children:(0,t.jsx)(xt,{sx:{bgcolor:"background.paper",height:"100%"},children:(0,t.jsxs)(Tt,{sx:{pb:2},children:[(0,t.jsx)(v,{variant:"caption",color:"text.secondary",children:"Total models"}),(0,t.jsx)(v,{variant:"h6",children:ct.totalModels})]})})}),(0,t.jsx)(K,{size:{xs:6,md:3},children:(0,t.jsx)(xt,{sx:{bgcolor:"background.paper",height:"100%"},children:(0,t.jsxs)(Tt,{sx:{pb:2},children:[(0,t.jsx)(v,{variant:"caption",color:"text.secondary",children:"Total PNL"}),(0,t.jsxs)(v,{variant:"h6",sx:{color:ct.totalPnl>=0?"success.main":"error.main"},children:[ct.totalPnl>=0?"+":"",ct.totalPnl.toFixed(4)]})]})})}),(0,t.jsx)(K,{size:{xs:6,md:3},children:(0,t.jsx)(xt,{sx:{bgcolor:"background.paper",height:"100%"},children:(0,t.jsxs)(Tt,{sx:{pb:2},children:[(0,t.jsx)(v,{variant:"caption",color:"text.secondary",children:"Total Positions"}),(0,t.jsx)(v,{variant:"h6",children:ct.totalPositions})]})})}),(0,t.jsx)(K,{size:{xs:6,md:3},children:(0,t.jsx)(xt,{sx:{bgcolor:"background.paper",height:"100%"},children:(0,t.jsxs)(Tt,{sx:{pb:2},children:[(0,t.jsx)(v,{variant:"caption",color:"text.secondary",children:"Equity (each model)"}),(0,t.jsx)(v,{variant:"h6",children:"10"})]})})})]}),(0,t.jsxs)(_t,{direction:"row",spacing:2,sx:{mb:2},alignItems:"center",children:[(0,t.jsx)(mt,{size:"small",placeholder:"Search...",value:d,onChange:n=>{x(n.target.value),k(0)},InputProps:{startAdornment:(0,t.jsx)(Le,{sx:{color:"action.active",mr:1,fontSize:20}}),endAdornment:d&&(0,t.jsx)(pt,{size:"small",onClick:()=>x(""),children:(0,t.jsx)(Gt,{fontSize:"small"})})},sx:{flexGrow:1,maxWidth:300}}),(0,t.jsxs)(mt,{select:!0,size:"small",label:"Status",value:s,onChange:n=>{f(n.target.value),k(0)},sx:{maxWidth:150},children:[(0,t.jsx)(ft,{value:"All",children:"All"}),(0,t.jsx)(ft,{value:"Published",children:"Published"}),(0,t.jsx)(ft,{value:"Unpublished",children:"Unpublished"}),(0,t.jsx)(ft,{value:"active",children:"Active"}),(0,t.jsx)(ft,{value:"inactive",children:"Inactive"})]}),(0,t.jsx)(P,{sx:{flexGrow:1}}),Object.keys(G).length>0&&(0,t.jsxs)(rt,{size:"small",onClick:()=>_({}),children:["Show ",Object.keys(G).length," Hidden Rows"]}),(0,t.jsx)(rt,{startIcon:(0,t.jsx)(Ee,{}),onClick:n=>D(n.currentTarget),variant:"outlined",size:"small",children:"Columns"}),(0,t.jsx)(He,{open:!!S,anchorEl:S,onClose:()=>D(null),anchorOrigin:{vertical:"bottom",horizontal:"right"},transformOrigin:{vertical:"top",horizontal:"right"},children:(0,t.jsxs)(P,{sx:{p:2,maxHeight:300,overflow:"auto"},children:[(0,t.jsx)(v,{variant:"subtitle2",sx:{mb:1},children:"Visible Columns"}),(0,t.jsx)(_t,{children:$.map(n=>(0,t.jsx)(We,{control:(0,t.jsx)(Oe,{size:"small",checked:!!lt[n],onChange:()=>te(n)}),label:n},n))})]})})]}),(0,t.jsx)(Fe,{children:(0,t.jsxs)(Be,{size:"small",children:[(0,t.jsx)(je,{children:(0,t.jsxs)(Lt,{sx:{bgcolor:"action.hover"},children:[(0,t.jsx)(Z,{sx:{width:40},padding:"none"}),kt.map(n=>(0,t.jsx)(Z,{sx:{fontWeight:600},children:(0,t.jsx)(ze,{active:c===n,direction:c===n?i:"asc",onClick:()=>Qt(n),children:n})},n)),(0,t.jsx)(Z,{sx:{fontWeight:600},children:"Action"})]})}),(0,t.jsxs)(Ne,{children:[Mt.map((n,l)=>(0,t.jsxs)(Lt,{hover:!0,children:[(0,t.jsx)(Z,{padding:"none",align:"center",children:(0,t.jsx)(pt,{size:"small",onClick:()=>ee(n),sx:{opacity:.3,"&:hover":{opacity:1,color:"error.main"}},children:(0,t.jsx)(Gt,{fontSize:"small",sx:{fontSize:14}})})}),kt.map(h=>(0,t.jsx)(Z,{children:$e(h,n[h])},h)),(0,t.jsxs)(Z,{children:[(0,t.jsx)(pt,{size:"small",onClick:()=>St(n),color:"warning",title:"Publish to Marketplace",children:(0,t.jsx)(Ae,{fontSize:"small"})}),(0,t.jsx)(pt,{size:"small",onClick:()=>ne(n),color:"primary",title:"Edit Config",children:(0,t.jsx)(_e,{fontSize:"small"})}),(0,t.jsx)(pt,{size:"small",onClick:()=>oe(n),color:"primary",title:"View Equity Curve",children:(0,t.jsx)(Me,{fontSize:"small"})})]})]},`${n.Identity||l}`)),Mt.length===0&&(0,t.jsx)(Lt,{children:(0,t.jsx)(Z,{colSpan:kt.length+2,align:"center",sx:{py:3},children:(0,t.jsx)(v,{color:"text.secondary",children:"No matching records found"})})})]})]})}),(0,t.jsx)(Ue,{component:"div",count:wt.length,page:y,rowsPerPage:b,rowsPerPageOptions:[10,20,50,100],onPageChange:(n,l)=>k(l),onRowsPerPageChange:n=>{U(Number(n.target.value)),k(0)}}),(0,t.jsx)(Qe,{open:W,onClose:()=>!L&&m(!1),editingRow:O,initialValues:H,onSave:ie,saving:L}),(0,t.jsx)(tn,{open:A,onClose:()=>z(!1),row:C,registry:o}),(0,t.jsx)(Wt,{open:T,onClose:()=>V(!1),modelIdentity:B?.identity})]})};export{pn as default};
+var se = Object.create;
+var At = Object.defineProperty;
+var re = Object.getOwnPropertyDescriptor;
+var le = Object.getOwnPropertyNames;
+var ce = Object.getPrototypeOf,
+  de = Object.prototype.hasOwnProperty;
+var Bt = (e, o) => () => (o || e((o = { exports: {} }).exports, o), o.exports);
+var ue = (e, o, i, a) => {
+  if ((o && typeof o == 'object') || typeof o == 'function')
+    for (let c of le(o))
+      !de.call(e, c) &&
+        c !== i &&
+        At(e, c, {
+          get: () => o[c],
+          enumerable: !(a = re(o, c)) || a.enumerable,
+        });
+  return e;
+};
+var yt = (e, o, i) => (
+  (i = e != null ? se(ce(e)) : {}),
+  ue(
+    o || !e || !e.__esModule
+      ? At(i, 'default', { value: e, enumerable: !0 })
+      : i,
+    e
+  )
+);
+var Ft = Bt((bt) => {
+  'use strict';
+  var ge = Symbol.for('react.transitional.element'),
+    pe = Symbol.for('react.fragment');
+  function Nt(e, o, i) {
+    var a = null;
+    if (
+      (i !== void 0 && (a = '' + i),
+      o.key !== void 0 && (a = '' + o.key),
+      'key' in o)
+    ) {
+      i = {};
+      for (var c in o) c !== 'key' && (i[c] = o[c]);
+    } else i = o;
+    return (
+      (o = i.ref),
+      { $$typeof: ge, type: e, key: a, ref: o !== void 0 ? o : null, props: i }
+    );
+  }
+  bt.Fragment = pe;
+  bt.jsx = Nt;
+  bt.jsxs = Nt;
+});
+var dt = Bt((on, jt) => {
+  'use strict';
+  jt.exports = Ft();
+});
+var r = yt(dt(), 1),
+  { useState: F, useEffect: fe } = React,
+  {
+    Dialog: me,
+    DialogTitle: he,
+    DialogContent: ye,
+    DialogActions: be,
+    Button: Ct,
+    Stack: ot,
+    Typography: it,
+    CircularProgress: Ce,
+    Alert: It,
+    Box: at,
+    TextField: zt,
+    Chip: Ut,
+    Divider: ve,
+  } = Mui,
+  {
+    CheckCircle: xe,
+    CloudUpload: Te,
+    Delete: Pe,
+    Info: Se,
+    Warning: we,
+  } = MuiIcon,
+  { ConfigForm: an } = Components,
+  { SESSIONS: Ot } = Constants,
+  { buildJinjaContext: Rt } = Utils,
+  ut = 'alpha_miner.plugins.LiveTradeForUserPlugin',
+  ke = 'alpha_miner.plugins.LiveTradeForMonitorPlugin',
+  vt = Ot[1].id,
+  De = 'production',
+  Et = { env: De, url: null, apikey: null };
+function Wt({ open: e, onClose: o, modelIdentity: i }) {
+  let [a, c] = F(!1),
+    [p, d] = F(!1),
+    [x, s] = F(null),
+    [f, y] = F(null),
+    [k, b] = F(null),
+    [U, S] = F(null),
+    [D, O] = F({}),
+    [w, W] = F(null),
+    [m, L] = F(!1),
+    [M, H] = F(''),
+    [J, A] = F('');
+  fe(() => {
+    e && i && (z(), C());
+  }, [e, i]);
+  let z = () => {
+      (c(!1), d(!1), s(null), W(null), L(!1), O({}), H(''), A(''));
+    },
+    C = async () => {
+      (c(!0), s(null));
+      try {
+        let u = await api.fetchPlugins(),
+          I = u.find((R) => R.package === ut),
+          T = u.find((R) => R.package === ke);
+        if (!I) throw new Error(`Plugin ${ut} not found.`);
+        y(I.id);
+        let V = vt,
+          B = await api.fetchSchema(V, I.id);
+        (b(B.schema), S(await Utils.getEnvDoc(B.globals || {})));
+        let Y = {};
+        if (T)
+          try {
+            let q = (await api.fetchSchema(vt, T.id)).jobs?.find(
+              ($) => $.config?.model_key === i
+            );
+            if (q) Y = { ...q.config };
+            else {
+              let lt = (await api.fetchSchema(Ot[0].id, T.id)).jobs?.find(
+                (ht) => ht.config?.model_key === i
+              );
+              lt && (Y = { ...lt.config });
+            }
+          } catch (R) {
+            console.warn('Could not fetch monitor plugin jobs', R);
+          }
+        let St = Object.fromEntries(
+          Object.entries(B.schema.properties || {}).map(([R, q]) => [
+            R,
+            q.default,
+          ])
+        );
+        if (
+          (O({
+            ...St,
+            ...Y,
+            ...{
+              webhook_url: '',
+              webhook_api_key: '',
+              model_tag: 'production',
+              model_key: i,
+            },
+          }),
+          B.jobs && Array.isArray(B.jobs))
+        ) {
+          let R = B.jobs.find((q) => q.config?.model_key === i);
+          R && W(R);
+        }
+        await tt();
+      } catch (u) {
+        (console.error(u), s(u.message || 'Failed to load data'));
+      } finally {
+        c(!1);
+      }
+    },
+    tt = async () => {
+      try {
+        let I = await Rt(
+            ut,
+            {},
+            !0
+          )('{{ list_trade_models(env, url, apikey) }}', Et),
+          T = (typeof I == 'string' ? JSON.parse(I.replace(/'/g, '"')) : I)
+            .versions,
+          V = Array.isArray(T) ? T.some((B) => B.id === i) : !1;
+        L(V);
+      } catch (u) {
+        (console.warn('Error checking registration status:', u), L(!1));
+      }
+    },
+    G = async () => {
+      if (f) {
+        (d(!0), s(null));
+        try {
+          await Rt(
+            ut,
+            {},
+            !0
+          )('{{ create_trade_model(payload, url, apikey, env) }}', {
+            payload: { key: i, name: M || void 0, description: J || void 0 },
+            ...Et,
+          });
+          let V = {
+            config: Object.fromEntries(
+              Object.entries(D).filter(([B, Y]) => Y !== void 0)
+            ),
+            description: `Live Trading for ${i}`,
+            pluginId: f,
+            sessionId: vt,
+          };
+          (await api.updateConfig(0, V), await C(), L(!0));
+        } catch (u) {
+          s(u.message || 'Failed to subscribe');
+        } finally {
+          d(!1);
+        }
+      }
+    },
+    _ = async () => {
+      (d(!0), s(null));
+      try {
+        (await Rt(
+          ut,
+          {},
+          !0
+        )('{{ deactivate_trade_model(key, url, apikey, env) }}', {
+          key: i,
+          ...Et,
+        }),
+          w && (await api.deleteJob(w.id)),
+          await C(),
+          L(!1));
+      } catch (u) {
+        s(u.message || 'Failed to unsubscribe');
+      } finally {
+        d(!1);
+      }
+    };
+  return (0, r.jsxs)(me, {
+    open: e,
+    onClose: o,
+    maxWidth: 'md',
+    fullWidth: !0,
+    children: [
+      (0, r.jsxs)(he, { children: ['Publish Model: ', i] }),
+      (0, r.jsxs)(ye, {
+        dividers: !0,
+        children: [
+          x &&
+            (0, r.jsx)(It, { severity: 'error', sx: { mb: 2 }, children: x }),
+          a
+            ? (0, r.jsx)(at, {
+                display: 'flex',
+                justifyContent: 'center',
+                p: 4,
+                children: (0, r.jsx)(Ce, {}),
+              })
+            : (0, r.jsx)(at, {
+                children: m
+                  ? (0, r.jsxs)(ot, {
+                      spacing: 3,
+                      alignItems: 'center',
+                      py: 4,
+                      children: [
+                        (0, r.jsx)(xe, {
+                          color: 'success',
+                          sx: { fontSize: 64 },
+                        }),
+                        (0, r.jsx)(it, {
+                          variant: 'h5',
+                          children: 'Model Published',
+                        }),
+                        (0, r.jsxs)(at, {
+                          sx: {
+                            width: '100%',
+                            maxWidth: 500,
+                            my: 2,
+                            p: 2,
+                            bgcolor: 'action.hover',
+                            borderRadius: 2,
+                          },
+                          children: [
+                            (0, r.jsx)(it, {
+                              variant: 'subtitle2',
+                              gutterBottom: !0,
+                              children: 'Production Status',
+                            }),
+                            (0, r.jsxs)(ot, {
+                              direction: 'row',
+                              spacing: 2,
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              children: [
+                                (0, r.jsx)(it, {
+                                  variant: 'body2',
+                                  children: 'Job State:',
+                                }),
+                                w
+                                  ? (0, r.jsx)(Ut, {
+                                      label: w.active ? 'Running' : 'Paused',
+                                      color: w.active ? 'success' : 'warning',
+                                      size: 'small',
+                                    })
+                                  : (0, r.jsx)(Ut, {
+                                      label: 'Missing Job',
+                                      color: 'error',
+                                      size: 'small',
+                                    }),
+                              ],
+                            }),
+                            w &&
+                              (0, r.jsxs)(ot, {
+                                direction: 'row',
+                                spacing: 2,
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                mt: 1,
+                                children: [
+                                  (0, r.jsxs)(ot, {
+                                    direction: 'row',
+                                    spacing: 1,
+                                    alignItems: 'center',
+                                    children: [
+                                      (0, r.jsx)(it, {
+                                        variant: 'body2',
+                                        children: 'Job ID:',
+                                      }),
+                                      (0, r.jsx)(it, {
+                                        variant: 'body2',
+                                        fontFamily: 'monospace',
+                                        children: w.id,
+                                      }),
+                                    ],
+                                  }),
+                                  (0, r.jsx)(Ct, {
+                                    size: 'small',
+                                    variant: 'contained',
+                                    onClick: () =>
+                                      window.open(
+                                        `/plugins/${f}/sessions/${vt}/jobs/${w.id}`,
+                                        '_blank'
+                                      ),
+                                    children: 'View jobs',
+                                  }),
+                                ],
+                              }),
+                          ],
+                        }),
+                        (0, r.jsx)(It, {
+                          severity: 'warning',
+                          icon: (0, r.jsx)(we, {}),
+                          sx: { maxWidth: 500, width: '100%' },
+                          children:
+                            'Unpublishing will deactivate the model in the marketplace and DELETE the production job.',
+                        }),
+                        (0, r.jsx)(Ct, {
+                          variant: 'contained',
+                          color: 'error',
+                          startIcon: (0, r.jsx)(Pe, {}),
+                          onClick: _,
+                          disabled: p,
+                          size: 'large',
+                          children: p ? 'Unpublishing...' : 'Unpublish Model',
+                        }),
+                      ],
+                    })
+                  : (0, r.jsxs)(ot, {
+                      spacing: 4,
+                      children: [
+                        (0, r.jsx)(It, {
+                          severity: 'info',
+                          icon: (0, r.jsx)(Se, {}),
+                          children:
+                            'Subscribe this model to the Marketplace. This will register the model and automatically create a production job using the configuration from the Monitor plugin.',
+                        }),
+                        (0, r.jsxs)(at, {
+                          children: [
+                            (0, r.jsx)(it, {
+                              variant: 'h6',
+                              gutterBottom: !0,
+                              sx: { fontWeight: 600 },
+                              children: '1. Model Details',
+                            }),
+                            (0, r.jsxs)(ot, {
+                              spacing: 2,
+                              direction: 'row',
+                              children: [
+                                (0, r.jsx)(zt, {
+                                  fullWidth: !0,
+                                  label: 'Model Name',
+                                  value: M,
+                                  onChange: (u) => H(u.target.value),
+                                  placeholder: 'Display name',
+                                  disabled: p,
+                                }),
+                                (0, r.jsx)(zt, {
+                                  fullWidth: !0,
+                                  label: 'Description',
+                                  value: J,
+                                  onChange: (u) => A(u.target.value),
+                                  placeholder: 'Description',
+                                  disabled: p,
+                                }),
+                              ],
+                            }),
+                          ],
+                        }),
+                        (0, r.jsx)(ve, {}),
+                        (0, r.jsx)(at, {}),
+                        (0, r.jsx)(at, {
+                          display: 'flex',
+                          justifyContent: 'flex-end',
+                          pt: 2,
+                          children: (0, r.jsx)(Ct, {
+                            variant: 'contained',
+                            color: 'primary',
+                            startIcon: (0, r.jsx)(Te, {}),
+                            onClick: G,
+                            disabled: p || !f,
+                            size: 'large',
+                            children: p
+                              ? 'Subscribing...'
+                              : 'Subscribe & Create Job',
+                          }),
+                        }),
+                      ],
+                    }),
+              }),
+        ],
+      }),
+      (0, r.jsx)(be, {
+        children: (0, r.jsx)(Ct, {
+          onClick: o,
+          disabled: p,
+          children: 'Close',
+        }),
+      }),
+    ],
+  });
+}
+var t = yt(dt(), 1),
+  {
+    useCallback: Ie,
+    useEffect: Q,
+    useMemo: gt,
+    useRef: Ht,
+    useState: g,
+  } = React,
+  {
+    createChart: Re,
+    IChartApi: rn,
+    LineData: ln,
+    LineSeries: Jt,
+    MouseEventParams: cn,
+    UTCTimestamp: dn,
+  } = LightweightChart,
+  {
+    ViewColumn: Ee,
+    FilterList: Le,
+    Clear: Gt,
+    Settings: _e,
+    ShowChart: Me,
+    Storefront: Ae,
+  } = MuiIcon,
+  {
+    Table: Be,
+    TableBody: Ne,
+    TableCell: Z,
+    TableContainer: Fe,
+    TableHead: je,
+    TableRow: Lt,
+    TableSortLabel: ze,
+    TablePagination: Ue,
+    TextField: mt,
+    Box: P,
+    Checkbox: Oe,
+    FormControlLabel: We,
+    Stack: _t,
+    IconButton: pt,
+    Button: rt,
+    Card: xt,
+    CardContent: Tt,
+    Typography: v,
+    Grid: K,
+    Popover: He,
+    Paper: gn,
+    MenuItem: ft,
+    Dialog: $t,
+    DialogTitle: Yt,
+    DialogContent: Xt,
+    DialogActions: Zt,
+    CircularProgress: Je,
+  } = Mui,
+  j = {
+    positive: '#28a745',
+    negative: '#dc3545',
+    neutral: '#6c757d',
+    warning: '#ffc107',
+  },
+  st = ({ color: e, bold: o, children: i }) =>
+    (0, t.jsx)(P, {
+      component: 'span',
+      sx: { color: e, fontWeight: o ? 700 : 400 },
+      children: i,
+    });
+function Kt(e) {
+  if (e == null || Number.isNaN(e)) return '-';
+  let i = new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 4,
+      maximumFractionDigits: 4,
+    }).format(Math.abs(e)),
+    a = e > 0 ? '+' : e < 0 ? '-' : '',
+    c = e > 0 ? '\u2197' : e < 0 ? '\u2198' : '',
+    p = e > 0 ? j.positive : e < 0 ? j.negative : j.neutral;
+  return (0, t.jsxs)(st, { color: p, bold: e !== 0, children: [c, ' ', a, i] });
+}
+function Ge(e) {
+  return e
+    ? e.state === 'active'
+      ? (0, t.jsxs)(st, {
+          color: j.positive,
+          children: ['\u2713 Active (', e.label, ')'],
+        })
+      : e.state === 'inactive'
+        ? (0, t.jsxs)(st, {
+            color: j.warning,
+            children: ['\u23F8 Inactive (', e.label, ')'],
+          })
+        : (0, t.jsx)(st, { color: j.neutral, children: '\u2298 No Job' })
+    : '-';
+}
+function Ve(e) {
+  if (!e) return '-';
+  let o =
+    e.direction === 'BUY' || e.direction === 'LONG' ? j.positive : j.negative;
+  return (0, t.jsxs)(t.Fragment, {
+    children: [
+      (0, t.jsx)(st, { color: o, bold: !0, children: e.symbol }),
+      ' ',
+      Kt(e.pnl),
+    ],
+  });
+}
+function qe(e) {
+  if (e == null) return '-';
+  let o = e * 100,
+    i = j.negative;
+  return (
+    o >= 50 ? (i = j.positive) : o >= 40 && (i = j.neutral),
+    (0, t.jsxs)(st, { color: i, bold: !0, children: [o.toFixed(1), '%'] })
+  );
+}
+var $e = (e, o) => {
+  switch (e) {
+    case 'Total PNL':
+    case 'PNL 1H':
+    case 'PNL 4H':
+    case 'PNL 1D':
+      return Kt(o);
+    case 'Winrate':
+      return qe(o);
+    case 'Status':
+      return Ge(o);
+    case 'Latest Position':
+      return Ve(o);
+    case 'Started':
+    case 'Latest Position Time':
+      return Utils.formatUtcTime(o);
+    default:
+      return o;
+  }
+};
+function Ye(e, o, i = []) {
+  if (!e?.length)
+    return {
+      rows: [],
+      totals: { total_models: 0, total_pnl: 0, total_positions: 0 },
+    };
+  let a = {};
+  for (let s of e) {
+    let f = s.identity;
+    f && (a[f] = s);
+  }
+  e = Object.values(a);
+  let c = {};
+  for (let s of o) {
+    let f = s?.config?.model_key;
+    f &&
+      (c[f] = {
+        state: s.active ? 'active' : 'inactive',
+        label: s.description || 'No description',
+        job: s,
+      });
+  }
+  let p = [],
+    d = 0,
+    x = 0;
+  for (let s of e) {
+    let f = s.identity;
+    if (!f) continue;
+    let y = s.totalPnl ?? 0,
+      k = Number(s.totalPositions ?? 0);
+    ((d += y), (x += k));
+    let b = s.lastPosition,
+      U = b
+        ? { symbol: b.symbol ?? '', direction: b.side ?? '', pnl: b.pnl ?? 0 }
+        : null,
+      S = b?.time ?? null,
+      D = c[f];
+    p.push({
+      Identity: f,
+      Model: s.modelName,
+      'Total PNL': y,
+      'PNL 1H': s.pnlDelta1h ?? 0,
+      'PNL 4H': s.pnlDelta4h ?? 0,
+      'PNL 1D': s.pnlDelta1d ?? 0,
+      Winrate: s.winrate ?? null,
+      'Max Drawdown': s.maxDrawdown,
+      'Latest Position': U,
+      'Latest Position Time': S,
+      Status: D,
+      'Hide Status': D?.state ?? '',
+      Started: s.startedAt ?? '',
+      'Total Positions': k,
+      'Total Runtime': s.totalRunningTime ?? '-',
+    });
+  }
+  return {
+    rows: p,
+    totals: { total_models: p.length, total_pnl: d, total_positions: x },
+  };
+}
+function Vt(e) {
+  return e
+    ? new Date(e).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
+    : '';
+}
+var Xe = React.memo(({ visible: e, x: o, y: i, data: a }) =>
+  !e || !a
+    ? null
+    : (0, t.jsxs)(P, {
+        sx: {
+          position: 'absolute',
+          left: o,
+          top: i,
+          bgcolor: 'rgba(0,0,0,0.85)',
+          color: '#fff',
+          px: 1.5,
+          py: 1,
+          fontSize: 12,
+          pointerEvents: 'none',
+          zIndex: 10,
+          minWidth: 220,
+          boxShadow: 3,
+        },
+        children: [
+          (0, t.jsxs)(v, {
+            variant: 'caption',
+            display: 'block',
+            children: [
+              (0, t.jsx)('strong', { children: 'Open time:' }),
+              ' ',
+              a.openTime,
+            ],
+          }),
+          (0, t.jsxs)(v, {
+            variant: 'caption',
+            display: 'block',
+            children: [
+              (0, t.jsx)('strong', { children: 'Close time:' }),
+              ' ',
+              a.time,
+            ],
+          }),
+          (0, t.jsxs)(v, {
+            variant: 'caption',
+            display: 'block',
+            children: [
+              (0, t.jsx)('strong', { children: 'Symbol:' }),
+              ' ',
+              a.symbol,
+              ' | ',
+              (0, t.jsx)('strong', { children: 'Side:' }),
+              ' ',
+              (0, t.jsx)(P, {
+                component: 'span',
+                sx: {
+                  color: a.side === 'BUY' ? '#4caf50' : '#f44336',
+                  fontWeight: 600,
+                },
+                children: a.side,
+              }),
+            ],
+          }),
+          (0, t.jsx)(P, {
+            sx: { my: 0.5, borderTop: '1px solid rgba(255,255,255,0.2)' },
+          }),
+          (0, t.jsxs)(v, {
+            variant: 'caption',
+            display: 'block',
+            children: [
+              (0, t.jsx)('strong', { children: 'PnL:' }),
+              ' ',
+              (0, t.jsxs)(P, {
+                component: 'span',
+                sx: {
+                  color: a.pnl >= 0 ? '#4caf50' : '#f44336',
+                  fontWeight: 600,
+                },
+                children: [a.pnl >= 0 ? '+' : '', a.pnl.toFixed(4)],
+              }),
+            ],
+          }),
+          (0, t.jsxs)(v, {
+            variant: 'caption',
+            display: 'block',
+            children: [
+              (0, t.jsx)('strong', { children: 'Accumulated:' }),
+              ' ',
+              (0, t.jsxs)(P, {
+                component: 'span',
+                sx: {
+                  color: a.accumulatedPnl >= 0 ? '#2962FF' : '#f44336',
+                  fontWeight: 600,
+                },
+                children: [
+                  a.accumulatedPnl >= 0 ? '+' : '',
+                  a.accumulatedPnl.toFixed(4),
+                ],
+              }),
+            ],
+          }),
+        ],
+      })
+);
+function Pt(e) {
+  if (typeof e == 'number') return e;
+  if (typeof e == 'string') {
+    let o = e.replace(/[^\d.-]/g, ''),
+      i = parseFloat(o);
+    return isNaN(i) ? 0 : i;
+  }
+  return 0;
+}
+function qt(e, o, i) {
+  let a = e[i],
+    c = o[i];
+  if (
+    typeof a == 'string' &&
+    typeof c == 'string' &&
+    /^\d{4}-\d{2}-\d{2}T/.test(a) &&
+    /^\d{4}-\d{2}-\d{2}T/.test(c)
+  ) {
+    let f = Date.parse(a),
+      y = Date.parse(c);
+    if (!isNaN(f) && !isNaN(y)) return y < f ? -1 : y > f ? 1 : 0;
+  }
+  let p = Pt(a),
+    d = Pt(c);
+  if (p !== d) return p < d ? 1 : -1;
+  let x = String(a ?? '').toLowerCase(),
+    s = String(c ?? '').toLowerCase();
+  return s < x ? -1 : s > x ? 1 : 0;
+}
+function Ze(e, o) {
+  return e === 'desc' ? (i, a) => qt(i, a, o) : (i, a) => -qt(i, a, o);
+}
+var Ke = [
+    'num_session',
+    'num_signal',
+    'signal_direction',
+    'sl_percent',
+    'total_volume',
+    'tp_percent',
+    'volatility',
+  ],
+  Qe = ({
+    open: e,
+    onClose: o,
+    editingRow: i,
+    initialValues: a,
+    onSave: c,
+    saving: p,
+  }) => {
+    let [d, x] = g(a || {});
+    Q(() => {
+      x(a || {});
+    }, [a, e]);
+    let s = (y, k) => {
+        x((b) => ({ ...b, [y]: k }));
+      },
+      f = () => {
+        c(d);
+      };
+    return i
+      ? (0, t.jsxs)($t, {
+          open: e,
+          onClose: o,
+          maxWidth: 'sm',
+          fullWidth: !0,
+          children: [
+            (0, t.jsxs)(Yt, {
+              children: ['Edit Config: ', i.Identity || 'Unknown'],
+            }),
+            (0, t.jsx)(Xt, {
+              dividers: !0,
+              children: (0, t.jsx)(K, {
+                container: !0,
+                spacing: 2,
+                sx: { pt: 1 },
+                children: Ke.map((y) => {
+                  let k = d[y],
+                    b = typeof k == 'number';
+                  return (0, t.jsx)(
+                    K,
+                    {
+                      size: { sm: 6 },
+                      children: (0, t.jsx)(mt, {
+                        fullWidth: !0,
+                        size: 'small',
+                        label: y,
+                        value: k ?? '',
+                        type: b ? 'number' : 'text',
+                        onChange: (U) => {
+                          let S = b
+                            ? parseFloat(U.target.value)
+                            : U.target.value;
+                          s(y, S);
+                        },
+                      }),
+                    },
+                    y
+                  );
+                }),
+              }),
+            }),
+            (0, t.jsxs)(Zt, {
+              children: [
+                (0, t.jsx)(rt, {
+                  onClick: o,
+                  disabled: p,
+                  color: 'inherit',
+                  children: 'Cancel',
+                }),
+                (0, t.jsx)(rt, {
+                  onClick: f,
+                  disabled: p,
+                  variant: 'contained',
+                  children: p ? 'Saving...' : 'Save Changes',
+                }),
+              ],
+            }),
+          ],
+        })
+      : null;
+  },
+  tn = ({ open: e, onClose: o, row: i, registry: a }) => {
+    let [c, p] = g(!1),
+      [d, x] = g(),
+      [s, f] = g(null),
+      [y, k] = g(''),
+      [b, U] = g(''),
+      S = Ht(null),
+      D = Ht(null),
+      [O, w] = g({ visible: !1, x: 0, y: 0 }),
+      W = Ie(async () => {
+        if (i) {
+          (p(!0), f(null));
+          try {
+            let m = Utils.buildJinjaContext(
+                a.formContext.pluginPackage,
+                a.formContext.formData
+              ),
+              L = i.Identity || i.id,
+              M = (z) => (z ? `${z}:00Z` : ''),
+              H = M(y),
+              J = M(b),
+              A = await m(
+                '{{ get_equity_curve_forward_test(identity, startTime, endTime) }}',
+                { identity: L, startTime: H, endTime: J }
+              );
+            A && Array.isArray(A) ? x(A) : x([]);
+          } catch (m) {
+            (console.error('Failed to fetch equity curve', m),
+              f('Failed to load chart data: ' + m.message),
+              x([]));
+          } finally {
+            p(!1);
+          }
+        }
+      }, [i, y, b, Utils, a]);
+    return (
+      Q(() => {
+        e || w((m) => ({ ...m, visible: !1 }));
+      }, [e]),
+      Q(() => {
+        e && i && W();
+      }, [e, i, W]),
+      Q(() => {
+        if (!e || !S.current || !d) return;
+        (D.current?.remove(), (D.current = null));
+        let m = Re(S.current, {
+          width: S.current.clientWidth,
+          height: 500,
+          layout: { background: { color: '#ffffff' }, textColor: '#333' },
+          grid: {
+            vertLines: { color: '#e1e8ed' },
+            horzLines: { color: '#e1e8ed' },
+          },
+          crosshair: {
+            mode: 1,
+            vertLine: { width: 1, color: '#758696', style: 3 },
+            horzLine: { width: 1, color: '#758696', style: 3 },
+          },
+          timeScale: {
+            timeVisible: !0,
+            secondsVisible: !1,
+            borderColor: '#d1d4dc',
+          },
+          rightPriceScale: { borderColor: '#d1d4dc' },
+        });
+        D.current = m;
+        let L = m.addSeries(Jt, {
+            color: '#FF6B00',
+            lineWidth: 2,
+            title: 'PnL',
+          }),
+          M = m.addSeries(Jt, {
+            color: '#2962FF',
+            lineWidth: 2,
+            title: 'Accumulated PnL',
+          }),
+          H = d.map((C) => ({
+            time: new Date(C.time).getTime() / 1e3,
+            value: C.pnl,
+          })),
+          J = d.map((C) => ({
+            time: new Date(C.time).getTime() / 1e3,
+            value: C.accumulatedPnl,
+          }));
+        (L.setData(H), M.setData(J), m.timeScale().fitContent());
+        let A = Utils._.throttle((C) => {
+          if (!C?.time || !C?.point) {
+            w((T) => ({ ...T, visible: !1 }));
+            return;
+          }
+          if (C.point.x < 0 || C.point.y < 0) {
+            w((T) => ({ ...T, visible: !1 }));
+            return;
+          }
+          let tt = C.seriesData.get(M);
+          if (!tt) {
+            w((T) => ({ ...T, visible: !1 }));
+            return;
+          }
+          let G = tt.time * 1e3,
+            _ = d.find((T) => Math.abs(new Date(T.time).getTime() - G) < 1e3);
+          if (!_) return;
+          let u = S.current.clientWidth - 240,
+            I = S.current.clientHeight - 120;
+          w({
+            visible: !0,
+            x: Math.min(C.point.x + 15, u),
+            y: Math.min(C.point.y + 15, I),
+            data: {
+              time: Vt(_.time),
+              openTime: Vt(_.openTime),
+              symbol: _.symbol,
+              side: _.side,
+              pnl: _.pnl,
+              accumulatedPnl: _.accumulatedPnl,
+            },
+          });
+        }, 40);
+        m.subscribeCrosshairMove(A);
+        let z = () => {
+          !D.current ||
+            !S.current ||
+            D.current.applyOptions({ width: S.current.clientWidth });
+        };
+        return (
+          window.addEventListener('resize', z),
+          () => {
+            (window.removeEventListener('resize', z),
+              m.unsubscribeCrosshairMove(A),
+              m.remove(),
+              (D.current = null));
+          }
+        );
+      }, [d, e]),
+      (0, t.jsxs)($t, {
+        open: e,
+        onClose: o,
+        maxWidth: 'xl',
+        fullWidth: !0,
+        children: [
+          (0, t.jsxs)(Yt, {
+            children: ['Equity Curve: ', i?.Identity || 'Unknown'],
+          }),
+          (0, t.jsxs)(Xt, {
+            children: [
+              (0, t.jsxs)(_t, {
+                direction: 'row',
+                spacing: 2,
+                sx: { mb: 2, mt: 1 },
+                children: [
+                  (0, t.jsx)(mt, {
+                    label: 'Start Time',
+                    type: 'datetime-local',
+                    value: y,
+                    onChange: (m) => k(m.target.value),
+                    size: 'small',
+                    InputLabelProps: { shrink: !0 },
+                    sx: { flex: 1 },
+                  }),
+                  (0, t.jsx)(mt, {
+                    label: 'End Time',
+                    type: 'datetime-local',
+                    value: b,
+                    onChange: (m) => U(m.target.value),
+                    size: 'small',
+                    InputLabelProps: { shrink: !0 },
+                    sx: { flex: 1 },
+                  }),
+                  (0, t.jsx)(rt, {
+                    variant: 'contained',
+                    onClick: W,
+                    disabled: c,
+                    sx: { height: 40, alignSelf: 'flex-start' },
+                    children: 'Refresh',
+                  }),
+                ],
+              }),
+              (0, t.jsxs)(P, {
+                sx: {
+                  display: 'flex',
+                  gap: 3,
+                  mb: 2,
+                  justifyContent: 'center',
+                },
+                children: [
+                  (0, t.jsxs)(P, {
+                    sx: { display: 'flex', alignItems: 'center', gap: 1 },
+                    children: [
+                      (0, t.jsx)(P, {
+                        sx: { width: 20, height: 3, bgcolor: '#FF6B00' },
+                      }),
+                      (0, t.jsx)(v, {
+                        variant: 'body2',
+                        children: 'PnL (Individual Trade)',
+                      }),
+                    ],
+                  }),
+                  (0, t.jsxs)(P, {
+                    sx: { display: 'flex', alignItems: 'center', gap: 1 },
+                    children: [
+                      (0, t.jsx)(P, {
+                        sx: { width: 20, height: 3, bgcolor: '#2962FF' },
+                      }),
+                      (0, t.jsx)(v, {
+                        variant: 'body2',
+                        children: 'Accumulated PnL',
+                      }),
+                    ],
+                  }),
+                ],
+              }),
+              c &&
+                (0, t.jsx)(P, {
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  minHeight: 400,
+                  children: (0, t.jsx)(Je, {}),
+                }),
+              s &&
+                (0, t.jsx)(P, {
+                  minHeight: 400,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  children: (0, t.jsx)(v, { color: 'error', children: s }),
+                }),
+              d &&
+                (d.length
+                  ? (0, t.jsx)(P, {
+                      ref: S,
+                      sx: {
+                        position: 'relative',
+                        width: '100%',
+                        height: 540,
+                        mt: 2,
+                      },
+                      children: (0, t.jsx)(Xe, { ...O }),
+                    })
+                  : (0, t.jsx)(P, {
+                      minHeight: 400,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      children: (0, t.jsx)(v, {
+                        color: 'text.secondary',
+                        children: 'No data available',
+                      }),
+                    })),
+            ],
+          }),
+          (0, t.jsx)(Zt, {
+            children: (0, t.jsx)(rt, {
+              variant: 'contained',
+              color: 'warning',
+              onClick: o,
+              children: 'Close',
+            }),
+          }),
+        ],
+      })
+    );
+  },
+  pn = ({ formData: e, registry: o }) => {
+    let [i, a] = g('desc'),
+      [c, p] = g(''),
+      [d, x] = g(''),
+      [s, f] = g('All'),
+      [y, k] = g(0),
+      [b, U] = g(10),
+      [S, D] = g(null),
+      [O, w] = g(null),
+      [W, m] = g(!1),
+      [L, M] = g(!1),
+      [H, J] = g({}),
+      [A, z] = g(!1),
+      [C, tt] = g(null),
+      [G, _] = g({}),
+      [u, I] = g([]),
+      [T, V] = g(!1),
+      [B, Y] = g(null),
+      St = (n) => {
+        (Y({ identity: n.Identity }), V(!0));
+      },
+      [et, R] = g([]),
+      q = async () => {
+        try {
+          let l = await Utils.buildJinjaContext(
+              'alpha_miner.plugins.LiveTradeForUserPlugin',
+              {},
+              !0
+            )('{{ list_trade_models(env, url, apikey) }}', {
+              env: 'production',
+              url: null,
+              apikey: null,
+            }),
+            h = (typeof l == 'string' ? JSON.parse(l.replace(/'/g, '"')) : l)
+              .versions;
+          Array.isArray(h) && R(h.map((E) => E.id));
+        } catch (n) {
+          console.warn('Failed to fetch published models', n);
+        }
+      };
+    (Q(() => {
+      q();
+    }, [T]),
+      Q(() => {
+        if (e)
+          try {
+            let {
+                models: n,
+                jobList: l,
+                stats: h,
+              } = Utils.convertByType(e, 'object'),
+              { rows: E } = Ye(h, l, et),
+              Dt = Object.fromEntries(
+                n.map((X) => [X.identity, X.currentConfig])
+              ),
+              N = E.map((X) => ({
+                ...X,
+                'Hide currentConfig': Dt[X.Identity],
+              }));
+            I(N);
+          } catch (n) {
+            console.error(n);
+          }
+      }, [e, et]));
+    let $ = gt(
+        () =>
+          u.length === 0
+            ? []
+            : Object.keys(u[0]).filter(
+                (n) => !n.includes('Hide') && n !== 'config'
+              ),
+        [u]
+      ),
+      [lt, ht] = g({});
+    Q(() => {
+      $.length > 0 &&
+        ht((n) => {
+          let l = { ...n },
+            h = !1;
+          return (
+            $.forEach((E) => {
+              l[E] === void 0 && ((l[E] = !0), (h = !0));
+            }),
+            h ? l : n
+          );
+        });
+    }, [$]);
+    let nt = gt(() => {
+        if (!u) return [];
+        let n = u;
+        if (((n = n.filter((l) => !G[l.Identity || l.id])), d)) {
+          let l = d.toLowerCase();
+          n = n.filter((h) =>
+            Object.values(h).some((E) => String(E).toLowerCase().includes(l))
+          );
+        }
+        return (
+          s !== 'All' &&
+            (s === 'Published'
+              ? (n = n.filter((l) => et.includes(l.Identity)))
+              : s === 'Unpublished'
+                ? (n = n.filter((l) => !et.includes(l.Identity)))
+                : (n = n.filter((l) => {
+                    let h = String(l['Hide Status']).toLowerCase();
+                    return s === 'active'
+                      ? h === 'active' || et.includes(l.Identity)
+                      : h
+                        ? h === s
+                        : !1;
+                  }))),
+          n
+        );
+      }, [u, d, G, s]),
+      wt = gt(() => (c ? [...nt].sort(Ze(i, c)) : nt), [nt, i, c]),
+      Mt = gt(() => {
+        let n = y * b;
+        return wt.slice(n, n + b);
+      }, [wt, y, b]),
+      ct = gt(() => {
+        let n = nt.length,
+          l = 0,
+          h = 0;
+        return (
+          nt.forEach((E) => {
+            ((l += Pt(E['Total PNL'])), (h += Pt(E['Total Positions'])));
+          }),
+          { totalModels: n, totalPnl: l, totalPositions: h }
+        );
+      }, [nt]),
+      Qt = (n) => {
+        (a(c === n && i === 'asc' ? 'desc' : 'asc'), p(n));
+      },
+      te = (n) => {
+        ht((l) => ({ ...l, [n]: !l[n] }));
+      },
+      ee = (n) => {
+        let l = n.Identity || JSON.stringify(n);
+        _((h) => ({ ...h, [l]: !0 }));
+      },
+      ne = (n) => {
+        w(n);
+        let l = n['Hide currentConfig'] || n.config || {};
+        (J(l.config), m(!0));
+      },
+      oe = (n) => {
+        (tt(n), z(!0));
+      },
+      ie = async (n) => {
+        if (!(!O || !o)) {
+          M(!0);
+          try {
+            let l = Utils.buildJinjaContext(
+                o.formContext.pluginPackage,
+                o.formContext.formData
+              ),
+              h = { ...n },
+              E = O.Identity;
+            (await l(
+              '{{ update_model_config(webhook_url, webhook_api_key,identity, payload) }}',
+              { identity: E, payload: h }
+            ),
+              I((Dt) =>
+                Dt.map((N) => {
+                  let X = N.Identity,
+                    ae = O.Identity;
+                  if (X === ae) {
+                    if (N['Hide currentConfig'])
+                      return {
+                        ...N,
+                        'Hide currentConfig': {
+                          ...N['Hide currentConfig'],
+                          config: { ...N['Hide currentConfig'].config, ...n },
+                        },
+                      };
+                    if (N.config)
+                      return { ...N, config: { ...N.config, ...n } };
+                  }
+                  return N;
+                })
+              ),
+              m(!1),
+              w(null),
+              alert('Update config completed'));
+          } catch (l) {
+            (console.error('Failed to update config', l),
+              alert('Failed to update config: ' + l.message));
+          } finally {
+            M(!1);
+          }
+        }
+      },
+      kt = $.filter((n) => lt[n]);
+    return (0, t.jsxs)(P, {
+      children: [
+        (0, t.jsxs)(K, {
+          container: !0,
+          spacing: 2,
+          sx: { mb: 2 },
+          children: [
+            (0, t.jsx)(K, {
+              size: { xs: 6, md: 3 },
+              children: (0, t.jsx)(xt, {
+                sx: { bgcolor: 'background.paper', height: '100%' },
+                children: (0, t.jsxs)(Tt, {
+                  sx: { pb: 2 },
+                  children: [
+                    (0, t.jsx)(v, {
+                      variant: 'caption',
+                      color: 'text.secondary',
+                      children: 'Total models',
+                    }),
+                    (0, t.jsx)(v, { variant: 'h6', children: ct.totalModels }),
+                  ],
+                }),
+              }),
+            }),
+            (0, t.jsx)(K, {
+              size: { xs: 6, md: 3 },
+              children: (0, t.jsx)(xt, {
+                sx: { bgcolor: 'background.paper', height: '100%' },
+                children: (0, t.jsxs)(Tt, {
+                  sx: { pb: 2 },
+                  children: [
+                    (0, t.jsx)(v, {
+                      variant: 'caption',
+                      color: 'text.secondary',
+                      children: 'Total PNL',
+                    }),
+                    (0, t.jsxs)(v, {
+                      variant: 'h6',
+                      sx: {
+                        color: ct.totalPnl >= 0 ? 'success.main' : 'error.main',
+                      },
+                      children: [
+                        ct.totalPnl >= 0 ? '+' : '',
+                        ct.totalPnl.toFixed(4),
+                      ],
+                    }),
+                  ],
+                }),
+              }),
+            }),
+            (0, t.jsx)(K, {
+              size: { xs: 6, md: 3 },
+              children: (0, t.jsx)(xt, {
+                sx: { bgcolor: 'background.paper', height: '100%' },
+                children: (0, t.jsxs)(Tt, {
+                  sx: { pb: 2 },
+                  children: [
+                    (0, t.jsx)(v, {
+                      variant: 'caption',
+                      color: 'text.secondary',
+                      children: 'Total Positions',
+                    }),
+                    (0, t.jsx)(v, {
+                      variant: 'h6',
+                      children: ct.totalPositions,
+                    }),
+                  ],
+                }),
+              }),
+            }),
+            (0, t.jsx)(K, {
+              size: { xs: 6, md: 3 },
+              children: (0, t.jsx)(xt, {
+                sx: { bgcolor: 'background.paper', height: '100%' },
+                children: (0, t.jsxs)(Tt, {
+                  sx: { pb: 2 },
+                  children: [
+                    (0, t.jsx)(v, {
+                      variant: 'caption',
+                      color: 'text.secondary',
+                      children: 'Equity (each model)',
+                    }),
+                    (0, t.jsx)(v, { variant: 'h6', children: '10' }),
+                  ],
+                }),
+              }),
+            }),
+          ],
+        }),
+        (0, t.jsxs)(_t, {
+          direction: 'row',
+          spacing: 2,
+          sx: { mb: 2 },
+          alignItems: 'center',
+          children: [
+            (0, t.jsx)(mt, {
+              size: 'small',
+              placeholder: 'Search...',
+              value: d,
+              onChange: (n) => {
+                (x(n.target.value), k(0));
+              },
+              InputProps: {
+                startAdornment: (0, t.jsx)(Le, {
+                  sx: { color: 'action.active', mr: 1, fontSize: 20 },
+                }),
+                endAdornment:
+                  d &&
+                  (0, t.jsx)(pt, {
+                    size: 'small',
+                    onClick: () => x(''),
+                    children: (0, t.jsx)(Gt, { fontSize: 'small' }),
+                  }),
+              },
+              sx: { flexGrow: 1, maxWidth: 300 },
+            }),
+            (0, t.jsxs)(mt, {
+              select: !0,
+              size: 'small',
+              label: 'Status',
+              value: s,
+              onChange: (n) => {
+                (f(n.target.value), k(0));
+              },
+              sx: { maxWidth: 150 },
+              children: [
+                (0, t.jsx)(ft, { value: 'All', children: 'All' }),
+                (0, t.jsx)(ft, { value: 'Published', children: 'Published' }),
+                (0, t.jsx)(ft, {
+                  value: 'Unpublished',
+                  children: 'Unpublished',
+                }),
+                (0, t.jsx)(ft, { value: 'active', children: 'Active' }),
+                (0, t.jsx)(ft, { value: 'inactive', children: 'Inactive' }),
+              ],
+            }),
+            (0, t.jsx)(P, { sx: { flexGrow: 1 } }),
+            Object.keys(G).length > 0 &&
+              (0, t.jsxs)(rt, {
+                size: 'small',
+                onClick: () => _({}),
+                children: ['Show ', Object.keys(G).length, ' Hidden Rows'],
+              }),
+            (0, t.jsx)(rt, {
+              startIcon: (0, t.jsx)(Ee, {}),
+              onClick: (n) => D(n.currentTarget),
+              variant: 'outlined',
+              size: 'small',
+              children: 'Columns',
+            }),
+            (0, t.jsx)(He, {
+              open: !!S,
+              anchorEl: S,
+              onClose: () => D(null),
+              anchorOrigin: { vertical: 'bottom', horizontal: 'right' },
+              transformOrigin: { vertical: 'top', horizontal: 'right' },
+              children: (0, t.jsxs)(P, {
+                sx: { p: 2, maxHeight: 300, overflow: 'auto' },
+                children: [
+                  (0, t.jsx)(v, {
+                    variant: 'subtitle2',
+                    sx: { mb: 1 },
+                    children: 'Visible Columns',
+                  }),
+                  (0, t.jsx)(_t, {
+                    children: $.map((n) =>
+                      (0, t.jsx)(
+                        We,
+                        {
+                          control: (0, t.jsx)(Oe, {
+                            size: 'small',
+                            checked: !!lt[n],
+                            onChange: () => te(n),
+                          }),
+                          label: n,
+                        },
+                        n
+                      )
+                    ),
+                  }),
+                ],
+              }),
+            }),
+          ],
+        }),
+        (0, t.jsx)(Fe, {
+          children: (0, t.jsxs)(Be, {
+            size: 'small',
+            children: [
+              (0, t.jsx)(je, {
+                children: (0, t.jsxs)(Lt, {
+                  sx: { bgcolor: 'action.hover' },
+                  children: [
+                    (0, t.jsx)(Z, { sx: { width: 40 }, padding: 'none' }),
+                    kt.map((n) =>
+                      (0, t.jsx)(
+                        Z,
+                        {
+                          sx: { fontWeight: 600 },
+                          children: (0, t.jsx)(ze, {
+                            active: c === n,
+                            direction: c === n ? i : 'asc',
+                            onClick: () => Qt(n),
+                            children: n,
+                          }),
+                        },
+                        n
+                      )
+                    ),
+                    (0, t.jsx)(Z, {
+                      sx: { fontWeight: 600 },
+                      children: 'Action',
+                    }),
+                  ],
+                }),
+              }),
+              (0, t.jsxs)(Ne, {
+                children: [
+                  Mt.map((n, l) =>
+                    (0, t.jsxs)(
+                      Lt,
+                      {
+                        hover: !0,
+                        children: [
+                          (0, t.jsx)(Z, {
+                            padding: 'none',
+                            align: 'center',
+                            children: (0, t.jsx)(pt, {
+                              size: 'small',
+                              onClick: () => ee(n),
+                              sx: {
+                                opacity: 0.3,
+                                '&:hover': { opacity: 1, color: 'error.main' },
+                              },
+                              children: (0, t.jsx)(Gt, {
+                                fontSize: 'small',
+                                sx: { fontSize: 14 },
+                              }),
+                            }),
+                          }),
+                          kt.map((h) =>
+                            (0, t.jsx)(Z, { children: $e(h, n[h]) }, h)
+                          ),
+                          (0, t.jsxs)(Z, {
+                            children: [
+                              (0, t.jsx)(pt, {
+                                size: 'small',
+                                onClick: () => St(n),
+                                color: 'warning',
+                                title: 'Publish to Marketplace',
+                                children: (0, t.jsx)(Ae, { fontSize: 'small' }),
+                              }),
+                              (0, t.jsx)(pt, {
+                                size: 'small',
+                                onClick: () => ne(n),
+                                color: 'primary',
+                                title: 'Edit Config',
+                                children: (0, t.jsx)(_e, { fontSize: 'small' }),
+                              }),
+                              (0, t.jsx)(pt, {
+                                size: 'small',
+                                onClick: () => oe(n),
+                                color: 'primary',
+                                title: 'View Equity Curve',
+                                children: (0, t.jsx)(Me, { fontSize: 'small' }),
+                              }),
+                            ],
+                          }),
+                        ],
+                      },
+                      `${n.Identity || l}`
+                    )
+                  ),
+                  Mt.length === 0 &&
+                    (0, t.jsx)(Lt, {
+                      children: (0, t.jsx)(Z, {
+                        colSpan: kt.length + 2,
+                        align: 'center',
+                        sx: { py: 3 },
+                        children: (0, t.jsx)(v, {
+                          color: 'text.secondary',
+                          children: 'No matching records found',
+                        }),
+                      }),
+                    }),
+                ],
+              }),
+            ],
+          }),
+        }),
+        (0, t.jsx)(Ue, {
+          component: 'div',
+          count: wt.length,
+          page: y,
+          rowsPerPage: b,
+          rowsPerPageOptions: [10, 20, 50, 100],
+          onPageChange: (n, l) => k(l),
+          onRowsPerPageChange: (n) => {
+            (U(Number(n.target.value)), k(0));
+          },
+        }),
+        (0, t.jsx)(Qe, {
+          open: W,
+          onClose: () => !L && m(!1),
+          editingRow: O,
+          initialValues: H,
+          onSave: ie,
+          saving: L,
+        }),
+        (0, t.jsx)(tn, { open: A, onClose: () => z(!1), row: C, registry: o }),
+        (0, t.jsx)(Wt, {
+          open: T,
+          onClose: () => V(!1),
+          modelIdentity: B?.identity,
+        }),
+      ],
+    });
+  };
+export { pn as default };

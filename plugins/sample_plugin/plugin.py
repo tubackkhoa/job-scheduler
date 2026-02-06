@@ -6,7 +6,7 @@ from typing import Any, Awaitable, Callable, List, Optional, ParamSpec
 from enforcer import ExecutionContext, job_permission
 from plugins import ui_schema
 from plugins.schema import SecureBaseModel, SecureField
-
+from schemas import settings
 from .data import JSON_TPL, SQL_TPL, YAML_TPL, MD_TPL, countries
 
 
@@ -114,8 +114,11 @@ export default function ({
         json_schema_extra=ui_schema(
             {
                 "ui:field": "Dynamic",
-                # "code": Path(__file__).with_name("compile_plugin.js").read_text(),
-                "url": "CompilePluginComponent.tsx",
+                **(
+                    {"url": "CompilePluginComponent.tsx"}
+                    if settings.env == "dev"
+                    else {"code": Path(__file__).with_name("compile_plugin.js").read_text()}
+                ),
                 "ui:options": {
                     "size": 6,
                 },
