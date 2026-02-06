@@ -10,6 +10,7 @@ from .api import (
 )
 from .config import Config
 from pathlib import Path
+from schemas import settings
 
 
 # {% set model_keys = models | map(attribute='map(attribute='name')') %}
@@ -33,15 +34,19 @@ class Plugin:
         ("", Config.model_config.get("json_schema_extra")),
         (
             "dashboard",
-            {
-                "code": Path(__file__).with_name("dashboard.js").read_text(),
-            },
+            (
+                {"url": "Dashboard.tsx"}
+                if settings.env == "dev"
+                else {"code": Path(__file__).with_name("dashboard.js").read_text()}
+            ),
         ),
         (
             "marketplace",
-            {
-                "url": "forwardtest/MarketPlace.tsx",
-            },
+            (
+                {"url": "MarketPlace.tsx"}
+                if settings.env == "dev"
+                else {"code": Path(__file__).with_name("marketplace.js").read_text()}
+            ),
         ),
     ]
 
