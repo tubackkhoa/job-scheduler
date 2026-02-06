@@ -39,7 +39,13 @@ def register_model_config(payload: str) -> bool:
         config=default_config
     )
     
-    return repo.register_model(model)
+    result = repo.register_model(model)
+
+    if (result):
+        return {"status": "success"}
+    else:
+        return {"status": "failed"}
+
 
 def update_model_config(model_name: str, config: Dict[str, Any]) -> bool:
     """

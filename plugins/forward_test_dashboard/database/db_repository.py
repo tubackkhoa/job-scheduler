@@ -335,7 +335,7 @@ class ForwardTestRepository:
         assets: List[str]
     ) -> Dict[tuple, float]:
         """
-        Get price deltas from ohlcv_binance-futures_1h table.
+        Get price deltas from view_ohlcv_binance-futures_1h table.
         Returns a dictionary mapping (open_time, base_asset) -> percentage change.
         Change is calculated as (close - open) / open.
         
@@ -361,7 +361,7 @@ class ForwardTestRepository:
                 open_time,
                 base_asset,
                 (close-open)/open as delta
-            FROM "ohlcv_binance-futures_1h"
+            FROM "view_ohlcv_binance-futures_1h"
             WHERE base_asset IN ({placeholders})
               AND open_time >= ?
               AND open_time <= ?
