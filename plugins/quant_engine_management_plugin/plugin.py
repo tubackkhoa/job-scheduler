@@ -132,23 +132,23 @@ class Plugin:
         ("", Config.model_config.get("json_schema_extra")),
     ]
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def install(cls) -> bool:
         return True
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def env(cls):
         return cls._env
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def schema(cls, ctx):
         return Config.model_json_schema()
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def config(
         cls,
         ctx,
@@ -157,8 +157,8 @@ class Plugin:
     ):
         return Config.model_validate(json or {})
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def on_active_job(cls, ctx: ExecutionContext, json: Optional[dict[str, Any]] = None):
         if not json:
             return
@@ -166,8 +166,8 @@ class Plugin:
         if json.get("model_tag", "") == ModelEnv.uat_test and model_key:
             activate_forwardtest_model(ctx, model_key)
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def on_deactive_job(cls, ctx: ExecutionContext, json: Optional[dict[str, Any]] = None):
         if not json:
             return
@@ -175,18 +175,18 @@ class Plugin:
         if json.get("model_tag", "") == ModelEnv.uat_test and model_key:
             deactivate_trade_model(ctx, model_key)
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def roles(cls):
         return {"admin"}
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def routes(cls) -> list[tuple[str, Any]]:
         return cls._routes
 
-    @hookimpl
     @classmethod
+    @hookimpl
     async def run(
         cls,
         config: Config,

@@ -164,29 +164,29 @@ class Plugin:
         # ),
     ]
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def env(cls):
         return cls._env
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def schema(cls, ctx: ExecutionContext):
         return Config.model_json_schema()
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def roles(cls):
         return {}
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def routes(cls) -> list[tuple[str, CodeSchema]]:
         # using function so that it will delete memory because page can be huge
         return cls._routes
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def config(
         cls,
         ctx: ExecutionContext,
@@ -195,8 +195,8 @@ class Plugin:
     ):
         return Config.model_validate(json or {})
 
-    @hookimpl
     @classmethod
+    @hookimpl
     async def run(cls, config: Config, logger: logging.Logger):
         # do something at background
         pass

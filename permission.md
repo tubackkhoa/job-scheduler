@@ -329,8 +329,8 @@ def fetch_data(ctx: ExecutionContext):
 
 ```python
 class Plugin:
-    @hookimpl
     @classmethod
+    @hookimpl
     def roles(cls):
         return {
             "fetch_data": {"data", "admin"},  # Roles with permission
@@ -395,14 +395,14 @@ PROJECT_NAME = "job-scheduler"
 hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
 
 class Plugin:
-    @hookimpl
     @classmethod
+    @hookimpl
     def install(cls) -> bool:
         """Called when plugin is installed"""
         return True
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def env(cls) -> dict[str, Any]:
         """Provide globals for Jinja2 templates"""
         return {
@@ -411,20 +411,20 @@ class Plugin:
             "MyClass": MyClass,        # Classes
         }
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def schema(cls, ctx: ExecutionContext):
         """Return JSON Schema with permission filtering"""
         return Config.model_json_schema(ctx)
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def config(cls, ctx: ExecutionContext, json=None, validate=False):
         """Parse and validate config"""
         return Config.model_validate(ctx, json or {}, validate)
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def roles(cls):
         """Define permission mappings"""
         return {
@@ -432,8 +432,8 @@ class Plugin:
             "code_read": {"admin"},
         }
 
-    @hookimpl
     @classmethod
+    @hookimpl
     async def run(cls, ctx: ExecutionContext, config, logger, render):
         """Execute plugin logic"""
         # Sandbox execution with ctx

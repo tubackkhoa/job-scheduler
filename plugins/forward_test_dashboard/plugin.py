@@ -51,29 +51,29 @@ class Plugin:
         ),
     ]
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def routes(cls) -> list[tuple[str, Any]]:
         # using function so that it will delete memory because page can be huge
         return cls._routes
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def install(cls) -> bool:
         return True
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def env(cls) -> Dict[str, Any]:
         return cls._env
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def schema(cls, ctx):
         return Config.model_json_schema()
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def config(
         cls,
         ctx,
@@ -83,13 +83,13 @@ class Plugin:
 
         return Config.model_validate(json or {})
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def roles(cls):
         return {"admin"}
 
-    @hookimpl
     @classmethod
+    @hookimpl
     async def run(
         cls,
         ctx,
