@@ -162,8 +162,8 @@ class Plugin:
     def on_active_job(cls, ctx: ExecutionContext, json: Optional[dict[str, Any]] = None):
         if not json:
             return
-        model_key = json.get("model_key", "")
-        if json.get("model_tag", "") == ModelEnv.uat_test and model_key:
+        model_key = json.get("model_key")
+        if json.get("model_tag") == ModelEnv.uat_test and model_key:
             activate_forwardtest_model(ctx, model_key)
 
     @classmethod
@@ -171,8 +171,8 @@ class Plugin:
     def on_deactive_job(cls, ctx: ExecutionContext, json: Optional[dict[str, Any]] = None):
         if not json:
             return
-        model_key = json.get("model_key", "")
-        if json.get("model_tag", "") == ModelEnv.uat_test and model_key:
+        model_key = json.get("model_key")
+        if json.get("model_tag") == ModelEnv.uat_test and model_key:
             deactivate_trade_model(ctx, model_key)
 
     @classmethod
