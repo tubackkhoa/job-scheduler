@@ -3,7 +3,7 @@ import importlib
 import logging
 import sys
 
-from typing import Any, Awaitable, Callable, Mapping, Optional
+from typing import Any, Awaitable, Callable, Mapping, Optional, cast
 
 import pluggy
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -55,6 +55,12 @@ class PluginSpec:
         logger: logging.Logger,
         render: RenderFn,
     ) -> Any: ...
+
+    # events
+    @hookspec
+    def on_active_job(cls, ctx: ExecutionContext, json: Optional[dict[str, Any]] = None): ...
+    @hookspec
+    def on_deactive_job(cls, ctx: ExecutionContext, json: Optional[dict[str, Any]] = None): ...
 
     # methods that not require ctx to run
     @hookspec
@@ -122,6 +128,10 @@ class PluginManager:
         # Pass any additional user-provided args
         self.scheduler = AsyncIOScheduler(**(scheduler_kwargs or {}))
         self.log_handler = log_handler
+
+    @property
+    def hook(self) -> PluginSpec:
+        return cast(PluginSpec, self.manager.hook)
 
     # reload all jobs from database
     async def reload_all_jobs(self):

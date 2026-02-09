@@ -7,6 +7,12 @@ from enforcer import ExecutionContext
 from plugins import ui_schema
 from pathlib import Path
 import pluggy
+from .api import (
+    activate_forwardtest_model,
+    deactivate_trade_model,
+    list_trade_models,
+    create_trade_model,
+)
 
 from schemas import settings
 
@@ -91,9 +97,9 @@ class Config(BaseModel):
                 else {"field_code": Path(__file__).with_name("crud.js").read_text()}
             ),
             crud_exprs={
-                "list": "{{ list_trade_models(env, webhook_url, webhook_api_key) | tojson }}",
-                "create": "{{ create_trade_model(payload, webhook_url, webhook_api_key, env) | tojson }}",
-                "delete": "{{ deactivate_trade_model(key, webhook_url, webhook_api_key, env) | tojson }}",
+                "list": "{{ list_trade_models(env) | tojson }}",
+                "create": "{{ create_trade_model(payload, env) | tojson }}",
+                "delete": "{{ deactivate_trade_model(key, env) | tojson }}",
             },
             deps=["webhook_url", "webhook_api_key", "env"],
             ui_options={
@@ -115,7 +121,11 @@ class Config(BaseModel):
 
 class Plugin:
 
-    _env = {}
+    _env = {
+        "list_trade_models": list_trade_models,
+        "create_trade_model": create_trade_model,
+        "deactivate_trade_model": deactivate_trade_model,
+    }
 
     _routes: list[tuple[str, Any]] = [
         # empty route will be use as portal
@@ -150,6 +160,24 @@ class Plugin:
 
             json = json_module.loads(json)
         return Config.model_validate(json or {})
+
+    @hookimpl
+    @classmethod
+    def on_active_job(cls, ctx: ExecutionContext, json: Optional[dict[str, Any]] = None):
+        if not json:
+            return
+        model_key = json.get("model_key", "")
+        if json.get("model_tag", "") == ModelEnv.uat_test and model_key:
+            activate_forwardtest_model(ctx, model_key)
+
+    @hookimpl
+    @classmethod
+    def on_deactive_job(cls, ctx: ExecutionContext, json: Optional[dict[str, Any]] = None):
+        if not json:
+            return
+        model_key = json.get("model_key", "")
+        if json.get("model_tag", "") == ModelEnv.uat_test and model_key:
+            deactivate_trade_model(ctx, model_key)
 
     @hookimpl
     @classmethod

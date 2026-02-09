@@ -1,10 +1,10 @@
-import os
 from enum import Enum
-from typing import Optional
-
 import httpx
+from enforcer import ExecutionContext
 
-from enforcer import ExecutionContext, global_permission
+
+base_url = "https://api-quantsigengine-uat.orai.network"
+api_key = "Au4mL7ugEkD4qxxmYPe9f1bH"
 
 
 class ModelType(str, Enum):
@@ -22,54 +22,31 @@ def _is_test_env(env: str) -> bool:
     return env == "forward_test"
 
 
-def _get_api_config(
-    env: str = "production",
-    api_url: Optional[str] = None,
-    api_key: Optional[str] = None,
-) -> tuple[str, str]:
-    if env == "production":
-        resolved_url = api_url or os.getenv("MULTI_USER_WEBHOOK_URL", "")
-        resolved_key = api_key or os.getenv("MULTI_USER_WEBHOOK_API_KEY", "")
-        if not resolved_url or not resolved_key:
-            raise ValueError(
-                "Production environment requires MULTI_USER_WEBHOOK_URL and MULTI_USER_WEBHOOK_API_KEY env vars"
-            )
-        return resolved_url, resolved_key
-
-    # For uat, staging, or other envs - require explicit api_url and api_key
-    if not api_url or not api_key:
-        raise ValueError(f"Environment '{env}' requires explicit api_url and api_key")
-    return api_url, api_key
-
-
-@global_permission("job")
 def list_trade_models(
     ctx: ExecutionContext,
     env: str = "production",
-    api_url: Optional[str] = None,
-    api_key: Optional[str] = None,
     status: str = "active",
 ):
     versions = []
     try:
-        url, key = _get_api_config(env, api_url, api_key)
+
         if _is_test_env(env):
             # Test env: GET /api/test-system/models?status=running
             resp = httpx.get(
-                f"{url}/api/test-system/models?status=running",
-                headers={"test-system-api-key": key, "Content-Type": "application/json"},
+                f"{base_url}/api/test-system/models?status=running",
+                headers={"test-system-api-key": api_key, "Content-Type": "application/json"},
                 timeout=60,
             )
         else:
             resp = httpx.get(
-                f"{url}/api/trading-models",
+                f"{base_url}/api/trading-models",
                 params={"status": "active"},
-                headers={"quant-api-key": key, "Content-Type": "application/json"},
+                headers={"quant-api-key": api_key, "Content-Type": "application/json"},
                 timeout=30,
             )
         resp.raise_for_status()
         result = resp.json()
-        print("result: ", result)
+
         if _is_test_env(env):
             items = result.get("models", [])
             print("items: ", items)
@@ -86,20 +63,15 @@ def list_trade_models(
         return {"versions": [{"id": item.value, "name": item.value} for item in ModelType]}
 
 
-@global_permission("job")
 def create_trade_model(
     ctx: ExecutionContext,
     payload: dict,
-    api_url: Optional[str] = None,
-    api_key: Optional[str] = None,
     env: str = "production",
 ):
-    url, key = _get_api_config(env, api_url, api_key)
-    print(payload)
 
     if _is_test_env(env):
         # Test env: POST /api/test-system/model
-        headers = {"test-system-api-key": key, "Content-Type": "application/json"}
+        headers = {"test-system-api-key": api_key, "Content-Type": "application/json"}
         identity = payload.get("key", payload.get("key", ""))
         test_payload = {
             "modelName": identity,
@@ -108,14 +80,14 @@ def create_trade_model(
             "version": "1",
         }
         resp = httpx.post(
-            f"{url}/api/test-system/model",
+            f"{base_url}/api/test-system/model",
             headers=headers,
             json=test_payload,
             timeout=30,
         )
         if "exist" in resp.text.lower() or resp.status_code == 409:
             start_resp = httpx.post(
-                f"{url}/api/test-system/model/start",
+                f"{base_url}/api/test-system/model/start",
                 headers=headers,
                 json={"identity": identity},
                 timeout=30,
@@ -129,9 +101,9 @@ def create_trade_model(
     # Production: POST /api/trading-models
     payload.setdefault("status", "active")
     resp = httpx.post(
-        f"{url}/api/trading-models",
+        f"{base_url}/api/trading-models",
         json=payload,
-        headers={"quant-api-key": key},
+        headers={"quant-api-key": api_key},
         timeout=30,
     )
     resp.raise_for_status()
@@ -139,30 +111,26 @@ def create_trade_model(
     return {"id": result.get("key") or result.get("id"), "name": result.get("name", ""), **result}
 
 
-@global_permission("job")
 def deactivate_trade_model(
     ctx: ExecutionContext,
     key: str,
-    api_url: Optional[str] = None,
-    api_key: Optional[str] = None,
     env: str = "production",
 ):
-    url, api_key_resolved = _get_api_config(env, api_url, api_key)
 
     if _is_test_env(env):
         # Test env: POST /api/test-system/model/stop
         resp = httpx.post(
-            f"{url}/api/test-system/model/stop",
-            headers={"test-system-api-key": api_key_resolved, "Content-Type": "application/json"},
+            f"{base_url}/api/test-system/model/stop",
+            headers={"test-system-api-key": api_key, "Content-Type": "application/json"},
             json={"identity": key, "unlockCredential": True},
             timeout=30,
         )
     else:
         # Production: PUT /api/trading-models/key/{key}
         resp = httpx.put(
-            f"{url}/api/trading-models/key/{key}",
+            f"{base_url}/api/trading-models/key/{key}",
             json={"status": "inactive"},
-            headers={"quant-api-key": api_key_resolved},
+            headers={"quant-api-key": api_key},
             timeout=30,
         )
 
@@ -170,20 +138,17 @@ def deactivate_trade_model(
     return {"success": True, "message": f"Trade model {key} deactivated"}
 
 
-@global_permission("job")
 def activate_forwardtest_model(
     ctx: ExecutionContext,
     key: str,
-    api_url: Optional[str] = None,
-    api_key: Optional[str] = None,
     env: str = "production",
 ):
-    url, api_key_resolved = _get_api_config(env, api_url, api_key)
+
     if _is_test_env(env):
         # Test env: POST /api/test-system/model/start
         resp = httpx.post(
-            f"{url}/api/test-system/model/start",
-            headers={"test-system-api-key": api_key_resolved, "Content-Type": "application/json"},
+            f"{base_url}/api/test-system/model/start",
+            headers={"test-system-api-key": api_key, "Content-Type": "application/json"},
             json={"identity": key},
             timeout=30,
         )
