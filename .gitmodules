@@ -1,4 +1,0 @@
-[submodule "alpha-miner"]
-	path = alpha-miner
-	url = git@github.com:oraichain/alpha-miner.git
-	branch = lab

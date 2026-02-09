@@ -25,6 +25,7 @@ def get_plugin(plugin_manager: PluginManagerState, plugin_id: int):
 def plugins(
     plugin_manager: PluginManagerState,
 ):
+
     return [
         {"id": id, "interval": interval, "package": package, "description": description}
         for id, (interval, package, description) in plugin_manager.dao.plugin_cache.items()

@@ -391,7 +391,7 @@ plugins/
 import pluggy
 from enforcer import ExecutionContext
 
-PROJECT_NAME = "alpha-miner"
+PROJECT_NAME = "job-scheduler"
 hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
 
 class Plugin:
@@ -643,7 +643,7 @@ def get_jobs(self, ctx: ExecutionContext):
 | **roles()**            | Permission mapping           | Define who can access what       |
 | **Multi-version**      | Plugin versioning            | `plugin@v0_1_0`, `@v0_2_0`       |
 | **frozen=True**        | Immutability for security    | Prevent mutation attacks         |
-| ****slots****          | Memory + security            | Prevent dynamic attrs            |
+| \***\*slots\*\***      | Memory + security            | Prevent dynamic attrs            |
 
 ---
 

@@ -36,9 +36,11 @@ RenderFn = Callable[
 
 class PluginSpec:
 
+    @classmethod
     @hookspec
     def schema(cls, ctx: ExecutionContext) -> dict[str, Any]: ...
 
+    @classmethod
     @hookspec
     def config(
         cls,
@@ -47,6 +49,7 @@ class PluginSpec:
         validate: Optional[bool] = False,
     ) -> BaseModel: ...
 
+    @classmethod
     @hookspec
     async def run(
         cls,
@@ -57,24 +60,32 @@ class PluginSpec:
     ) -> Any: ...
 
     # events
+    @classmethod
     @hookspec
     def on_active_job(cls, ctx: ExecutionContext, json: Optional[dict[str, Any]] = None): ...
+
+    @classmethod
     @hookspec
     def on_deactive_job(cls, ctx: ExecutionContext, json: Optional[dict[str, Any]] = None): ...
 
     # methods that not require ctx to run
+    @classmethod
     @hookspec
     def env(cls) -> dict[str, Any]: ...
 
+    @classmethod
     @hookspec
     def roles(cls) -> dict[str, set[str]]: ...
 
+    @classmethod
     @hookspec
     def routes(cls) -> list[tuple[str, CodeSchema]]: ...
 
+    @classmethod
     @hookspec
     async def install(cls) -> bool: ...
 
+    @classmethod
     @hookspec
     async def uninstall(cls) -> bool: ...
 
@@ -105,6 +116,7 @@ class PluginManager:
     # static pluggy manager, so that all pluginmanager share the same plugins
     manager = pluggy.PluginManager(PROJECT_NAME)
     manager.add_hookspecs(PluginSpec)
+    hook = cast(PluginSpec, manager.hook)
 
     routes_cache: dict[str, tuple[set[str], Optional[CodeSchema]]] = {}
     _failed_plugins: dict[str, Exception] = {}
@@ -128,10 +140,6 @@ class PluginManager:
         # Pass any additional user-provided args
         self.scheduler = AsyncIOScheduler(**(scheduler_kwargs or {}))
         self.log_handler = log_handler
-
-    @property
-    def hook(self) -> PluginSpec:
-        return cast(PluginSpec, self.manager.hook)
 
     # reload all jobs from database
     async def reload_all_jobs(self):

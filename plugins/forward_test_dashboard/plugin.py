@@ -18,8 +18,7 @@ from schemas import settings
 # {{ map(attribute='name') }}
 
 
-PROJECT_NAME = "alpha-miner"
-hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
+hookimpl = pluggy.HookimplMarker("job-scheduler")
 
 
 class Plugin:

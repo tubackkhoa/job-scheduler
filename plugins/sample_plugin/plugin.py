@@ -10,9 +10,7 @@ from schemas import settings
 from .data import JSON_TPL, SQL_TPL, YAML_TPL, MD_TPL, countries
 
 
-PROJECT_NAME = "alpha-miner"
-
-hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
+hookimpl = pluggy.HookimplMarker("job-scheduler")
 
 
 def ui_schema_binding(field_path: list[str]):
@@ -258,28 +256,28 @@ class Plugin:
         ("", Config.model_config.get("json_schema_extra")),
     ]
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def install(cls) -> bool:
         return True
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def env(cls) -> dict[str, Any]:
         return cls._env
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def routes(cls) -> list[tuple[str, CodeSchema]]:
         return cls._routes
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def schema(cls, ctx: ExecutionContext):
         return Config.model_json_schema(ctx)
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def config(
         cls,
         ctx: ExecutionContext,
@@ -288,8 +286,8 @@ class Plugin:
     ):
         return Config.model_validate(ctx, json or {}, validate)
 
-    @hookimpl
     @classmethod
+    @hookimpl
     def roles(cls):
         return {
             "fetch_data": {"data", "admin"},
@@ -297,8 +295,8 @@ class Plugin:
             "code_write": {"admin"},
         }
 
-    @hookimpl
     @classmethod
+    @hookimpl
     async def run(
         cls,
         ctx: ExecutionContext,
