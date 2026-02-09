@@ -155,10 +155,6 @@ class Plugin:
         json: Optional[dict[str, Any]] = None,
         validate: Optional[bool] = False,
     ):
-        if isinstance(json, str):
-            import json as json_module
-
-            json = json_module.loads(json)
         return Config.model_validate(json or {})
 
     @hookimpl
