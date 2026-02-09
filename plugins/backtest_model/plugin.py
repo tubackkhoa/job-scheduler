@@ -1,7 +1,8 @@
+import json
 import logging
 from pathlib import Path
 import pluggy
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from typing import Any, List, Optional, cast
 import pandas as pd
 from schemas import settings
@@ -33,6 +34,14 @@ TODAY_PRICE_MAP = {
     "DOT": 7.2,
     "LINK": 14.5,
 }
+
+
+class Setting(BaseModel):
+    api_key: SecretStr = Field(
+        default_factory=lambda: SecretStr(""),
+        json_schema_extra=ui_schema({"ui:options": {"size": 6}}),
+    )
+
 
 # --------------------------------------------------
 # Config schema
@@ -137,12 +146,21 @@ return [
 # Plugin
 # --------------------------------------------------
 
+plugin_setting = Setting.model_validate_json(Path(__file__).with_name("setting.json").read_text())
+
+
+def update_setting(data: dict[str, Any]):
+    global plugin_setting
+    plugin_setting = Setting.model_validate(data)
+    config = plugin_setting.model_dump(exclude={"api_key"})
+    config["api_key"] = plugin_setting.api_key.get_secret_value()
+    Path(__file__).with_name("setting.json").write_text(json.dumps(config))
+    return {"success": True}
+
 
 class Plugin:
 
-    _env = {
-        "DataFrame": pd.DataFrame,
-    }
+    _env = {"DataFrame": pd.DataFrame, "setting": plugin_setting, "update_setting": update_setting}
 
     _routes: list[tuple[str, CodeSchema]] = [
         # empty route will be use as portal

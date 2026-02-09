@@ -36,7 +36,7 @@ class Plugin:
         (
             "dashboard",
             (
-                {"url": "backtest/Dashboard.tsx"}
+                {"url": "forwardtest/Dashboard.tsx"}
                 if settings.env == "dev"
                 else {"code": Path(__file__).with_name("dashboard.js").read_text()}
             ),
