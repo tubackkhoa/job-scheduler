@@ -1,36 +1,36 @@
-import pluggy
 import logging
-from typing import Any, Callable, Dict, Optional
-from jinja2 import Environment
-from .api import (
-    fetch_positions,
-    get_running_models,
-    fetch_stats_running_models,
-    update_model_config,
-    get_equity_curve_forward_test,
-    fetch_positions,
-)
-from .config import Config
 from pathlib import Path
+from typing import Any, Callable, Optional, Dict
+import pluggy
+from pydantic import BaseModel, ConfigDict
+from plugins.blog.dao import create_post, get_post, delete_post, get_posts, update_post
+from plugins.schema import ui_schema
 from schemas import settings
-
-
-# {% set model_keys = models | map(attribute='map(attribute='name')') %}
-# {{ map(attribute='name') }}
-
 
 hookimpl = pluggy.HookimplMarker("job-scheduler")
 
 
+class Config(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra=ui_schema(
+            {
+                **(
+                    {"url": "blog/Portal.tsx"}
+                    if settings.env == "dev"
+                    else {"code": Path(__file__).with_name("portal.js").read_text()}
+                ),
+            }
+        )
+    )
+
+
 class Plugin:
     _env = {
-        "get_running_models": get_running_models,
-        "fetch_positions": fetch_positions,
-        "get_equity_curve_forward_test": get_equity_curve_forward_test,
-        "fetch_stats_running_models": fetch_stats_running_models,
-        "update_model_config": update_model_config,
-        "get_equity_curve_forward_test": get_equity_curve_forward_test,
-        "fetch_positions": fetch_positions,
+        "get_posts": get_posts,
+        "create_post": create_post,
+        "update_post": update_post,
+        "get_post": get_post,
+        "delete_post": delete_post,
     }
     _routes: list[tuple[str, Any]] = [
         # empty route will be use as portal
@@ -38,17 +38,17 @@ class Plugin:
         (
             "dashboard",
             (
-                {"url": "forwardtest/Dashboard.tsx"}
+                {"url": "blog/Dashboard.tsx"}
                 if settings.env == "dev"
                 else {"code": Path(__file__).with_name("dashboard.js").read_text()}
             ),
         ),
         (
-            "marketplace",
+            "blog/:blog_id",
             (
-                {"url": "forwardtest/MarketPlace.tsx"}
+                {"url": "blog/Blog.tsx"}
                 if settings.env == "dev"
-                else {"code": Path(__file__).with_name("marketplace.js").read_text()}
+                else {"code": Path(__file__).with_name("blog.js").read_text()}
             ),
         ),
     ]
@@ -97,7 +97,7 @@ class Plugin:
         ctx,
         config: Config,
         logger: logging.Logger,
-        render: Callable[[str, Environment, dict], Any],
+        render: Callable,
     ):
-        logger.info(f"ForwardTestDashboard: {config.webhook_url}")
+
         return True

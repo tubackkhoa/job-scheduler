@@ -17,11 +17,17 @@ from jinja2 import Environment
 # from .stats import build_stats_table
 from .api import get_running_models, fetch_stats_running_models
 from .forwardtest_plugin_components.config import Config
+
 # from .formatters import fmt_pnl, fmt_status, fmt_latest, fmt_winrate, fmt_drawdown
 from .theme import THEME, color_span
 from .database.db_repository import ForwardTestRepository
 from enforcer import GLOBAL_PERMISSION_REGISTRY
-from .forwardtest_plugin_components.actions import update_model_config, register_model_config, get_running_models, get_running_models_list
+from .forwardtest_plugin_components.actions import (
+    update_model_config,
+    register_model_config,
+    get_running_models,
+    get_running_models_list,
+)
 from .forwardtest_plugin_components.actions import get_equity_curve_forward_test_fromdb
 
 logger = logging.getLogger(__name__)
@@ -31,6 +37,7 @@ logger = logging.getLogger(__name__)
 # Database-backed functions (NEW)
 # ============================================================================
 
+
 def fetch_signals_from_db(
     model_names: Optional[List[str]] = None,
     start_time: Optional[datetime] = None,
@@ -39,13 +46,13 @@ def fetch_signals_from_db(
 ) -> List[Dict[str, Any]]:
     """
     Fetch signal data from forward_test_trade_history table.
-    
+
     Args:
         model_names: Optional list of model names to filter
         start_time: Optional start time filter
         end_time: Optional end time filter
         limit: Maximum records to return
-        
+
     Returns:
         List of trade history records
     """
@@ -69,14 +76,14 @@ def fetch_performance_from_db(
 ) -> List[Dict[str, Any]]:
     """
     Fetch performance data from forward_test_performance table.
-    
+
     This is the DB equivalent of fetch_stats_running_models().
-    
+
     Args:
         identities: Optional list of identities to filter
         pred_time: Optional time to get snapshot at
         status_filter: Optional status filter (default: 'running')
-        
+
     Returns:
         List of performance records (same format as API stats)
     """
@@ -92,7 +99,7 @@ def fetch_performance_from_db(
                     identities=identities,
                     status_filter=status_filter,
                 )
-            
+
             # Transform to match API format for compatibility with build_stats_table
             # Note: DB stores winrate as percentage (49.03), API expects decimal (0.4903)
             def normalize_winrate(val):
@@ -100,7 +107,7 @@ def fetch_performance_from_db(
                     return None
                 # DB stores as percentage, convert to decimal
                 return val / 100.0 if val > 1 else val
-            
+
             return [
                 {
                     "identity": r.get("identity"),
@@ -127,14 +134,15 @@ def _parse_last_position(last_pos) -> Optional[Dict[str, Any]]:
     """Parse last_position field which may be JSON string."""
     if not last_pos:
         return None
-    
+
     if isinstance(last_pos, str):
         try:
             import json
+
             last_pos = json.loads(last_pos)
         except:
             return None
-    
+
     if isinstance(last_pos, dict):
         return {
             "symbol": last_pos.get("symbol", ""),
@@ -177,35 +185,31 @@ def build_signal_comparison_from_db(
         return pd.DataFrame({"message": ["No models provided"]})
 
     # 2. Fetch trade history
-    trades = fetch_signals_from_db(
-        model_names=model_keys,
-        start_time=start_time,
-        limit=limit
-    )
-    
+    trades = fetch_signals_from_db(model_names=model_keys, start_time=start_time, limit=limit)
+
     if not trades:
-         return pd.DataFrame({"message": ["No signals found in DB"]})
+        return pd.DataFrame({"message": ["No signals found in DB"]})
 
     # 3. Fetch price deltas for PNL calculation
     # Collect all needed assets and time range
     assets = set()
     timestamps = []
-    
+
     # Pre-process trades into a more usable list
     processed_trades = []
-    
+
     for t in trades:
         t_time = t.get("pred_time")
         if not t_time:
             continue
-            
+
         # Ensure naive datetime for consistent comparison
         if hasattr(t_time, "tzinfo") and t_time.tzinfo:
             t_time = t_time.replace(tzinfo=None)
-            
+
         timestamps.append(t_time)
         assets.add(t.get("base_asset"))
-        
+
         # Determine direction
         new_mu = _coerce_float(t.get("new_mu", 0))
         if new_mu > 0:
@@ -214,7 +218,7 @@ def build_signal_comparison_from_db(
             direction = "SHORT"
         else:
             direction = "NONE"
-            
+
         gated_flag = t.get("gated_flag")
         # Handle various boolean/string representations of gated_flag
         if isinstance(gated_flag, str):
@@ -222,14 +226,16 @@ def build_signal_comparison_from_db(
         else:
             is_gated = bool(gated_flag)
 
-        processed_trades.append({
-            "pred_time": t_time,
-            "base_asset": t.get("base_asset"),
-            "direction": direction,
-            "new_mu": new_mu,
-            "is_gated": is_gated,
-            "_identity": t.get("model_name"), # This maps to column identity
-        })
+        processed_trades.append(
+            {
+                "pred_time": t_time,
+                "base_asset": t.get("base_asset"),
+                "direction": direction,
+                "new_mu": new_mu,
+                "is_gated": is_gated,
+                "_identity": t.get("model_name"),  # This maps to column identity
+            }
+        )
 
     if not processed_trades:
         return pd.DataFrame({"message": ["No valid trades to process"]})
@@ -243,9 +249,7 @@ def build_signal_comparison_from_db(
         try:
             with ForwardTestRepository() as repo:
                 pnl_map = repo.get_price_deltas(
-                    start_time=min_time,
-                    end_time=max_time,
-                    assets=list(assets)
+                    start_time=min_time, end_time=max_time, assets=list(assets)
                 )
         except Exception as e:
             logger.error(f"Failed to fetch price deltas: {e}")
@@ -253,33 +257,33 @@ def build_signal_comparison_from_db(
 
     # 4. Connect and Render
     df = pd.DataFrame(processed_trades)
-    
+
     def render_signal(row) -> str:
         t = row["pred_time"]
         t_hour = t.replace(minute=0, second=0, microsecond=0)
-        
+
         asset = row["base_asset"]
         key = (t_hour, asset)
-        
+
         price_delta = pnl_map.get(key, 0.0)
-        
+
         direction = row["direction"]
         pnl = 0.0
-        
+
         if direction == "LONG":
             pnl = price_delta
         elif direction == "SHORT":
             pnl = -price_delta
-            
+
         # Only show PNL if we actually found a price delta or if logic dictates?
         # signals.py: marker = "*" if key in pnl_map else ""
         # Here we only have estimated PNL.
-        
+
         has_pnl = key in pnl_map
-        marker = "" # No order fetch here, so maybe optional? User said "get pnl... from db"
-        
+        marker = ""  # No order fetch here, so maybe optional? User said "get pnl... from db"
+
         symbol = f"{row['base_asset']}"
-        
+
         # Color symbol
         if direction == "LONG":
             sym_span = color_span(symbol, THEME["positive"], bold=True)
@@ -287,17 +291,19 @@ def build_signal_comparison_from_db(
             sym_span = color_span(symbol, THEME["negative"], bold=True)
         else:
             sym_span = color_span(symbol, THEME["neutral"], bold=True)
-            
+
         # PNL formatting
         if has_pnl:
             if pnl > 0:
-                pnl_str = color_span(f"↗ +{pnl:.4f}", THEME["positive"]) # Using % for delta? signals.py used $ pnl.
-                # signals.py: pnl_str = color_span(f"↗ +${pnl:.4f}", THEME["positive"]) 
+                pnl_str = color_span(
+                    f"↗ +{pnl:.4f}", THEME["positive"]
+                )  # Using % for delta? signals.py used $ pnl.
+                # signals.py: pnl_str = color_span(f"↗ +${pnl:.4f}", THEME["positive"])
                 # Wait, signals.py shows raw PNL value (USD presumably).
-                # We only have % change. 
+                # We only have % change.
                 # User request: "pnl ... tính bằng db ... precalculate delta change"
                 # "Show signal comparison... format y hệt code ở Plugin"
-                # If I only have %, I should probably show %? 
+                # If I only have %, I should probably show %?
                 # Or maybe assume $1 position?
                 # Let's show % since we don't know position size.
                 pnl_str = color_span(f"↗ {pnl:+.4f}", THEME["positive"])
@@ -307,9 +313,9 @@ def build_signal_comparison_from_db(
                 pnl_str = color_span("0.00%", THEME["neutral"])
         else:
             pnl_str = ""
-            
+
         txt = f"{sym_span} {pnl_str}".strip()
-        
+
         if row["is_gated"]:
             return f"~~{txt}~~"
         return txt
@@ -323,29 +329,26 @@ def build_signal_comparison_from_db(
         values="signal",
         aggfunc="first",
     )
-    
+
     # Reorder columns
-    ordered_columns = [
-        mid for mid in model_keys
-        if mid in pivot.columns
-    ]
+    ordered_columns = [mid for mid in model_keys if mid in pivot.columns]
     pivot = pivot[ordered_columns]
     pivot = pivot.fillna("-")
-    
+
     # Sort
     pivot = pivot.sort_index(level="pred_time", ascending=False)
-    
+
     # Flatten
     pivot = pivot.reset_index()
     pivot["pred_time"] = pivot["pred_time"].dt.strftime("%Y-%m-%d %H:%M")
     pivot = pivot.rename(columns={"pred_time": "Time", "base_asset": "Symbol"})
-    
+
     # Clean up duplicate times
     time_col = pivot["Time"].copy()
     for i in range(1, len(time_col)):
         if time_col.iloc[i] == time_col.iloc[i - 1]:
             pivot.at[i, "Time"] = ""
-            
+
     return pivot
 
 
@@ -355,20 +358,20 @@ def build_stats_table_from_db(
 ) -> tuple[pd.DataFrame, dict]:
     """
     Build stats table from forward_test_performance database records.
-    
+
     This is a drop-in replacement for build_stats_table().
     Uses the same output format.
-    
+
     Usage in Jinja2 (replaces old template):
         Old: {% set stats = fetch_stats_running_models(webhook_url, webhook_api_key) %}
              {% set df, summary = build_stats_table(stats, job_list) %}
         New: {% set stats = fetch_performance_from_db() %}
              {% set df, summary = build_stats_table_from_db(stats, job_list) %}
-    
+
     Args:
         stats: List of performance records from fetch_performance_from_db()
         jobs: Optional list of jobs for status mapping
-        
+
     Returns:
         Tuple of (DataFrame with stats, summary dict)
     """
@@ -377,36 +380,34 @@ def build_stats_table_from_db(
     return build_stats_table(stats, jobs or [])
 
 
-
-
 def get_models_from_db(
     status_filter: Optional[str] = "running",
 ) -> List[Dict[str, Any]]:
     """
     Get list of models from forward_test_performance table.
-    
+
     This is the DB equivalent of get_running_models().
-    
+
     Usage in Jinja2 (replaces old template):
         Old: {% set models = get_running_models(webhook_url, webhook_api_key) %}
         New: {% set models = get_models_from_db() %}
-    
+
     Args:
         status_filter: Optional status filter (default: 'running')
-        
+
     Returns:
         List of model info dicts (compatible with existing code)
     """
     try:
         with ForwardTestRepository() as repo:
             records = repo.get_latest_performance(status_filter=status_filter)
-            
+
             # Normalize winrate from percentage to decimal
             def normalize_winrate(val):
                 if val is None:
                     return None
                 return val / 100.0 if val > 1 else val
-            
+
             # Transform to model format compatible with existing code
             return [
                 {
@@ -430,6 +431,7 @@ def get_models_from_db(
 # Legacy functions (kept for backward compatibility)
 # ============================================================================
 
+
 async def fetch_signal_messages(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     Legacy function: Fetch signal messages from DAO (log-based).
@@ -438,7 +440,7 @@ async def fetch_signal_messages(models: list[dict[str, Any]]) -> list[dict[str, 
     dao = GLOBAL_PERMISSION_REGISTRY.get("dao")
     if not dao:
         return []
-    
+
     model_keys = [m.get("identity") for m in models if m.get("identity")]
     if not model_keys:
         return []
@@ -457,11 +459,11 @@ hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
 class ForwardTestDashboardPlugin:
     """
     Forward Test Dashboard Plugin - Database-Backed Version.
-    
+
     Provides both new DB-backed functions and legacy API-based functions
     for backward compatibility.
     """
-    
+
     _env = {
         # New DB-backed functions
         "fetch_signals_from_db": fetch_signals_from_db,
@@ -469,7 +471,6 @@ class ForwardTestDashboardPlugin:
         "build_signal_comparison_from_db": build_signal_comparison_from_db,
         "build_stats_table_from_db": build_stats_table_from_db,
         "get_models_from_db": get_models_from_db,
-        
         # Legacy functions (backward compatibility)
         "get_running_models": get_running_models,
         "fetch_stats_running_models": fetch_stats_running_models,
@@ -482,7 +483,6 @@ class ForwardTestDashboardPlugin:
         "get_running_models": get_running_models,
         "get_running_models_list": get_running_models_list,
         "get_equity_curve_forward_test": get_equity_curve_forward_test_fromdb,
-        
         # Formatters
         # "fmt_pnl": fmt_pnl,
         # "fmt_status": fmt_status,
@@ -505,7 +505,7 @@ class ForwardTestDashboardPlugin:
     @classmethod
     def schema(cls, ctx):
         return Config.model_json_schema()
-    
+
     @hookimpl
     @classmethod
     def config(
@@ -516,16 +516,17 @@ class ForwardTestDashboardPlugin:
     ):
         if isinstance(json, str):
             import json as json_module
+
             json = json_module.loads(json)
         return Config.model_validate(json or {})
-    
+
     @hookimpl
     @classmethod
     def roles(cls):
-        return {"admin"}
-    
+        return {}
+
     @hookimpl
-    @classmethod    
+    @classmethod
     async def run(
         cls,
         ctx,

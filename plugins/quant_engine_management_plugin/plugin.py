@@ -178,7 +178,7 @@ class Plugin:
     @classmethod
     @hookimpl
     def roles(cls):
-        return {"admin"}
+        return {}
 
     @classmethod
     @hookimpl
