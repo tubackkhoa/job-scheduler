@@ -1,3 +1,4 @@
+from schemas import settings
 import httpx
 import logging
 from typing import Optional, List, Dict, Any
@@ -8,7 +9,7 @@ API_TIMEOUT_SHORT = 10.0
 API_TIMEOUT_LONG = 30.0
 
 base_url = "https://api-quantsigengine-uat.orai.network"
-api_key = "Au4mL7ugEkD4qxxmYPe9f1bH"
+api_key = settings.test_system_api_key
 
 
 def _get(
