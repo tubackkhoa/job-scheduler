@@ -1,0 +1,364 @@
+var ce = Object.create;
+var W = Object.defineProperty;
+var de = Object.getOwnPropertyDescriptor;
+var ue = Object.getOwnPropertyNames;
+var me = Object.getPrototypeOf,
+  pe = Object.prototype.hasOwnProperty;
+var q = (o, a) => () => (a || o((a = { exports: {} }).exports, a), a.exports);
+var ge = (o, a, i, c) => {
+  if ((a && typeof a == 'object') || typeof a == 'function')
+    for (let s of ue(a))
+      !pe.call(o, s) &&
+        s !== i &&
+        W(o, s, {
+          get: () => a[s],
+          enumerable: !(c = de(a, s)) || c.enumerable,
+        });
+  return o;
+};
+var N = (o, a, i) => (
+  (i = o != null ? ce(me(o)) : {}),
+  ge(
+    a || !o || !o.__esModule
+      ? W(i, 'default', { value: o, enumerable: !0 })
+      : i,
+    o
+  )
+);
+var Y = q((T) => {
+  'use strict';
+  var fe = Symbol.for('react.transitional.element'),
+    Ce = Symbol.for('react.fragment');
+  function V(o, a, i) {
+    var c = null;
+    if (
+      (i !== void 0 && (c = '' + i),
+      a.key !== void 0 && (c = '' + a.key),
+      'key' in a)
+    ) {
+      i = {};
+      for (var s in a) s !== 'key' && (i[s] = a[s]);
+    } else i = a;
+    return (
+      (a = i.ref),
+      { $$typeof: fe, type: o, key: c, ref: a !== void 0 ? a : null, props: i }
+    );
+  }
+  T.Fragment = Ce;
+  T.jsx = V;
+  T.jsxs = V;
+});
+var F = q((Re, G) => {
+  'use strict';
+  G.exports = Y();
+});
+var t = N(F(), 1),
+  { useState: r, useEffect: ve, useRef: xe, useCallback: p } = React,
+  {
+    Stack: w,
+    Typography: S,
+    Box: E,
+    Autocomplete: ye,
+    TextField: U,
+    Button: B,
+    Chip: he,
+    IconButton: H,
+    Dialog: ke,
+    DialogTitle: De,
+    DialogContent: Te,
+    DialogActions: Se,
+  } = Mui,
+  { Save: Ae, Delete: be, Add: Ie, Refresh: Fe } = MuiIcon,
+  { ConfirmationDialog: we } = Components,
+  { _: _e, buildJinjaContext: Ee } = Utils;
+function je({
+  formData: o,
+  onChange: a,
+  schema: i,
+  fieldPathId: c,
+  registry: s,
+}) {
+  let [Q, O] = r([]),
+    [d, g] = r(null),
+    [x, X] = r(''),
+    [R, A] = r(!1),
+    [_, j] = r(!1),
+    [z, f] = r(''),
+    [P, u] = r(''),
+    [Z, b] = r(!1),
+    [K, y] = r(!1),
+    [h, I] = r({}),
+    [$, J] = r(!1),
+    k = i['ui:options']?.createSchema,
+    L = p(
+      Ee(s.formContext.pluginPackage, {
+        ...s.formContext.env.filters,
+        ...s.formContext.formData,
+      }),
+      [s.formContext]
+    ),
+    m = p((e, n) => L(i['model:expr'][e], n), [i, L]),
+    M = p(
+      (e, n = '', l = 20, D = 0) =>
+        m('list', { field_id: e, search: n, limit: l, offset: D }),
+      [m]
+    ),
+    ee = p((e) => m('create', { payload: e }), [m]),
+    te = p((e) => m('delete', { key: e }), [m]),
+    C = xe(null),
+    v = p(async () => {
+      (A(!0), u(''));
+      try {
+        let e = await M(c?.$id, x),
+          n = e?.versions || e?.items || [];
+        if ((O(n), o)) {
+          let l = n.find((D) => D.id === o || D.key === o);
+          l && g(l);
+        }
+      } catch (e) {
+        (O([]), u(e.message || 'Failed to load items'), console.error(e));
+      } finally {
+        A(!1);
+      }
+    }, [c, x, o, M]);
+  ve(
+    () => (
+      C.current && clearTimeout(C.current),
+      (C.current = setTimeout(() => {
+        v();
+      }, 300)),
+      () => {
+        C.current && clearTimeout(C.current);
+      }
+    ),
+    [x, o, v]
+  );
+  let ae = async (e) => {
+      if (!e) {
+        (g(null), a('', i['model:binding']));
+        return;
+      }
+      (g(e), f(''), u(''));
+      let n = e.key || e.id || e.name;
+      a(n, i['model:binding']);
+    },
+    ne = () => {
+      (I({}), y(!0));
+    },
+    ie = (e, n) => {
+      I((l) => ({ ...l, [e]: n }));
+    },
+    oe = async () => {
+      (J(!0), u(''), f(''));
+      try {
+        let e = { ...h, status: 'active' };
+        if (e.detail && typeof e.detail == 'string')
+          try {
+            e.detail = JSON.parse(e.detail);
+          } catch {
+            e.detail = {};
+          }
+        let n = await ee(e);
+        (f(`Created: ${n.name || n.key || n.id}`),
+          y(!1),
+          I({}),
+          await v(),
+          n && (g(n), a(n.key || n.id, i['model:binding'])));
+      } catch (e) {
+        u(e.message || 'Failed to create item');
+      } finally {
+        J(!1);
+      }
+    },
+    le = () => {
+      if (!d) {
+        u('Please select an item to deactivate');
+        return;
+      }
+      b(!0);
+    },
+    se = async () => {
+      if ((b(!1), !!d)) {
+        (j(!0), u(''), f(''));
+        try {
+          let e = d.key || d.id;
+          (await te(e),
+            f(`Deactivated: ${d.name || e}`),
+            g(null),
+            a('', i['model:binding']),
+            await v());
+        } catch (e) {
+          u(e.message || 'Failed to deactivate item');
+        } finally {
+          j(!1);
+        }
+      }
+    },
+    re = () =>
+      k?.properties
+        ? Object.entries(k.properties).map(([e, n]) =>
+            (0, t.jsx)(
+              U,
+              {
+                fullWidth: !0,
+                size: 'small',
+                label: n.title || e,
+                value: h[e] || '',
+                onChange: (l) => ie(e, l.target.value),
+                required: k.required?.includes(e),
+                multiline: e === 'description' || e === 'detail',
+                rows: e === 'detail' ? 4 : e === 'description' ? 2 : 1,
+                placeholder: e === 'detail' ? '{"key": "value"}' : '',
+                sx: { mb: 1.5 },
+              },
+              e
+            )
+          )
+        : null;
+  return (0, t.jsxs)(E, {
+    sx: {
+      p: 1.5,
+      bgcolor: 'rgba(99, 102, 241, 0.08)',
+      borderRadius: 1,
+      border: '1px solid',
+      borderColor: 'divider',
+    },
+    children: [
+      (0, t.jsxs)(w, {
+        spacing: 1.5,
+        children: [
+          (0, t.jsxs)(w, {
+            direction: { xs: 'column', sm: 'row' },
+            spacing: 1,
+            alignItems: { xs: 'stretch', sm: 'center' },
+            children: [
+              (0, t.jsx)(ye, {
+                size: 'small',
+                options: Q,
+                getOptionLabel: (e) => e.name || e.key || '',
+                value: d,
+                onChange: (e, n) => ae(n),
+                inputValue: x,
+                onInputChange: (e, n) => X(n),
+                loading: R,
+                sx: { flex: 1, minWidth: 200 },
+                renderInput: (e) =>
+                  (0, t.jsx)(U, {
+                    ...e,
+                    label: i.title,
+                    placeholder: 'Type to search...',
+                  }),
+                renderOption: ({ key: e, ...n }, l) =>
+                  (0, t.jsx)(
+                    E,
+                    {
+                      component: 'li',
+                      ...n,
+                      children: (0, t.jsxs)(w, {
+                        direction: 'row',
+                        spacing: 1,
+                        alignItems: 'center',
+                        sx: { width: '100%' },
+                        children: [
+                          (0, t.jsx)(S, {
+                            variant: 'body2',
+                            sx: { flex: 1 },
+                            children: l.name,
+                          }),
+                          l.status === 'active' &&
+                            (0, t.jsx)(he, {
+                              label: 'Active',
+                              size: 'small',
+                              color: 'success',
+                            }),
+                          (0, t.jsx)(S, {
+                            variant: 'caption',
+                            color: 'text.secondary',
+                            children: l.key || l.id,
+                          }),
+                        ],
+                      }),
+                    },
+                    l.id || l.key
+                  ),
+              }),
+              (0, t.jsx)(H, {
+                size: 'small',
+                onClick: v,
+                disabled: R,
+                children: (0, t.jsx)(Fe, {}),
+              }),
+              k &&
+                i['model:expr']?.create &&
+                (0, t.jsx)(B, {
+                  variant: 'contained',
+                  size: 'small',
+                  startIcon: (0, t.jsx)(Ie, {}),
+                  onClick: ne,
+                  sx: { minWidth: 100 },
+                  children: 'Create',
+                }),
+              d &&
+                i['model:expr']?.delete &&
+                (0, t.jsx)(H, {
+                  size: 'small',
+                  color: 'error',
+                  onClick: le,
+                  disabled: _,
+                  title: 'Deactivate',
+                  children: (0, t.jsx)(be, {}),
+                }),
+            ],
+          }),
+          z &&
+            (0, t.jsx)(S, {
+              variant: 'caption',
+              color: 'success.main',
+              children: z,
+            }),
+          P &&
+            (0, t.jsx)(S, {
+              variant: 'caption',
+              color: 'error.main',
+              children: P,
+            }),
+        ],
+      }),
+      (0, t.jsxs)(ke, {
+        open: K,
+        onClose: () => y(!1),
+        maxWidth: 'sm',
+        fullWidth: !0,
+        children: [
+          (0, t.jsxs)(De, { children: ['Create New ', i.title || 'Item'] }),
+          (0, t.jsx)(Te, {
+            children: (0, t.jsx)(E, { sx: { pt: 1 }, children: re() }),
+          }),
+          (0, t.jsxs)(Se, {
+            children: [
+              (0, t.jsx)(B, { onClick: () => y(!1), children: 'Cancel' }),
+              (0, t.jsx)(B, {
+                variant: 'contained',
+                onClick: oe,
+                disabled: $ || !h.key || !h.name,
+                children: $ ? 'Creating...' : 'Create',
+              }),
+            ],
+          }),
+        ],
+      }),
+      (0, t.jsx)(we, {
+        open: Z,
+        onClose: () => b(!1),
+        onConfirm: se,
+        title: 'Deactivate Item',
+        message: 'Are you sure you want to deactivate this item?',
+        details: `This will deactivate "${d?.name}". The item will be marked as inactive.`,
+        severity: 'warning',
+        confirmText: 'Deactivate',
+        isLoading: _,
+      }),
+    ],
+  });
+}
+export { je as default };

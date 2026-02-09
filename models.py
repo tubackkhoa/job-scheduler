@@ -466,8 +466,8 @@ class DAO:
         async with self.session_factory() as session:
             stmt = select(ValueVersion).where(
                 ValueVersion.field_id.like(f"%.{field_name}")
-                if plugin_part == "*"
-                else ValueVersion.field_id == field_id
+                # if plugin_part == "*"
+                # else ValueVersion.field_id == field_id
             )
 
             if search:
