@@ -1,3 +1,4 @@
+from typing import AsyncIterator
 from app.deps import PluginManagerState
 from app.routers import (
     auth,
@@ -52,7 +53,7 @@ logging.basicConfig(level=logging.DEBUG, handlers=[logging.NullHandler()])
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Initialise log service and handler
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     ws_manager = WSConnectionManager()
