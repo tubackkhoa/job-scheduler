@@ -76,6 +76,7 @@ class Settings(BaseSettings):
     log_max_size: int = 10 * 1024 * 1024
     log_max_files: int = 10
     log_retention_days: int = 7
+    min_gzip_size: Optional[int] = None
 
     # Required fields from your previous error
     db_connection: str = ""

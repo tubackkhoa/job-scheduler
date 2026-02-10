@@ -15,8 +15,6 @@ from app.routers import (
 import asyncio
 import logging
 import os
-
-
 from fastapi.responses import FileResponse
 import uvloop
 from fastapi import (
@@ -26,6 +24,7 @@ from fastapi import (
     HTTPException,
 )
 from fastapi.concurrency import asynccontextmanager
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
@@ -133,6 +132,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(lifespan=lifespan)
 
+# Compress responses
+if settings.min_gzip_size:
+    app.add_middleware(GZipMiddleware, minimum_size=settings.min_gzip_size)
 
 app.add_middleware(
     CORSMiddleware,
