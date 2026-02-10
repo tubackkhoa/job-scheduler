@@ -15,7 +15,7 @@ from plugins import ui_schema, CodeSchema
 # Pluggy setup
 # --------------------------------------------------
 
-PROJECT_NAME = "apluggy"
+PROJECT_NAME = "job-scheduler"
 hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
 
 # --------------------------------------------------
