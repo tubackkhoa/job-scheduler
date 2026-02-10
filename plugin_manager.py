@@ -62,11 +62,11 @@ class PluginSpec:
     # events
     @classmethod
     @hookspec
-    def on_active_job(cls, ctx: ExecutionContext, json: Optional[dict[str, Any]] = None): ...
+    def on_active_job(cls, ctx: ExecutionContext, json: Optional[dict[str, Any]]): ...
 
     @classmethod
     @hookspec
-    def on_deactive_job(cls, ctx: ExecutionContext, json: Optional[dict[str, Any]] = None): ...
+    def on_deactive_job(cls, ctx: ExecutionContext, json: Optional[dict[str, Any]]): ...
 
     # methods that not require ctx to run
     @classmethod
