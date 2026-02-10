@@ -107,11 +107,11 @@ def create_trade_model(
     )
     if "exists" in resp.text.lower() or resp.status_code == 409:
         start_resp = httpx.put(
-                f"{url}/api/trading-models/key/{payload.get('key')}",
-                headers={"quant-api-key": key},
-                json=payload,
-                timeout=30,
-            )
+            f"{base_url}/api/trading-models/key/{payload.get('key')}",
+            headers={"quant-api-key": api_key},
+            json=payload,
+            timeout=30,
+        )
         start_resp.raise_for_status()
         return {"id": payload.get("key"), "name": payload.get("key"), "started": True}
     resp.raise_for_status()
@@ -144,33 +144,6 @@ def deactivate_trade_model(
 
     resp.raise_for_status()
     return {"success": True, "message": f"Trade model {key} deactivated"}
-
-
-def activate_forwardtest_model(
-    ctx: ExecutionContext,
-    key: str,
-    env: str = "production",
-):
-
-    if _is_test_env(env):
-        # Test env: POST /api/test-system/model/start
-        resp = httpx.post(
-            f"{base_url}/api/test-system/model/start",
-            headers={"test-system-api-key": api_key, "Content-Type": "application/json"},
-            json={"identity": key},
-            timeout=30,
-        )
-    else:
-        # Production: PUT /api/trading-models/key/{key}
-        resp = httpx.put(
-            f"{url}/api/trading-models/key/{key}",
-            json={"status": "active"},
-            headers={"quant-api-key": api_key_resolved},
-            timeout=30,
-        )
-
-    resp.raise_for_status()
-    return {"success": True, "message": f"Trade model {key} activated"}
 
 
 def activate_forwardtest_model(
