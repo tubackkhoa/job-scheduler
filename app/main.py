@@ -190,13 +190,22 @@ app.include_router(ws.router)
 
 # static site
 if settings.static_files:
-    app.mount(
-        "/assets",
-        StaticFiles(directory=f"{settings.static_files}/assets"),
-        name="assets",
-    )
+    from pathlib import Path
 
-    # SPA fallback (LAST)
+    static_dir = Path(settings.static_files).resolve()
+    assets_dir = static_dir / "assets"
+    index_file = static_dir / "index.html"
+
+    app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
     @app.get("/{path:path}")
-    async def spa_fallback(path: str):
-        return FileResponse(f"{settings.static_files}/index.html")
+    def spa_fallback(path: str):
+        requested = (static_dir / path).resolve()
+        try:
+            requested.relative_to(static_dir)
+            if requested.is_file():
+                return FileResponse(requested)
+        except ValueError:
+            pass
+
+        return FileResponse(index_file)
