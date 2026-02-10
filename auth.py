@@ -26,7 +26,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30 * 24 * 60
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token", auto_error=False)
 
 
 @dataclass(frozen=True)
@@ -58,6 +58,9 @@ def require_auth(
     request: Request,
     token: str = Depends(oauth2_scheme),
 ):
+    if not token:
+        return
+
     try:
         payload = jwt.decode(
             token,

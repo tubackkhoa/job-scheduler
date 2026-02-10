@@ -1,4 +1,6 @@
 from typing import Optional
+
+from enforcer import job_permission
 from .model import Base, engine, SessionLocal, Post
 
 Base.metadata.create_all(bind=engine)
@@ -16,7 +18,8 @@ def get_posts(limit: Optional[int] = None):
     return ret
 
 
-def create_post(title: str, description: str, content: str):
+@job_permission("blog")
+def create_post(ctx, title: str, description: str, content: str):
     db = SessionLocal()
     if not title:
         db.close()
@@ -29,7 +32,8 @@ def create_post(title: str, description: str, content: str):
     return post
 
 
-def update_post(post_id: int, title=None, description=None, content=None):
+@job_permission("blog")
+def update_post(ctx, post_id: int, title=None, description=None, content=None):
     db = SessionLocal()
     post = db.query(Post).filter(Post.id == post_id).first()
 
@@ -50,7 +54,8 @@ def update_post(post_id: int, title=None, description=None, content=None):
     return post
 
 
-def delete_post(post_id: int):
+@job_permission("blog")
+def delete_post(ctx, post_id: int):
     db = SessionLocal()
 
     post = db.query(Post).filter(Post.id == post_id).first()

@@ -122,7 +122,7 @@ class SecureBaseModel(BaseModel):
     # ---------------------
 
     def model_dump(self, **kwargs) -> dict[str, Any]:
-        ctx = getattr(self, "_ctx", None)
+        ctx: Optional[ExecutionContext] = getattr(self, "_ctx", None)
         if ctx is None:
             return super().model_dump(**kwargs)
 

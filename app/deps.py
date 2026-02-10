@@ -1,5 +1,5 @@
 from typing import Annotated
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, Request
 
 from auth import UserContext
 from log_service import LogService
@@ -17,7 +17,8 @@ def get_log_service(request: Request):
 def get_user(request: Request) -> UserContext:
     uid = getattr(request.state, "uid", None)
     if uid is None:
-        raise HTTPException(status_code=401)
+        # return anonymous user instead
+        return UserContext(0, frozenset())
 
     plugin_manager: PluginManager = request.app.state.plugin_manager
     roles, username = plugin_manager.dao.user_cache.get(uid, ([], ""))

@@ -44,6 +44,14 @@ class Plugin:
             ),
         ),
         (
+            "blog",
+            (
+                {"url": "blog/Home.tsx"}
+                if settings.env == "dev"
+                else {"code": Path(__file__).with_name("home.js").read_text()}
+            ),
+        ),
+        (
             "blog/:blog_id",
             (
                 {"url": "blog/Blog.tsx"}
