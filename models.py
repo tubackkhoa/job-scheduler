@@ -709,7 +709,6 @@ class DAO:
         message: str,
         created_at: datetime,
     ) -> int:
-        import json
 
         async with self.session_factory() as session:
             try:
@@ -717,11 +716,8 @@ class DAO:
                 if not job:
                     raise ValueError(f"Job with id {job_id} not found")
 
-                config = job.config
-                if isinstance(config, str):
-                    config = json.loads(config)
-
-                model_key = config.get("model_key", None) if config else None
+                config = job.config or {}
+                model_key = config.get("model_key", None)
                 signal = SignalMessage(
                     job_id=job_id,
                     message=message,

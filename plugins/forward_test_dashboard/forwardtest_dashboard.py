@@ -5,6 +5,7 @@ This plugin retrieves signal data from forward_test_trade_history table
 and performance data from forward_test_performance table.
 """
 
+import orjson
 import pluggy
 import logging
 import pandas as pd
@@ -137,9 +138,7 @@ def _parse_last_position(last_pos) -> Optional[Dict[str, Any]]:
 
     if isinstance(last_pos, str):
         try:
-            import json
-
-            last_pos = json.loads(last_pos)
+            last_pos = orjson.loads(last_pos)
         except:
             return None
 
@@ -514,10 +513,6 @@ class ForwardTestDashboardPlugin:
         json: Optional[dict[str, Any]] = None,
         validate: Optional[bool] = False,
     ):
-        if isinstance(json, str):
-            import json as json_module
-
-            json = json_module.loads(json)
         return Config.model_validate(json or {})
 
     @hookimpl

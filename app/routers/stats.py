@@ -1,7 +1,7 @@
 from collections import defaultdict
-import json
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
+import orjson
 from app.deps import PluginManagerState, UserState
 from typing import Annotated
 
@@ -26,7 +26,7 @@ async def list_jobs(
         jobs, total = await plugin_manager.dao.get_jobs_by_filters(
             ctx,
             query,
-            config=json.loads(config) if config else None,
+            config=orjson.loads(config) if config else None,
         )
 
         results = {

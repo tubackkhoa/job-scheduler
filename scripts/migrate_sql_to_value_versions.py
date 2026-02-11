@@ -9,11 +9,13 @@ Usage:
    - session_id=1 (staging): use sql with name "u5 - v2.6.1 - Cheat flip with voting (test)"
    - session_id=2 (production): use sql with name defined below
 """
+
 import os
-import json
+import orjson
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 import dotenv
+
 dotenv.load_dotenv()
 
 # Configuration
@@ -34,11 +36,13 @@ def main():
     with Session(engine) as session:
         # Step 1: Migrate sql_versions to value_versions
         sql_versions = session.execute(
-            text("""
+            text(
+                """
                 SELECT id, name, description, sql_query, created_at, updated_at, is_active, tags
                 FROM sql_versions
                 ORDER BY id
-            """)
+            """
+            )
         ).fetchall()
 
         print(f"Found {len(sql_versions)} sql_versions to migrate")
@@ -53,15 +57,19 @@ def main():
             ).scalar()
 
             if existing:
-                print(f"  Skipping sql_version {old_id} ({name}) - already exists as value_version {existing}")
+                print(
+                    f"  Skipping sql_version {old_id} ({name}) - already exists as value_version {existing}"
+                )
                 continue
 
             result = session.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO value_versions (field_id, name, description, value, created_at, updated_at, is_active, tags)
                     VALUES (:field_id, :name, :description, :value, :created_at, :updated_at, :is_active, :tags)
                     RETURNING id
-                """),
+                """
+                ),
                 {
                     "field_id": FIELD_ID,
                     "name": name,
@@ -100,8 +108,8 @@ def main():
 
         for job_id, session_id, config_str in jobs:
             try:
-                config = json.loads(config_str) if config_str else {}
-            except json.JSONDecodeError:
+                config = orjson.loads(config_str) if config_str else {}
+            except orjson.JSONDecodeError:
                 config = {}
 
             if session_id == 1:
@@ -117,7 +125,7 @@ def main():
                 continue
 
             config["sql_id"] = new_sql_id
-            new_config_str = json.dumps(config)
+            new_config_str = orjson.dumps(config).decode()
 
             session.execute(
                 text("UPDATE jobs SET config = :config WHERE id = :job_id"),

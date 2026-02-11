@@ -7,6 +7,8 @@ from jinja2 import DictLoader, FileSystemBytecodeCache
 from jinja2.sandbox import SandboxedEnvironment
 from datetime import datetime, timedelta, timezone
 
+import orjson
+
 from enforcer import GLOBAL_PERMISSION_REGISTRY, ExecutionContext
 from schemas import settings
 
@@ -102,6 +104,14 @@ def in_clause(values: list[object]):
     return "()" if not values else f"({','.join(map(repr, values))})"
 
 
+# for faster at server
+def orjson_dumps(obj, **kwargs):
+    option = (orjson.OPT_INDENT_2 if kwargs.get("indent") else 0) | (
+        orjson.OPT_SORT_KEYS if kwargs.get("sort_keys") else 0
+    )
+    return orjson.dumps(obj, option=option).decode()
+
+
 class Renderer:
     _templates = LRUDict()
     _sandbox = SandboxedEnvironment(
@@ -115,7 +125,7 @@ class Renderer:
         ),
         loader=DictLoader(_templates),
     )
-
+    _sandbox.policies["json.dumps_function"] = orjson_dumps
     _sandbox.globals.update({"datetime": datetime, "timedelta": timedelta, "timezone": timezone})
     _sandbox.policies["json.dumps_kwargs"] = {"sort_keys": False}
 
