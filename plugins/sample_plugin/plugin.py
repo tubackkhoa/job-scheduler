@@ -53,7 +53,7 @@ export default function ({
   );
 
   const [input, setInput] = useState(
-    formData || `{{ get_all_plugins() | list | tojson }}`,
+    formData || `{{ dao.get_all_plugins() | list | tojson }}`,
   );
   const [output, setOutput] = useState<string>('');
   const [loading, setLoading] = useState(false);
