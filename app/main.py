@@ -15,8 +15,7 @@ from app.routers import (
 import asyncio
 import logging
 import os
-from fastapi.responses import FileResponse
-import uvloop
+from fastapi.responses import FileResponse, ORJSONResponse
 from fastapi import (
     APIRouter,
     Depends,
@@ -42,10 +41,12 @@ from models import DAO
 from plugin_manager import PROJECT_NAME, PluginManager
 from renderer import Renderer
 from schemas import settings
-
-
 from utils.job import JobUtil
 from ws_manager import WSConnectionManager
+
+import uvloop
+
+asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 # Configure logging to show INFO and above messages
 logging.basicConfig(level=logging.DEBUG, handlers=[logging.NullHandler()])
@@ -54,7 +55,6 @@ logging.basicConfig(level=logging.DEBUG, handlers=[logging.NullHandler()])
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Initialise log service and handler
-    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     ws_manager = WSConnectionManager()
 
     log_service = LogService(
@@ -130,7 +130,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     os._exit(0)
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=lifespan, default_response_class=ORJSONResponse)
 
 # Compress responses
 if settings.min_gzip_size:
@@ -149,8 +149,8 @@ app.add_middleware(
 async def health_check(plugin_manager: PluginManagerState):
     try:
         # Check database connection
-        async with plugin_manager.dao.session_factory().bind.connect() as conn:  # type: ignore
-            await conn.execute(text("SELECT 1"))
+        async with plugin_manager.dao.session_factory() as session:
+            await session.execute(text("SELECT 1"))
         return {
             "status": "healthy",
             "database": "connected",
