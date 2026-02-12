@@ -61,7 +61,13 @@ class Config(BaseModel):
 
     model_config = ConfigDict(
         json_schema_extra=ui_schema(
-            {"url": "HealthPortal.tsx" if settings.env == "dev" else "/assets/{package}/portal.js"}
+            {
+                "url": (
+                    "HealthPortal.tsx"
+                    if settings.env == "dev"
+                    else "{base_url}/assets/{package}/portal.js"
+                )
+            }
         )
     )
 
@@ -84,7 +90,9 @@ class Config(BaseModel):
         title="Model Type",
         json_schema_extra=ui_schema_crud(
             field_path=["model_type"],
-            field_url="CrudField.tsx" if settings.env == "dev" else "/assets/{package}/crud.js",
+            field_url=(
+                "CrudField.tsx" if settings.env == "dev" else "{base_url}/assets/{package}/crud.js"
+            ),
             crud_exprs={
                 "list": "{{ list_trade_models(env) | tojson }}",
                 "create": "{{ create_trade_model(payload, env) | tojson }}",

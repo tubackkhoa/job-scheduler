@@ -114,7 +114,7 @@ export default function ({
                 "url": (
                     "CompilePluginComponent.tsx"
                     if settings.env == "dev"
-                    else "/assets/{package}/compile_plugin.js"
+                    else "{base_url}/assets/{package}/compile_plugin.js"
                 ),
                 "ui:options": {
                     "size": 6,
@@ -144,7 +144,7 @@ class Config(SecureBaseModel):
                 "url": (
                     "forwardtest/Portal.tsx"
                     if settings.env == "dev"
-                    else "/assets/{package}/portal.js"
+                    else "{base_url}/assets/{package}/portal.js"
                 )
             }
         )

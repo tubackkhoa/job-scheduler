@@ -14,7 +14,9 @@ class Config(BaseModel):
         json_schema_extra=ui_schema(
             {
                 "url": (
-                    "blog/Portal.tsx" if settings.env == "dev" else "/assets/{package}/portal.js"
+                    "blog/Portal.tsx"
+                    if settings.env == "dev"
+                    else "{base_url}/assets/{package}/portal.js"
                 ),
             }
         )
@@ -38,17 +40,29 @@ class Plugin:
                 "url": (
                     "blog/Dashboard.tsx"
                     if settings.env == "dev"
-                    else "/assets/{package}/dashboard.js"
+                    else "{base_url}/assets/{package}/dashboard.js"
                 )
             },
         ),
         (
             "blog",
-            {"url": "blog/Home.tsx" if settings.env == "dev" else "/assets/{package}/home.js"},
+            {
+                "url": (
+                    "blog/Home.tsx"
+                    if settings.env == "dev"
+                    else "{base_url}/assets/{package}/home.js"
+                )
+            },
         ),
         (
             "blog/:blog_id",
-            {"url": "blog/Blog.tsx" if settings.env == "dev" else "/assets/{package}/blog.js"},
+            {
+                "url": (
+                    "blog/Blog.tsx"
+                    if settings.env == "dev"
+                    else "{base_url}/assets/{package}/blog.js"
+                )
+            },
         ),
     ]
 

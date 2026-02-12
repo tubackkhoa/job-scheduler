@@ -55,7 +55,7 @@ class Config(BaseModel):
                 "url": (
                     "forwardtest/Portal.tsx"
                     if settings.env == "dev"
-                    else "/assets/{package}/portal.js"
+                    else "{base_url}/assets/{package}/portal.js"
                 )
             }
         )
@@ -135,7 +135,7 @@ return [
                 "url": (
                     "LightweighChart.tsx"
                     if settings.env == "dev"
-                    else "/assets/{package}/lightweight_chart.js"
+                    else "{base_url}/assets/{package}/lightweight_chart.js"
                 ),
             }
         ),
@@ -171,7 +171,7 @@ class Plugin:
                 "url": (
                     "backtest/Dashboard.tsx"
                     if settings.env == "dev"
-                    else "/assets/{package}/dashboard.js"
+                    else "{base_url}/assets/{package}/dashboard.js"
                 )
             },
         ),
