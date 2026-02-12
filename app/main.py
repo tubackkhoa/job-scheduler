@@ -1,5 +1,5 @@
 from typing import AsyncIterator
-from app.deps import PluginManagerState, UserState
+from app.deps import PluginManagerState
 from app.routers import (
     auth,
     plugins,
