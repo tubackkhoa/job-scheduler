@@ -2,7 +2,7 @@ import asyncio
 import importlib
 import logging
 import sys
-
+from pathlib import Path
 from typing import Any, Awaitable, Callable, Mapping, Optional, cast
 
 import pluggy
@@ -35,6 +35,8 @@ RenderFn = Callable[
 
 
 class PluginSpec:
+
+    dir: Path
 
     @classmethod
     @hookspec
@@ -331,6 +333,8 @@ class PluginManager:
             module = importlib.import_module(module_path)
             plugin = getattr(module, class_name)
             assert plugin
+            if module.__file__:
+                plugin.dir = Path(module.__file__).resolve().parent
             cls.manager.register(plugin, package)
             cls.register_plugin_permissions(package, plugin)
 

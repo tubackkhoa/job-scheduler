@@ -17,7 +17,7 @@ class Config(BaseModel):
                 **(
                     {"url": "blog/Portal.tsx"}
                     if settings.env == "dev"
-                    else {"code": Path(__file__).with_name("portal.js").read_text()}
+                    else {"url": "/assets/{package}/portal.js"}
                 ),
             }
         )
@@ -40,7 +40,7 @@ class Plugin:
             (
                 {"url": "blog/Dashboard.tsx"}
                 if settings.env == "dev"
-                else {"code": Path(__file__).with_name("dashboard.js").read_text()}
+                else {"url": "/assets/{package}/dashboard.js"}
             ),
         ),
         (
@@ -48,7 +48,7 @@ class Plugin:
             (
                 {"url": "blog/Home.tsx"}
                 if settings.env == "dev"
-                else {"code": Path(__file__).with_name("home.js").read_text()}
+                else {"url": "/assets/{package}/home.js"}
             ),
         ),
         (
@@ -56,7 +56,7 @@ class Plugin:
             (
                 {"url": "blog/Blog.tsx"}
                 if settings.env == "dev"
-                else {"code": Path(__file__).with_name("blog.js").read_text()}
+                else {"url": "/assets/{package}/blog.js"}
             ),
         ),
     ]

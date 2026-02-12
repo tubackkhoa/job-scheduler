@@ -1,5 +1,5 @@
 from typing import AsyncIterator
-from app.deps import PluginManagerState
+from app.deps import PluginManagerState, UserState
 from app.routers import (
     auth,
     plugins,
@@ -189,6 +189,33 @@ app.include_router(api_router)
 
 # websocket
 app.include_router(ws.router)
+
+
+# Add plugin assets route (must be declared AFTER app is created)
+@app.get("/assets/{package}/{asset_path:path}")
+def plugin_assets(
+    plugin_manager: PluginManagerState,
+    package: str,
+    asset_path: str,
+):
+    plugin = plugin_manager.get_plugin_instance(package)
+    if not plugin:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    plugin_assets_dir = (plugin.dir / "assets").resolve()
+    file_path = (plugin_assets_dir / asset_path).resolve()
+
+    # Prevent path traversal
+    try:
+        file_path.relative_to(plugin_assets_dir)
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Invalid asset path")
+
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    return FileResponse(file_path)
+
 
 # static site
 if settings.static_files:
