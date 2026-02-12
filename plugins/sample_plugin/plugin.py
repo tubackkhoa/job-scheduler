@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 import pluggy
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Any, Awaitable, Callable, List, Optional, ParamSpec
@@ -112,10 +111,10 @@ export default function ({
         json_schema_extra=ui_schema(
             {
                 "ui:field": "Dynamic",
-                **(
-                    {"url": "CompilePluginComponent.tsx"}
+                "url": (
+                    "CompilePluginComponent.tsx"
                     if settings.env == "dev"
-                    else {"code": Path(__file__).with_name("compile_plugin.js").read_text()}
+                    else "/assets/{package}/compile_plugin.js"
                 ),
                 "ui:options": {
                     "size": 6,
@@ -142,11 +141,11 @@ class Config(SecureBaseModel):
     model_config = ConfigDict(
         json_schema_extra=ui_schema(
             {
-                **(
-                    {"url": "forwardtest/Portal.tsx"}
+                "url": (
+                    "forwardtest/Portal.tsx"
                     if settings.env == "dev"
-                    else {"code": Path(__file__).with_name("portal.js").read_text()}
-                ),
+                    else "/assets/{package}/portal.js"
+                )
             }
         )
     )

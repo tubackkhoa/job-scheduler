@@ -5,7 +5,6 @@ from pydantic import BaseModel, ConfigDict
 from pydantic import BaseModel, Field
 from enforcer import ExecutionContext
 from plugins import ui_schema
-from pathlib import Path
 import pluggy
 from .api import (
     activate_forwardtest_model,
@@ -62,13 +61,7 @@ class Config(BaseModel):
 
     model_config = ConfigDict(
         json_schema_extra=ui_schema(
-            {
-                **(
-                    {"url": "HealthPortal.tsx"}
-                    if settings.env == "dev"
-                    else {"code": Path(__file__).with_name("portal.js").read_text()}
-                ),
-            }
+            {"url": "HealthPortal.tsx" if settings.env == "dev" else "/assets/{package}/portal.js"}
         )
     )
 
@@ -91,11 +84,7 @@ class Config(BaseModel):
         title="Model Type",
         json_schema_extra=ui_schema_crud(
             field_path=["model_type"],
-            **(
-                {"field_url": "CrudField.tsx"}
-                if settings.env == "dev"
-                else {"field_code": Path(__file__).with_name("crud.js").read_text()}
-            ),
+            field_url="CrudField.tsx" if settings.env == "dev" else "/assets/{package}/crud.js",
             crud_exprs={
                 "list": "{{ list_trade_models(env) | tojson }}",
                 "create": "{{ create_trade_model(payload, env) | tojson }}",

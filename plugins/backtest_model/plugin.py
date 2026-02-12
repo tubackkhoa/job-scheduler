@@ -52,10 +52,10 @@ class Config(BaseModel):
     model_config = ConfigDict(
         json_schema_extra=ui_schema(
             {
-                **(
-                    {"url": "forwardtest/Portal.tsx"}
+                "url": (
+                    "forwardtest/Portal.tsx"
                     if settings.env == "dev"
-                    else {"code": Path(__file__).with_name("portal.js").read_text()}
+                    else "/assets/{package}/portal.js"
                 )
             }
         )
@@ -132,10 +132,10 @@ return [
             {
                 "ui:field": "Template",
                 "type": "markdown",
-                **(
-                    {"url": "LightweighChart.tsx"}
+                "url": (
+                    "LightweighChart.tsx"
                     if settings.env == "dev"
-                    else {"code": Path(__file__).with_name("lightweight_chart.js").read_text()}
+                    else "/assets/{package}/lightweight_chart.js"
                 ),
             }
         ),
@@ -167,19 +167,14 @@ class Plugin:
         ("", cast(CodeSchema, Config.model_config.get("json_schema_extra"))),
         (
             "dashboard",
-            (
-                {"url": "backtest/Dashboard.tsx"}
-                if settings.env == "dev"
-                else {"code": Path(__file__).parent.joinpath("backtest/dashboard.js").read_text()}
-            ),
+            {
+                "url": (
+                    "backtest/Dashboard.tsx"
+                    if settings.env == "dev"
+                    else "/assets/{package}/dashboard.js"
+                )
+            },
         ),
-        # (
-        #     "dashboard/jobs/:job_jd",
-        #     {
-        #         "url": "backtest/Job.tsx"
-        #         # "code": Path(__file__).parent.joinpath("backtest/job.js").read_text()
-        #     },
-        # ),
     ]
 
     @classmethod

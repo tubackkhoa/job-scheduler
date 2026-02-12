@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 from typing import Any, Callable, Optional, Dict
 import pluggy
 from pydantic import BaseModel, ConfigDict
@@ -14,10 +13,8 @@ class Config(BaseModel):
     model_config = ConfigDict(
         json_schema_extra=ui_schema(
             {
-                **(
-                    {"url": "blog/Portal.tsx"}
-                    if settings.env == "dev"
-                    else {"url": "/assets/{package}/portal.js"}
+                "url": (
+                    "blog/Portal.tsx" if settings.env == "dev" else "/assets/{package}/portal.js"
                 ),
             }
         )
@@ -37,27 +34,21 @@ class Plugin:
         ("", Config.model_config.get("json_schema_extra")),
         (
             "dashboard",
-            (
-                {"url": "blog/Dashboard.tsx"}
-                if settings.env == "dev"
-                else {"url": "/assets/{package}/dashboard.js"}
-            ),
+            {
+                "url": (
+                    "blog/Dashboard.tsx"
+                    if settings.env == "dev"
+                    else "/assets/{package}/dashboard.js"
+                )
+            },
         ),
         (
             "blog",
-            (
-                {"url": "blog/Home.tsx"}
-                if settings.env == "dev"
-                else {"url": "/assets/{package}/home.js"}
-            ),
+            {"url": "blog/Home.tsx" if settings.env == "dev" else "/assets/{package}/home.js"},
         ),
         (
             "blog/:blog_id",
-            (
-                {"url": "blog/Blog.tsx"}
-                if settings.env == "dev"
-                else {"url": "/assets/{package}/blog.js"}
-            ),
+            {"url": "blog/Blog.tsx" if settings.env == "dev" else "/assets/{package}/blog.js"},
         ),
     ]
 
