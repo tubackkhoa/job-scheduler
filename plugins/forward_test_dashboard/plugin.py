@@ -11,7 +11,6 @@ from .api import (
     fetch_positions,
 )
 from .config import Config
-from pathlib import Path
 from schemas import settings
 
 
@@ -38,17 +37,25 @@ class Plugin:
         (
             "dashboard",
             (
-                {"url": "forwardtest/Dashboard.tsx"}
-                if settings.env == "dev"
-                else {"code": Path(__file__).with_name("dashboard.js").read_text()}
+                {
+                    "url": (
+                        "forwardtest/Dashboard.tsx"
+                        if settings.env == "dev"
+                        else "{base_url}/assets/{package}/dashboard.js"
+                    )
+                }
             ),
         ),
         (
             "marketplace",
             (
-                {"url": "forwardtest/MarketPlace.tsx"}
-                if settings.env == "dev"
-                else {"code": Path(__file__).with_name("marketplace.js").read_text()}
+                {
+                    "url": (
+                        "forwardtest/MarketPlace.tsx"
+                        if settings.env == "dev"
+                        else "{base_url}/assets/{package}/marketplace.js"
+                    )
+                }
             ),
         ),
     ]

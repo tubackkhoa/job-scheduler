@@ -1,6 +1,5 @@
 from pydantic import BaseModel, ConfigDict, Field
 from plugins import ui_schema
-from pathlib import Path
 from schemas import settings
 
 
@@ -9,11 +8,11 @@ class Config(BaseModel):
     model_config = ConfigDict(
         json_schema_extra=ui_schema(
             {
-                **(
-                    {"url": "forwardtest/Portal.tsx"}
+                "url": (
+                    "forwardtest/Portal.tsx"
                     if settings.env == "dev"
-                    else {"code": Path(__file__).with_name("portal.js").read_text()}
-                ),
+                    else "{base_url}/assets/{package}/portal.js"
+                )
             }
         )
     )
@@ -36,10 +35,10 @@ class Config(BaseModel):
             {
                 "ui:field": "Template",
                 "type": "markdown",
-                **(
-                    {"url": "PnlPreview.tsx"}
+                "url": (
+                    "PnlPreview.tsx"
                     if settings.env == "dev"
-                    else {"code": Path(__file__).with_name("pnl_preview.js").read_text()}
+                    else "{base_url}/assets/{package}/pnl_preview.js"
                 ),
             }
         ),
@@ -58,10 +57,10 @@ class Config(BaseModel):
             {
                 "ui:field": "Template",
                 "type": "markdown",
-                **(
-                    {"url": "TableMarkdown.tsx"}
+                "url": (
+                    "TableMarkdown.tsx"
                     if settings.env == "dev"
-                    else {"code": Path(__file__).with_name("signal_comparison.js").read_text()}
+                    else "{base_url}/assets/{package}/signal_comparison.js"
                 ),
             }
         ),
