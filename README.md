@@ -15,14 +15,32 @@ Conceptually:
 - The **`jobs` table** defines _how_ each user runs a plugin (per‑user configs, one active at a time per (user, plugin)).
 - **APScheduler** drives execution on an interval, and logs are streamed to the browser over **WebSockets**.
 
-For a deeper dive on authoring plugins, see **[Plugin Development](./docs/PLUGIN_DEVELOPMENT.md)**.
+For a deeper dive on authoring plugins, see **[Plugin Development](./PLUGIN_DEVELOPMENT.md)**.
+
+---
+
+## Security & Authorization
+
+This system includes a built-in authorization layer to ensure that plugins, jobs, and data access are executed safely and within defined permissions. It provides:
+
+- Authenticated user context propagation via `ExecutionContext`
+- Per-job and per-action permission enforcement
+- Field-level protection for sensitive configuration values
+- Policy-based access control powered by Casbin
+
+For full details, see **[Authorization](./AUTHORIZATION.md)**, which covers:
+
+- ExecutionContext design and lifecycle
+- Permission decorators (e.g. `@job_permission`)
+- SecureField usage patterns
+- Role and policy configuration
+- Enforcement flow and examples
 
 ---
 
 ## Project structure
 
 - **Backend (FastAPI)**
-
   - `server.py` – creates the FastAPI app, configures the DB engine, starts/stops the `PluginManager`, and exposes:
     - `GET /plugins` – list all plugins.
     - `GET /schema/{session_id}/{plugin_id}` – plugin JSON schema + all saved configs for that user/plugin.
@@ -39,7 +57,6 @@ For a deeper dive on authoring plugins, see **[Plugin Development](./docs/PLUGIN
   - `scripts/database.sql` – raw schema for the `plugins` and `jobs` tables.
 
 - **Plugins (Python)**
-
   - Located under `plugins/`, usually with versioned folders, for example:
     - `plugins/sample_plugin@v0_1_0/`
     - `plugins/sample_plugin@v0_2_0/`
@@ -186,4 +203,4 @@ At a high level:
    - activate a job (only one active per (user, plugin) at a time),
    - watch logs in real time.
 
-For a complete walkthrough (including example code and SQL), see **[Plugin Development](./docs/PLUGIN_DEVELOPMENT.md)**.
+For a complete walkthrough (including example code and SQL), see **[Plugin Development](./PLUGIN_DEVELOPMENT.md)**.

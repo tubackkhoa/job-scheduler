@@ -17,15 +17,15 @@ The Job Scheduler uses a **Casbin RBAC** (Role-Based Access Control) permission 
 ```mermaid
 flowchart TB
     User[User Login] --> Auth[auth.py]
-    Auth --> |Creates| EC[ExecutionContext]
-    EC --> |Check Permission| Enforcer[Casbin Enforcer]
-    Enforcer --> |Policy Rules| Conf[enforcer.conf]
+    Auth -->|"Creates"| EC[ExecutionContext]
+    EC -->|"Check Permission"| Enforcer[Casbin Enforcer]
+    Enforcer -->|"Policy Rules"| Conf[enforcer.conf]
 
-    PM[PluginManager] --> |create_ctx| EC
-    PM --> |run_plugin_job| Plugin[Plugin Instance]
+    PM[PluginManager] -->|"create_ctx"| EC
+    PM -->|"run_plugin_job"| Plugin[Plugin Instance]
 
-    Plugin --> |@job_permission| Decorator1[Permission Check]
-    Plugin --> |SecureField| Decorator2[Field Access Control]
+    Plugin -->|"@job_permission"| Decorator1[Permission Check]
+    Plugin -->|"SecureField"| Decorator2[Field Access Control]
 
     Decorator1 --> EC
     Decorator2 --> EC
