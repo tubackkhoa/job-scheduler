@@ -2,7 +2,8 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 import logging
 
-import orjson
+import msgspec
+import msgspec.json as ms
 from ..database.config_repository import ConfigRepository, ForwardTestPluginModel
 from ..database.db_repository import ForwardTestRepository
 
@@ -177,8 +178,8 @@ def get_pnl_from_db(identity: str, start_time: Optional[str], end_time: Optional
         # Parse if string
         if isinstance(last_pos, str):
             try:
-                last_pos = orjson.loads(last_pos)
-            except orjson.JSONDecodeError:
+                last_pos = ms.decode(last_pos)
+            except msgspec.DecodeError:
                 continue
 
         # Determine time from record if missing in last_pos

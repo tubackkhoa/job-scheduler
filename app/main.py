@@ -15,12 +15,14 @@ from app.routers import (
 import asyncio
 import logging
 import os
-from fastapi.responses import FileResponse, ORJSONResponse
+import msgspec.json as ms
+from fastapi.responses import FileResponse
 from fastapi import (
     APIRouter,
     Depends,
     FastAPI,
     HTTPException,
+    Response,
 )
 from fastapi.concurrency import asynccontextmanager
 from fastapi.middleware.gzip import GZipMiddleware
@@ -50,6 +52,16 @@ asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 # Configure logging to show INFO and above messages
 logging.basicConfig(level=logging.DEBUG, handlers=[logging.NullHandler()])
+
+
+class MsgspecJSONResponse(Response):
+    media_type = "application/json"
+
+    def render(self, content) -> bytes:
+        # Fast path: return already-encoded bytes
+        if isinstance(content, (bytes, bytearray)):
+            return content
+        return ms.encode(content)
 
 
 @asynccontextmanager
@@ -130,7 +142,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     os._exit(0)
 
 
-app = FastAPI(lifespan=lifespan, default_response_class=ORJSONResponse)
+app = FastAPI(lifespan=lifespan, default_response_class=MsgspecJSONResponse)
 
 # Compress responses
 if settings.min_gzip_size:

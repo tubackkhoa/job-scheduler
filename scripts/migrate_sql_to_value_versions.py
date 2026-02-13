@@ -11,7 +11,8 @@ Usage:
 """
 
 import os
-import orjson
+import msgspec
+import msgspec.json as ms
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 import dotenv
@@ -108,8 +109,8 @@ def main():
 
         for job_id, session_id, config_str in jobs:
             try:
-                config = orjson.loads(config_str) if config_str else {}
-            except orjson.JSONDecodeError:
+                config = ms.decode(config_str) if config_str else {}
+            except msgspec.DecodeError:
                 config = {}
 
             if session_id == 1:
@@ -125,7 +126,7 @@ def main():
                 continue
 
             config["sql_id"] = new_sql_id
-            new_config_str = orjson.dumps(config).decode()
+            new_config_str = ms.encode(config).decode()
 
             session.execute(
                 text("UPDATE jobs SET config = :config WHERE id = :job_id"),

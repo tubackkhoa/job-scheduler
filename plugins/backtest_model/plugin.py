@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-import orjson
+import msgspec.json as ms
 import pluggy
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from typing import Any, List, Optional, cast
@@ -154,7 +154,7 @@ def update_setting(data: dict[str, Any]):
     plugin_setting = Setting.model_validate(data)
     config = plugin_setting.model_dump(exclude={"api_key"})
     config["api_key"] = plugin_setting.api_key.get_secret_value()
-    Path(__file__).with_name("setting.json").write_text(orjson.dumps(config).decode())
+    Path(__file__).with_name("setting.json").write_text(ms.encode(config).decode())
     return {"success": True}
 
 
