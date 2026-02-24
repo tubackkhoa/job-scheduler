@@ -1,124 +1,79 @@
 import asyncio
-import os
-import sys
 from typing import AsyncIterator
+import os
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel
 
-# Required for macOS + FAISS
-if sys.platform == "darwin":
-    os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-from langchain_core.runnables import RunnableSerializable, RunnablePassthrough
-from langchain_core.documents import Document
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
-
-
-# from langchain_core.runnables import RunnableLambda
-# from pathlib import Path
-# from langchain_text_splitters import RecursiveCharacterTextSplitter
-# from langchain_community.vectorstores import FAISS
-# from langchain_huggingface import HuggingFaceEmbeddings
-# # ---------------------------------------------------------
-# # Load schema + vector store (ONCE)
-# # ---------------------------------------------------------
-# def load_schema_docs(path: str) -> list[Document]:
-#     text = Path(path).read_text(encoding="utf-8")
-#     splitter = RecursiveCharacterTextSplitter(
-#         chunk_size=400,
-#         chunk_overlap=50,
-#     )
-#     return [Document(page_content=c) for c in splitter.split_text(text)]
-
-
-# SCHEMA_PATH = ".cursorrules"
-# INDEX_PATH = Path("cache/faiss")
-
-# docs = load_schema_docs(SCHEMA_PATH)
-
-# embeddings = HuggingFaceEmbeddings(
-#     model_name="nomic-ai/nomic-embed-text-v1.5",
-#     model_kwargs={"trust_remote_code": True},
-# )
-
-# if INDEX_PATH.exists():
-#     vectorstore = FAISS.load_local(
-#         str(INDEX_PATH),
-#         embeddings,
-#         allow_dangerous_deserialization=True,
-#     )
-# else:
-#     INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
-#     vectorstore = FAISS.from_documents(docs, embeddings)
-#     vectorstore.save_local(str(INDEX_PATH))
-
-# retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
+from pydantic_ai import Agent
+from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.models.openai import OpenAIChatModel
 
 
 # ---------------------------------------------------------
-# Prompts
+# Model (Ollama-compatible OpenAI Chat API)
 # ---------------------------------------------------------
-generate_prompt = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            "You are an AI plugin generator for the Job-Scheduler project.\n\n"
-            "OUTPUT FORMAT (MANDATORY):\n"
-            "=== plugin.yaml ===\n"
-            "<raw YAML>\n\n"
-            "=== plugin.j2 ===\n"
-            "<raw Jinja2>\n\n"
-            "RULES:\n"
-            "- No markdown\n"
-            "- No explanations\n"
-            "- No extra text\n",
-        ),
-        (
-            "human",
-            "Task:\n{question}",
-        ),
-    ]
+
+BASE_URL = os.getenv("OPENAI_BASE_URL", "http://localhost:11434/v1")
+API_KEY = os.getenv("OPENAI_API_KEY", "ollama")
+
+provider = OpenAIProvider(
+    base_url=BASE_URL,
+    api_key=API_KEY,
 )
 
-edit_prompt = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            "You are an AI plugin editor.\n\n"
-            "Modify ONLY what the instruction requests.\n"
-            "Preserve everything else.\n\n"
-            "OUTPUT FORMAT:\n"
-            "=== plugin.yaml ===\n"
-            "<updated YAML>\n\n"
-            "=== plugin.j2 ===\n"
-            "<updated Jinja2>",
-        ),
-        (
-            "human",
-            "Existing plugin:\n{plugin}\n\nInstruction:\n{instruction}",
-        ),
-    ]
+model = OpenAIChatModel("qwen2.5-coder:7b", provider=provider, settings={"temperature": 0})
+
+# ---------------------------------------------------------
+# Agents
+# ---------------------------------------------------------
+
+generate_agent = Agent(
+    model,
+    system_prompt="""
+You are an AI plugin generator for the Job-Scheduler project.
+
+OUTPUT FORMAT (MANDATORY):
+=== plugin.yaml ===
+<raw YAML>
+
+=== plugin.j2 ===
+<raw Jinja2>
+
+RULES:
+- No markdown
+- No explanations
+- No extra text
+""",
+)
+
+edit_agent = Agent(
+    model,
+    system_prompt="""
+You are an AI plugin editor.
+
+Modify ONLY what the instruction requests.
+Preserve everything else.
+
+OUTPUT FORMAT:
+=== plugin.yaml ===
+<updated YAML>
+
+=== plugin.j2 ===
+<updated Jinja2>
+
+No markdown.
+No explanations.
+No extra text.
+""",
 )
 
 
 # ---------------------------------------------------------
-# LLM
+# Request Models
 # ---------------------------------------------------------
-llm = ChatOpenAI(
-    base_url="http://localhost:11434/v1",
-    api_key=SecretStr("ollama"),
-    streaming=True,
-    model="qwen2.5-coder:7b",
-    temperature=0,
-)
-
-# ./build/bin/llama-server   -m ./models/Llama3-8B-1.58-100B-GGUF/Llama3-8B-1.58-100B-tokens-TQ1_0.gguf   -t $(nproc)   -c 4096   -b 768   --host 0.0.0.0   --port 11434   --no-mmap   --mlock   --numa distribute
 
 
-# ---------------------------------------------------------
-# Request models
-# ---------------------------------------------------------
 class GenerateRequest(BaseModel):
     query: str
 
@@ -129,56 +84,49 @@ class EditRequest(BaseModel):
 
 
 # ---------------------------------------------------------
-# Streaming helper
+# Streaming Helpers
 # ---------------------------------------------------------
-async def stream_chain(
-    chain: RunnableSerializable,
-    payload,
+
+
+async def stream_agent(
+    agent: Agent,
+    prompt: str,
 ) -> AsyncIterator[str]:
     try:
-        async for chunk in chain.astream(payload):
-            text = chunk if isinstance(chunk, str) else getattr(chunk, "content", None)
-            if text:
-                yield text
+        async with agent.run_stream(prompt) as result:
+            async for chunk in result.stream_text(
+                delta=True,
+            ):
+                if chunk:
+                    yield chunk
     except asyncio.CancelledError:
-        # Client disconnected — normal behavior for StreamingResponse
         raise
 
 
-def join_docs(docs: list[Document]) -> str:
-    return "\n\n".join(d.page_content for d in docs)
-
-
 # ---------------------------------------------------------
-# HTTP streaming endpoints
+# FastAPI Router
 # ---------------------------------------------------------
+
 router = APIRouter(prefix="/chatbot", tags=["chatbot"])
 
 
 @router.post("/generate")
 async def generate(req: GenerateRequest):
-    chain = (
-        {
-            "question": RunnablePassthrough(),
-        }
-        | generate_prompt
-        | llm
-    )
-
     return StreamingResponse(
-        stream_chain(chain, req.query),
-        media_type="text/plain",
+        stream_agent(
+            generate_agent,
+            f"Task:\n{req.query}",
+        ),
+        media_type="text/event-stream",
     )
 
 
 @router.post("/edit")
 async def edit(req: EditRequest):
-    chain = edit_prompt | llm
-
     return StreamingResponse(
-        stream_chain(
-            chain,
-            {"plugin": req.plugin, "instruction": req.instruction},
+        stream_agent(
+            edit_agent,
+            f"Existing plugin:\n{req.plugin}\n\nInstruction:\n{req.instruction}",
         ),
-        media_type="text/plain",
+        media_type="text/event-stream",
     )
