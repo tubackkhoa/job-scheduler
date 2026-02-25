@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-import orjson
+import msgspec
 from pydantic import BaseModel, Field
 import logging
 from .perp_postgres_client import PerpPostgresClient
@@ -39,7 +39,7 @@ class ConfigRepository:
                     config_val = row.get("config", {})
                     if isinstance(config_val, str):
                         try:
-                            config_val = orjson.loads(config_val)
+                            config_val = msgspec.json.decode(config_val)
                         except orjson.JSONDecodeError:
                             config_val = {}
 
@@ -66,7 +66,7 @@ class ConfigRepository:
                     return "NULL"
                 return str(s).replace("'", "''")
 
-            config_json = orjson.dumps(model.config).decode()
+            config_json = msgspec.json.encode(model.config).decode()
 
             # Construct raw Postgres SQL
             # We must inline values because postgres_execute takes the whole query as a string.
@@ -105,7 +105,7 @@ class ConfigRepository:
                     return "NULL"
                 return str(s).replace("'", "''")
 
-            config_json = orjson.dumps(new_config).decode()
+            config_json = msgspec.json.encode(new_config).decode()
             updated_at = datetime.now()
 
             query = f"""
@@ -137,7 +137,7 @@ class ConfigRepository:
                     config_val = row.get("config", {})
                     if isinstance(config_val, str):
                         try:
-                            config_val = orjson.loads(config_val)
+                            config_val = msgspec.json.decode(config_val)
                         except orjson.JSONDecodeError:
                             config_val = {}
 

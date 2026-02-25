@@ -5,7 +5,7 @@ This plugin retrieves signal data from forward_test_trade_history table
 and performance data from forward_test_performance table.
 """
 
-import orjson
+import msgspec
 import pluggy
 import logging
 import pandas as pd
@@ -138,7 +138,7 @@ def _parse_last_position(last_pos) -> Optional[Dict[str, Any]]:
 
     if isinstance(last_pos, str):
         try:
-            last_pos = orjson.loads(last_pos)
+            last_pos = msgspec.json.decode(last_pos)
         except:
             return None
 
