@@ -15,7 +15,7 @@ from app.routers import (
 import asyncio
 import logging
 import os
-from fastapi.responses import FileResponse, ORJSONResponse
+from fastapi.responses import FileResponse
 from fastapi import (
     APIRouter,
     Depends,
@@ -130,7 +130,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     os._exit(0)
 
 
-app = FastAPI(lifespan=lifespan, default_response_class=ORJSONResponse)
+app = FastAPI(lifespan=lifespan)
 
 # Compress responses
 if settings.min_gzip_size:
