@@ -12,15 +12,15 @@ base_url = "https://api-quantsigengine-uat.orai.network"
 api_key = settings.test_system_api_key
 
 
-def _get(
+async def _get(
     url: str,
     api_key: str,
     params=None,
     timeout=API_TIMEOUT_SHORT,
 ) -> dict:
     try:
-        with httpx.Client(timeout=timeout) as client:
-            resp = client.get(
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.get(
                 url,
                 headers={
                     "test-system-api-key": api_key,
@@ -38,8 +38,8 @@ def _get(
     return {}
 
 
-def get_running_models(**kwargs: Any) -> List[Dict[str, Any]]:
-    data = _get(
+async def get_running_models(**kwargs: Any) -> List[Dict[str, Any]]:
+    data = await _get(
         f"{base_url}/api/test-system/models",
         api_key,
         params=kwargs,
@@ -47,7 +47,7 @@ def get_running_models(**kwargs: Any) -> List[Dict[str, Any]]:
     return sorted(data.get("models", []), key=lambda m: m.get("createdAt") or "")
 
 
-def fetch_positions(**kwargs: Any) -> List[Dict[str, Any]]:
+async def fetch_positions(**kwargs: Any) -> List[Dict[str, Any]]:
     data = _get(
         f"{base_url}/api/test-system/models/positions",
         api_key,
@@ -57,7 +57,7 @@ def fetch_positions(**kwargs: Any) -> List[Dict[str, Any]]:
     return data.get("positions", [])
 
 
-def fetch_stats_running_models(**kwargs: Any) -> List[Dict[str, Any]]:
+async def fetch_stats_running_models(**kwargs: Any) -> List[Dict[str, Any]]:
     data = _get(
         f"{base_url}/api/test-system/models/stats",
         api_key,
@@ -66,7 +66,7 @@ def fetch_stats_running_models(**kwargs: Any) -> List[Dict[str, Any]]:
     return sorted(data.get("stats", []), key=lambda m: m.get("startedAt") or "")
 
 
-def update_model_config(
+async def update_model_config(
     identity: str,
     config: Dict[str, Any],
     config_name: Optional[str] = None,
@@ -83,8 +83,8 @@ def update_model_config(
     url = f"{base_url}/api/test-system/model/config"
     timeout = API_TIMEOUT_SHORT
     try:
-        with httpx.Client(timeout=timeout) as client:
-            resp = client.put(
+        with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.put(
                 url,
                 headers={
                     "test-system-api-key": api_key,
@@ -103,7 +103,7 @@ def update_model_config(
     return {}
 
 
-def get_equity_curve_forward_test(
+async def get_equity_curve_forward_test(
     identity: str,
     start_time: Optional[str],
     end_time: Optional[str],
