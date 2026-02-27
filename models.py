@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Iterable
 
 from sqlalchemy import (
     JSON,
@@ -16,7 +16,7 @@ from sqlalchemy import (
     text,
     func,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute, Mapped, mapped_column, load_only
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -366,14 +366,21 @@ class DAO:
         ctx: ExecutionContext,
         plugin_id: int,
         session_id: Optional[int] = None,
+        include_fields: Optional[Iterable[InstrumentedAttribute]] = None,
     ) -> list[Job]:
         async with self.session_factory() as session:
-            stmt = select(Job).where(Job.plugin_id == plugin_id)
+            conditions = [Job.plugin_id == plugin_id]
+
             if session_id is not None:
-                stmt = stmt.where(Job.session_id == session_id)
+                conditions.append(Job.session_id == session_id)
+
+            stmt = select(Job).where(*conditions)
+
+            if include_fields:
+                stmt = stmt.options(load_only(*include_fields))
 
             result = await session.execute(stmt)
-            return list(result.scalars().all())
+        return list(result.scalars().all())
 
     @global_permission("job")
     async def get_all_plugins(self, ctx: ExecutionContext):

@@ -8,7 +8,7 @@ class JobUtil:
     def __init__(self, dao: DAO):
         self.dao = dao
 
-    @global_permission("plugin")
+    @global_permission("job")
     async def get_config(
         self,
         ctx: ExecutionContext,
@@ -23,5 +23,4 @@ class JobUtil:
         plugin = PluginManager.get_plugin_instance(plugin_item[1])
         if not plugin:
             return {}
-        config = plugin.config(ctx, job.config)
-        return config.model_dump()
+        return plugin.config(ctx, job.config).model_dump(mode="json")

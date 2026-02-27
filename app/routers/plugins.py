@@ -33,7 +33,9 @@ def plugins(
 
 
 @router.post("")
-async def create_plugin(plugin_manager: PluginManagerState, payload: PluginCreatePayload = Body(...)):
+async def create_plugin(
+    plugin_manager: PluginManagerState, payload: PluginCreatePayload = Body(...)
+):
     """
     Create a plugin record and load it into the PluginManager.
 
@@ -141,9 +143,9 @@ async def schema(
 
     try:
         ctx = plugin_manager.create_ctx(user, package)
-        jobs = await plugin_manager.dao.get_jobs_by_plugin_and_session(ctx, plugin_id, session_id)
-        for job in jobs:
-            job.config = plugin.config(ctx, job.config).model_dump(mode="json")
+        jobs = await plugin_manager.dao.get_jobs_by_plugin_and_session(
+            ctx, plugin_id, session_id, include_fields=[Job.id, Job.active, Job.description]
+        )
 
         if len(jobs) == 0:
             # add empty config so that when saving it will be new job
@@ -153,8 +155,6 @@ async def schema(
                     description="",
                     id=0,
                     config=plugin.config(ctx).model_dump(mode="json"),
-                    plugin_id=plugin_id,
-                    session_id=session_id,
                 )
             )
 
