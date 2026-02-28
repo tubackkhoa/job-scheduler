@@ -20,6 +20,7 @@ from renderer import describe_callable
 
 BASE_URL = os.getenv("OPENAI_BASE_URL", "http://localhost:11434/v1")
 API_KEY = os.getenv("OPENAI_API_KEY", "ollama")
+MODEL_NAME = os.getenv("OPENAI_MODEL", "qwen2.5-coder:7b")
 
 provider = OpenAIProvider(
     base_url=BASE_URL,
@@ -27,7 +28,7 @@ provider = OpenAIProvider(
 )
 
 model = OpenAIChatModel(
-    "qwen2.5-coder:7b",
+    MODEL_NAME,
     provider=provider,
     settings={"temperature": 0},
 )
@@ -130,5 +131,5 @@ USER MESSAGE:
     return StreamingResponse(
         stream_agent(prompt),
         media_type="text/event-stream",
-        headers={"X-Model-Name": model.model_name},
+        headers={"X-Model-Name": MODEL_NAME},
     )
