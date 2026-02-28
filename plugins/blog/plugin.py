@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Callable, Optional, Dict
 import pluggy
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from plugins.blog.dao import create_post, get_post, delete_post, get_posts, update_post
 from plugins.schema import ui_schema
 from schemas import settings
@@ -20,6 +20,11 @@ class Config(BaseModel):
                 ),
             }
         )
+    )
+
+    md_template: str = Field(
+        "",
+        json_schema_extra=ui_schema({"ui:field": "Template", "type": "markdown"}),
     )
 
 
