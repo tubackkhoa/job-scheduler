@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Body, HTTPException, Response
+from fastapi import APIRouter, Body, Response
+from fastapi.responses import PlainTextResponse
 from app.deps import PluginManagerState, UserState
 from renderer import Renderer
 from schemas import ConfigPayload, TemplateCodePayload, TemplatePayload, settings
@@ -25,7 +26,7 @@ async def render_template(
     ctx = plugin_manager.create_ctx(user, package)
     # env will be extra to make sure params can not override
     result = await Renderer.render(ctx, payload.template, payload.params, **plugin_instance.env())
-    return Response(content=result, media_type="text/plain")
+    return Response(result, media_type="text/plain")
 
 
 # support template plugin, install by user
@@ -103,4 +104,4 @@ async def run_user_template(
     ctx = plugin_manager.create_ctx(user)
     config = tpl_plugin.config(ctx, payload)
     result = await tpl_plugin.run(ctx, config)
-    return Response(content=result, media_type="text/plain")
+    return PlainTextResponse(result)

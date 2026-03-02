@@ -1,6 +1,6 @@
 from collections import defaultdict
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 import orjson
 from app.deps import PluginManagerState, UserState
 from typing import Annotated

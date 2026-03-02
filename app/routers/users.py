@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body
 from app.deps import PluginManagerState, UserState
 
 router = APIRouter(prefix="/users", tags=["users"])
