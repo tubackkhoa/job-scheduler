@@ -87,14 +87,11 @@ SELECT * FROM ohlcv_binance_futures_in_range;
 """
 
 JSON_TPL = """
-{% extends "base" %}
-{% block content %}
 {  
   "quote_asset": {{ quote_asset | tojson }},
   "extra_bars": {{ extra_bars }},
   "base_assets": {{ base_assets | tojson }}
 }
-{% endblock %}
 """
 
 
