@@ -1,4 +1,5 @@
 from typing import AsyncIterator
+from jinja2 import UndefinedError
 from app.deps import PluginManagerState
 from app.routers import (
     auth,
@@ -15,7 +16,7 @@ from app.routers import (
 import asyncio
 import logging
 import os
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi import (
     APIRouter,
     Depends,
@@ -39,7 +40,7 @@ from enforcer import (
 from log_handler import JobLogHandler
 from log_service import LogService
 from models import DAO
-from plugin_manager import PROJECT_NAME, PluginManager, scheduler_logger
+from plugin_manager import PROJECT_NAME, PluginManager
 from renderer import Renderer
 from schemas import settings
 from utils.job import JobUtil
@@ -140,34 +141,27 @@ if settings.min_gzip_size:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
     expose_headers=["X-Model-Name"],
 )
 
 
+# override only HTTPException and UndefinedError, generic Exception will be log and only return Internal Server Error
 @app.exception_handler(HTTPException)
 async def http_exception_handler(_: Request, exc: HTTPException):
-    return JSONResponse(
+    return PlainTextResponse(
         status_code=exc.status_code,
-        content={"detail": exc.detail},
+        content=exc.detail,
     )
 
 
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    scheduler_logger.error(
-        "Unhandled exception",
-        extra={
-            "method": request.method,
-            "url": str(request.url),
-        },
-        exc_info=exc,
-    )
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error"},
+@app.exception_handler(UndefinedError)
+async def undefined_handler(_: Request, exc: UndefinedError):
+    return PlainTextResponse(
+        status_code=400,
+        content=str(exc),
     )
 
 
