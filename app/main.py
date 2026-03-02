@@ -15,12 +15,13 @@ from app.routers import (
 import asyncio
 import logging
 import os
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi import (
     APIRouter,
     Depends,
     FastAPI,
     HTTPException,
+    Request,
 )
 from fastapi.concurrency import asynccontextmanager
 from fastapi.middleware.gzip import GZipMiddleware
@@ -38,7 +39,7 @@ from enforcer import (
 from log_handler import JobLogHandler
 from log_service import LogService
 from models import DAO
-from plugin_manager import PROJECT_NAME, PluginManager
+from plugin_manager import PROJECT_NAME, PluginManager, scheduler_logger
 from renderer import Renderer
 from schemas import settings
 from utils.job import JobUtil
@@ -146,24 +147,43 @@ app.add_middleware(
 )
 
 
+@app.exception_handler(HTTPException)
+async def http_exception_handler(_: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    scheduler_logger.error(
+        "Unhandled exception",
+        extra={
+            "method": request.method,
+            "url": str(request.url),
+        },
+        exc_info=exc,
+    )
+    return HTTPException(
+        status_code=500,
+        detail="Internal server error",
+    )
+
+
 @app.get("/health")
 async def health_check(plugin_manager: PluginManagerState):
-    try:
-        # Check database connection
-        async with plugin_manager.dao.session_factory() as session:
-            await session.execute(text("SELECT 1"))
-        return {
-            "status": "healthy",
-            "database": "connected",
-            "plugin_manager": "initialized",
-            "plugins": len(plugin_manager.dao.plugin_cache),
-            "active_jobs": len(plugin_manager.dao.job_config_cache),
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Health check failed: {str(e)}",
-        )
+
+    # Check database connection
+    async with plugin_manager.dao.session_factory() as session:
+        await session.execute(text("SELECT 1"))
+    return {
+        "status": "healthy",
+        "database": "connected",
+        "plugin_manager": "initialized",
+        "plugins": len(plugin_manager.dao.plugin_cache),
+        "active_jobs": len(plugin_manager.dao.job_config_cache),
+    }
 
 
 app.include_router(auth.router)
@@ -207,10 +227,8 @@ def plugin_assets(
     file_path = (plugin_assets_dir / asset_path).resolve()
 
     # Prevent path traversal
-    try:
-        file_path.relative_to(plugin_assets_dir)
-    except ValueError:
-        raise HTTPException(status_code=403, detail="Invalid asset path")
+
+    file_path.relative_to(plugin_assets_dir)
 
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="Asset not found")

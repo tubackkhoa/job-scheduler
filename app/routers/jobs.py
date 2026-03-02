@@ -25,10 +25,8 @@ async def deactivate_job(plugin_manager: PluginManagerState, user: UserState, jo
     job_item = await plugin_manager.dao.get_job(job_id)
     if not job_item:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
-    try:
-        await plugin_manager.deactivate_job(job_id)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to deactivate job: {str(e)}")
+
+    await plugin_manager.deactivate_job(job_id)
 
     ctx = plugin_manager.create_ctx(user)
 
@@ -50,49 +48,42 @@ async def update_job_config(
     job_id: int,
     payload: ConfigPayload = Body(...),
 ):
-    try:
-        if job_id == 0:
-            # Validate required fields for new job creation
-            if payload.plugin_id is None:
-                raise HTTPException(status_code=400, detail="pluginId is required when job_id is 0")
-            if payload.session_id is None:
-                raise HTTPException(
-                    status_code=400, detail="sessionId is required when job_id is 0"
-                )
-            plugin_id = payload.plugin_id
-            session_id = payload.session_id
-        else:
-            job_item = await plugin_manager.dao.get_job(job_id)
-            if not job_item:
-                raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
-            plugin_id = job_item.plugin_id
 
-        plugin_item = plugin_manager.dao.plugin_cache.get(plugin_id)
-        if not plugin_item:
-            raise HTTPException(status_code=404, detail=f"Plugin {plugin_id} not found")
-        package = plugin_item[1]
-        plugin = plugin_manager.get_plugin_instance(package)
-        if not plugin:
-            raise HTTPException(status_code=404, detail="Plugin not found")
+    if job_id == 0:
+        # Validate required fields for new job creation
+        if payload.plugin_id is None:
+            raise HTTPException(status_code=400, detail="pluginId is required when job_id is 0")
+        if payload.session_id is None:
+            raise HTTPException(status_code=400, detail="sessionId is required when job_id is 0")
+        plugin_id = payload.plugin_id
+        session_id = payload.session_id
+    else:
+        job_item = await plugin_manager.dao.get_job(job_id)
+        if not job_item:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+        plugin_id = job_item.plugin_id
 
-        ctx = plugin_manager.create_ctx(user, package)
-        # validate before saving
-        config = plugin.config(ctx, payload.config, True)
-        if job_id == 0:
-            await plugin_manager.add_job(
-                session_id,
-                plugin_id,
-                config.model_dump(mode="json"),
-                payload.description,
-            )
-        else:
-            await plugin_manager.dao.update_job(
-                job_id, config.model_dump(mode="json"), payload.description
-            )
+    plugin_item = plugin_manager.dao.plugin_cache.get(plugin_id)
+    if not plugin_item:
+        raise HTTPException(status_code=404, detail=f"Plugin {plugin_id} not found")
+    package = plugin_item[1]
+    plugin = plugin_manager.get_plugin_instance(package)
+    if not plugin:
+        raise HTTPException(status_code=404, detail="Plugin not found")
 
-        return config
-    except HTTPException:
-        # Re-raise HTTP exceptions for FastAPI to handle properly
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update config: {str(e)}")
+    ctx = plugin_manager.create_ctx(user, package)
+    # validate before saving
+    config = plugin.config(ctx, payload.config, True)
+    if job_id == 0:
+        await plugin_manager.add_job(
+            session_id,
+            plugin_id,
+            config.model_dump(mode="json"),
+            payload.description,
+        )
+    else:
+        await plugin_manager.dao.update_job(
+            job_id, config.model_dump(mode="json"), payload.description
+        )
+
+    return config

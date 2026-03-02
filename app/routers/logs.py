@@ -26,18 +26,16 @@ def search_logs(
     - limit: max results (default 1000)
     - sort: sort order - "asc" (oldest first) or "desc" (newest first, default)
     """
-    try:
-        scheduler_job_id = PluginManager.get_job_scheduler_id(job_id)
-        result = log_service.search_logs(
-            job_id=scheduler_job_id,
-            search_text=search,
-            offset=offset,
-            limit=limit,
-            sort=sort,
-        )
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to search logs: {str(e)}")
+
+    scheduler_job_id = PluginManager.get_job_scheduler_id(job_id)
+    result = log_service.search_logs(
+        job_id=scheduler_job_id,
+        search_text=search,
+        offset=offset,
+        limit=limit,
+        sort=sort,
+    )
+    return result
 
 
 @router.get("/{job_id}/signals")
@@ -49,20 +47,16 @@ def search_logs_with_following(
     limit: int = 100,
     sort: str = "desc",
 ):
-    try:
-        scheduler_job_id = PluginManager.get_job_scheduler_id(job_id)
-        result = log_service.search_logs_with_following(
-            job_id=scheduler_job_id,
-            keyword=keyword,
-            n_following=n_following,
-            limit=limit,
-            sort=sort,
-        )
-        return result
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to search logs with following: {str(e)}"
-        )
+
+    scheduler_job_id = PluginManager.get_job_scheduler_id(job_id)
+    result = log_service.search_logs_with_following(
+        job_id=scheduler_job_id,
+        keyword=keyword,
+        n_following=n_following,
+        limit=limit,
+        sort=sort,
+    )
+    return result
 
 
 @router.post("/{job_id}/clear")

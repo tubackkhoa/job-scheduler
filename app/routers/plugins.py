@@ -47,18 +47,13 @@ async def create_plugin(
     }
     """
     # Load into manager
-    try:
-        plugin_id = await plugin_manager.add_plugin(
-            payload.package, payload.interval, payload.description
-        )
-        return {
-            "id": plugin_id,
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Failed to load plugin: {str(e)}",
-        )
+
+    plugin_id = await plugin_manager.add_plugin(
+        payload.package, payload.interval, payload.description
+    )
+    return {
+        "id": plugin_id,
+    }
 
 
 @router.delete("/{plugin_id}")
@@ -67,13 +62,9 @@ async def delete_plugin(plugin_manager: PluginManagerState, plugin_id: int):
     Delete a plugin from the database and unload it from memory.
     Also removes all associated jobs.
     """
-    try:
-        await plugin_manager.delete_plugin(plugin_id)
-        return {"success": True, "message": f"Plugin with id {plugin_id} deleted"}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to delete plugin: {str(e)}")
+
+    await plugin_manager.delete_plugin(plugin_id)
+    return {"success": True, "message": f"Plugin with id {plugin_id} deleted"}
 
 
 @router.get("/routes")
@@ -117,18 +108,16 @@ async def value_versions(
     limit: int = 100,
     offset: int = 0,
 ):
-    try:
-        ctx = plugin_manager.create_ctx(user)
-        result = await plugin_manager.dao.get_value_versions(
-            ctx,
-            f"{plugin_id or "*"}.{field_id}",
-            search,
-            limit=limit,
-            offset=offset,
-        )
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to list value versions: {str(e)}")
+
+    ctx = plugin_manager.create_ctx(user)
+    result = await plugin_manager.dao.get_value_versions(
+        ctx,
+        f"{plugin_id or "*"}.{field_id}",
+        search,
+        limit=limit,
+        offset=offset,
+    )
+    return result
 
 
 @router.get("/schema/{session_id}/{plugin_id}")
@@ -141,73 +130,59 @@ async def schema(
 
     plugin, package = get_plugin(plugin_manager, plugin_id)
 
-    try:
-        ctx = plugin_manager.create_ctx(user, package)
-        jobs = await plugin_manager.dao.get_jobs_by_plugin_and_session(
-            ctx, plugin_id, session_id, include_fields=[Job.id, Job.active, Job.description]
+    ctx = plugin_manager.create_ctx(user, package)
+    jobs = await plugin_manager.dao.get_jobs_by_plugin_and_session(
+        ctx, plugin_id, session_id, include_fields=[Job.id, Job.active, Job.description]
+    )
+
+    if len(jobs) == 0:
+        # add empty config so that when saving it will be new job
+        jobs.append(
+            Job(
+                active=False,
+                description="",
+                id=0,
+                config=plugin.config(ctx).model_dump(mode="json"),
+            )
         )
 
-        if len(jobs) == 0:
-            # add empty config so that when saving it will be new job
-            jobs.append(
-                Job(
-                    active=False,
-                    description="",
-                    id=0,
-                    config=plugin.config(ctx).model_dump(mode="json"),
-                )
-            )
-
-        # Built-in Jinja tags are provided by extensions
-        return {
-            "user": ctx.user,
-            "schema": plugin.schema(ctx),
-            "jobs": jobs,
-            "globals": Renderer.get_globals_doc(plugin.env()),
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load schema: {str(e)}")
+    # Built-in Jinja tags are provided by extensions
+    return {
+        "user": ctx.user,
+        "schema": plugin.schema(ctx),
+        "jobs": jobs,
+        "globals": Renderer.get_globals_doc(plugin.env()),
+    }
 
 
 @router.post("/reload/{package}")
 def reload_plugin(plugin_manager: PluginManagerState, package: str):
-    try:
-        plugin_manager.load_plugin(package, True)
-        return {"success": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to reload plugin: {str(e)}")
+
+    plugin_manager.load_plugin(package, True)
+    return {"success": True}
 
 
 @router.post("/download/{name}")
 def download_module(
     plugin_manager: PluginManagerState, name: str, payload: DownloadPayload = Body(...)
 ):
-    try:
-        version_or_vsi = payload.version
-        success = download_package(
-            scheduler_logger, plugin_manager.plugin_path, name, version_or_vsi
-        )
-        return {"success": success}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to download module: {str(e)}")
+
+    version_or_vsi = payload.version
+    success = download_package(scheduler_logger, plugin_manager.plugin_path, name, version_or_vsi)
+    return {"success": success}
 
 
 @router.put("/install/{package}")
 def install_module(plugin_manager: PluginManagerState, package: str):
-    try:
-        plugin = plugin_manager.get_plugin_instance(package)
-        assert plugin
-        return {"success": plugin.install()}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to install plugin: {str(e)}")
+
+    plugin = plugin_manager.get_plugin_instance(package)
+    assert plugin
+    return {"success": plugin.install()}
 
 
 @router.put("/uninstall/{package}")
 def uninstall_module(plugin_manager: PluginManagerState, package: str):
-    try:
-        plugin = plugin_manager.get_plugin_instance(package)
-        assert plugin
-        return {"success": plugin.uninstall()}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to uninstall plugin: {str(e)}")
+
+    plugin = plugin_manager.get_plugin_instance(package)
+    assert plugin
+    return {"success": plugin.uninstall()}
