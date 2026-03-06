@@ -1,5 +1,5 @@
 from typing import AsyncIterator
-from jinja2 import UndefinedError
+from jinja2 import TemplateError
 from app.deps import PluginManagerState
 from app.routers import (
     auth,
@@ -157,8 +157,8 @@ async def http_exception_handler(_: Request, exc: HTTPException):
     )
 
 
-@app.exception_handler(UndefinedError)
-async def undefined_handler(_: Request, exc: UndefinedError):
+@app.exception_handler(TemplateError)
+async def undefined_handler(_: Request, exc: TemplateError):
     return PlainTextResponse(
         status_code=400,
         content=str(exc),
