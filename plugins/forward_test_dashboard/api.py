@@ -48,7 +48,7 @@ async def get_running_models(**kwargs: Any) -> List[Dict[str, Any]]:
 
 
 async def fetch_positions(**kwargs: Any) -> List[Dict[str, Any]]:
-    data = _get(
+    data = await _get(
         f"{base_url}/api/test-system/models/positions",
         api_key,
         params=kwargs,
@@ -58,7 +58,7 @@ async def fetch_positions(**kwargs: Any) -> List[Dict[str, Any]]:
 
 
 async def fetch_stats_running_models(**kwargs: Any) -> List[Dict[str, Any]]:
-    data = _get(
+    data = await _get(
         f"{base_url}/api/test-system/models/stats",
         api_key,
         params=kwargs,
@@ -83,7 +83,7 @@ async def update_model_config(
     url = f"{base_url}/api/test-system/model/config"
     timeout = API_TIMEOUT_SHORT
     try:
-        with httpx.AsyncClient(timeout=timeout) as client:
+        async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.put(
                 url,
                 headers={
@@ -113,7 +113,7 @@ async def get_equity_curve_forward_test(
         params["startDate"] = start_time
     if end_time:
         params["endDate"] = end_time
-    data = _get(
+    data = await _get(
         f"{base_url}/api/test-system/models/{identity}/equity",
         api_key,
         params=params,
