@@ -277,9 +277,6 @@ class PluginManager:
         # user from login
         ctx = cls.create_ctx(user, package)
 
-        # do not validate because already save from db
-        config = plugin.config(ctx, job_config)
-
         job_scheduler_id = cls.get_job_scheduler_id(job_id)
 
         logger = logging.getLogger(job_scheduler_id)
@@ -291,6 +288,8 @@ class PluginManager:
 
         try:
             render_function = cls.make_render(plugin, ctx)
+            # do not validate because already save from db
+            config = plugin.config(ctx, job_config)
             retval = await plugin.run(ctx, config, logger, render_function)
             # logger.info(f"Job executed successfully (return value: {retval})")
             return retval
