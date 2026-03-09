@@ -271,14 +271,7 @@ class PluginManager:
         if plugin is None:
             return None
 
-        # only job is active can run
-        job_config = DAO.job_config_cache.get(job_id)
-
-        # user from login
-        ctx = cls.create_ctx(user, package)
-
         job_scheduler_id = cls.get_job_scheduler_id(job_id)
-
         logger = logging.getLogger(job_scheduler_id)
         # prevent log propagation to root logger
         logger.propagate = False
@@ -287,8 +280,11 @@ class PluginManager:
             logger.setLevel(logging.INFO)
 
         try:
+            # user from login
+            ctx = cls.create_ctx(user, package)
             render_function = cls.make_render(plugin, ctx)
             # do not validate because already save from db
+            job_config = DAO.job_config_cache.get(job_id)
             config = plugin.config(ctx, job_config)
             retval = await plugin.run(ctx, config, logger, render_function)
             # logger.info(f"Job executed successfully (return value: {retval})")
