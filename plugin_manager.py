@@ -261,7 +261,7 @@ class PluginManager:
         return render
 
     @classmethod
-    def run_plugin_job(cls, package: str, job_id: int, user: UserContext):
+    async def run_plugin_job(cls, package: str, job_id: int, user: UserContext):
         """
         Wrapper to run a plugin's 'run' method asynchronously,
         fetching config from the active job for the user/plugin.
@@ -291,7 +291,7 @@ class PluginManager:
 
         try:
             render_function = cls.make_render(plugin, ctx)
-            retval = asyncio.run(plugin.run(ctx, config, logger, render_function))
+            retval = await plugin.run(ctx, config, logger, render_function)
             # logger.info(f"Job executed successfully (return value: {retval})")
             return retval
         except Exception as e:

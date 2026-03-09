@@ -304,15 +304,16 @@ class Plugin:
         render: Callable[..., Awaitable[Any]],
     ):
 
-        version = await render(
-            "{{ dao.get_value_version(id).value }}",
-            {"id": config.sql_id},
-        )
+        # version = await render(
+        #     "{{ dao.get_value_version(id).value }}",
+        #     {"id": config.sql_id},
+        # )
 
-        print(version)
+        # print(version)
+        import asyncio
 
-        # for i in range(10):
-        #     logger.info(f"Running step {i}")
-        #     await asyncio.sleep(0.5)
+        for i in range(10):
+            print(f"Running step {i}")
+            await asyncio.sleep(0.5)
         # logger.info(config.model_dump())
         return True

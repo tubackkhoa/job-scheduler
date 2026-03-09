@@ -3,7 +3,7 @@ from pathlib import Path
 import orjson
 import pluggy
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
-from typing import Any, List, Optional, cast
+from typing import Any, Awaitable, Callable, List, Optional, cast
 import pandas as pd
 from schemas import settings
 from enforcer import ExecutionContext
@@ -210,6 +210,15 @@ class Plugin:
 
     @classmethod
     @hookimpl
-    async def run(cls, config: Config, logger: logging.Logger):
+    async def run(
+        cls,
+        ctx: ExecutionContext,
+        config: Config,
+        logger: logging.Logger,
+        render: Callable[..., Awaitable[Any]],
+    ):
         # do something at background
-        pass
+        print("I am backtesting")
+        import asyncio
+
+        await asyncio.sleep(10)
