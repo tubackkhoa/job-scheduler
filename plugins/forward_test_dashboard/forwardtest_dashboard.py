@@ -121,7 +121,7 @@ def fetch_performance_from_db(
                     "maxDrawdown": r.get("max_drawdown"),
                     "totalPositions": r.get("total_positions"),
                     "totalRunningTime": r.get("total_running_time"),
-                    "startedAt": r.get("started_at").strftime("%Y-%m-%d %H:%M:%S"),
+                    "startedAt": r["started_at"].strftime("%Y-%m-%d %H:%M:%S"),
                     "lastPosition": _parse_last_position(r.get("last_position")),
                 }
                 for r in records
