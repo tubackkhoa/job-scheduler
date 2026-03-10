@@ -71,7 +71,7 @@ async def test_scheduler_executes_jobs_concurrently():
     dao = DummyDAO()
     pm = PluginManager(dao)
 
-    PluginManager.manager.register(TestPlugin, "test_plugin.TestPlugin")
+    pm.manager.register(TestPlugin, "test_plugin.TestPlugin")
 
     for i in range(N_JOBS):
         pm.add_job_instance(i, False, 3, "test_plugin.TestPlugin")

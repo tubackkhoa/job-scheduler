@@ -43,7 +43,6 @@ from models import DAO
 from plugin_manager import PROJECT_NAME, PluginManager
 from renderer import Renderer
 from schemas import settings
-from utils.job import JobUtil
 from ws_manager import WSConnectionManager
 
 import uvloop
@@ -92,13 +91,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             db=settings.redis_db or 0,
             key=f"{PROJECT_NAME}:job_policy",
         )
-    # static enforcer
-    PluginManager.enforcer = create_enforcer(adapter)
+
     # prevent calling global registry in other plugin, so that we can mistake assign global permission for roles created by a plugin
-    job_util = JobUtil(dao)
     # this is for class binding, only know at instatiate time
     # bind_class_registry(dao, job_util)
-    GLOBAL_PERMISSION_REGISTRY.update({"dao": dao, "util": job_util})
+    GLOBAL_PERMISSION_REGISTRY.update({"dao": dao})
     freeze_permission_registry()
     # reload from global
     Renderer.update()
@@ -106,6 +103,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # create plugin_instance
     plugin_manager = PluginManager(
         dao,
+        enforcer=create_enforcer(adapter),
         log_handler=log_handler,
         module_paths=settings.module_path.split(":") if settings.module_path else None,
         plugin_path=settings.plugin_path,

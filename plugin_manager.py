@@ -1,4 +1,3 @@
-import asyncio
 import importlib
 import logging
 import sys
@@ -97,35 +96,10 @@ class PluginManager:
     Manages plugin loading/unloading, job scheduling, and execution
     """
 
-    # static cache of job configs, to remove access to database
-    # TODO: because schedule only make sure 1 job is added to queue, but can not verify job is done on a machine
-    # @classmethod
-    # def run_plugin_job(cls, job_id: int):
-    #     lock = cls.redis_client.lock(
-    #         f"lock:{PROJECT_NAME}:{job_id}",
-    #         timeout=plugin.interval * 2,
-    #         blocking=False,
-    #     )
-    #     if not lock.acquire():
-    #         return
-    #     try:
-    #         return asyncio.run(plugin.run(config, logger))
-    #     finally:
-    #         lock.release()
-
-    enforcer: Optional[Enforcer] = None
-
-    # static pluggy manager, so that all pluginmanager share the same plugins
-    manager = pluggy.PluginManager(PROJECT_NAME)
-    manager.add_hookspecs(PluginSpec)
-    hook = cast(PluginSpec, manager.hook)
-
-    routes_cache: dict[str, tuple[set[str], Optional[CodeSchema]]] = {}
-    _failed_plugins: dict[str, Exception] = {}
-
     def __init__(
         self,
         dao: DAO,
+        enforcer: Optional[Enforcer] = None,
         module_paths: Optional[list[str]] = None,
         plugin_path="plugins",
         log_handler: Optional[logging.Handler] = None,
@@ -142,6 +116,15 @@ class PluginManager:
         # Pass any additional user-provided args
         self.scheduler = AsyncIOScheduler(**(scheduler_kwargs or {}))
         self.log_handler = log_handler
+
+        self.enforcer = enforcer
+        # static pluggy manager, so that all pluginmanager share the same plugins
+        self.manager = pluggy.PluginManager(PROJECT_NAME)
+        self.manager.add_hookspecs(PluginSpec)
+        self.hook = cast(PluginSpec, self.manager.hook)
+
+        self.routes_cache: dict[str, tuple[set[str], Optional[CodeSchema]]] = {}
+        self._failed_plugins: dict[str, Exception] = {}
 
     # reload all jobs from database
     async def reload_all_jobs(self):
@@ -171,8 +154,8 @@ class PluginManager:
         if self.scheduler.running:
             self.scheduler.shutdown()
 
-    @classmethod
-    def _iter_plugin_permissions(cls, package: str, plugin_cls: PluginSpec):
+    @staticmethod
+    def _iter_plugin_permissions(package: str, plugin_cls: PluginSpec):
         mapping = plugin_cls.roles()
         if not isinstance(mapping, dict):
             return
@@ -183,13 +166,12 @@ class PluginManager:
                 if role != ADMIN_ROLE:
                     yield role, permission
 
-    @classmethod
-    def register_plugin_permissions(cls, package: str, plugin_cls: PluginSpec):
-        if not cls.enforcer:
+    def register_plugin_permissions(self, package: str, plugin_cls: PluginSpec):
+        if not self.enforcer:
             return
         try:
-            enforcer = cls.enforcer
-            for role, permission in cls._iter_plugin_permissions(package, plugin_cls):
+            enforcer = self.enforcer
+            for role, permission in self._iter_plugin_permissions(package, plugin_cls):
                 if not enforcer.has_policy(role, permission):
                     enforcer.add_policy(role, permission)
         except Exception:
@@ -198,13 +180,12 @@ class PluginManager:
                 extra={"package": package},
             )
 
-    @classmethod
-    def unregister_plugin_permissions(cls, package: str, plugin_cls: PluginSpec):
-        if not cls.enforcer:
+    def unregister_plugin_permissions(self, package: str, plugin_cls: PluginSpec):
+        if not self.enforcer:
             return
         try:
-            enforcer = cls.enforcer
-            for role, permission in cls._iter_plugin_permissions(package, plugin_cls):
+            enforcer = self.enforcer
+            for role, permission in self._iter_plugin_permissions(package, plugin_cls):
                 if enforcer.has_policy(role, permission):
                     enforcer.remove_policy(role, permission)
         except Exception:
@@ -231,21 +212,19 @@ class PluginManager:
         if root_module:
             importlib.reload(root_module)
 
-    @classmethod
-    def get_plugin_names(cls):
-        return [name for name, _ in cls.manager.list_name_plugin()]
+    def get_plugin_names(self):
+        return [name for name, _ in self.manager.list_name_plugin()]
 
-    @classmethod
-    def get_plugin_instance(cls, package: str) -> Optional[PluginSpec]:
-        if not cls.manager.has_plugin(package):
+    def get_plugin_instance(self, package: str) -> Optional[PluginSpec]:
+        if not self.manager.has_plugin(package):
             try:
                 scheduler_logger.info(f"Loading plugin: {package}")
-                return cls.load_plugin(package)
+                return self.load_plugin(package)
             except Exception as e:
                 scheduler_logger.exception(f"Error loading plugin: {e}")
                 return None
 
-        return cls.manager.get_plugin(package)
+        return self.manager.get_plugin(package)
 
     @staticmethod
     def make_render(plugin: PluginSpec, ctx: ExecutionContext) -> RenderFn:
@@ -260,35 +239,42 @@ class PluginManager:
 
         return render
 
+    # static cache of job configs, to remove access to database
+    # TODO: because schedule only make sure 1 job is added to queue, but can not verify job is done on a machine
+    # def run_plugin_job(self, job_id: int):
+    #     lock = self.redis_client.lock(
+    #         f"lock:{PROJECT_NAME}:{job_id}",
+    #         timeout=plugin.interval * 2,
+    #         blocking=False,
+    #     )
+    #     if not lock.acquire():
+    #         return
+    #     try:
+    #         return asyncio.run(plugin.run(config, logger))
+    #     finally:
+    #         lock.release()
+
     # pass reference to later retrieving back details
-    @classmethod
-    async def run_plugin_job(
-        cls, package: str, job_id: int, config_cache: dict[int, dict[str, Any] | None]
-    ):
+    async def run_plugin_job(self, package: str, job_id: int):
         """
         Wrapper to run a plugin's 'run' method asynchronously,
         fetching config from the active job for the user/plugin.
         """
-        plugin = cls.get_plugin_instance(package)
+        plugin = self.get_plugin_instance(package)
 
         if plugin is None:
             return None
 
-        job_scheduler_id = cls.get_job_scheduler_id(job_id)
-        logger = logging.getLogger(job_scheduler_id)
-        # prevent log propagation to root logger
-        logger.propagate = False
-        # Ensure logger level is set (default to INFO if not set)
-        if logger.level == logging.NOTSET:
-            logger.setLevel(logging.INFO)
+        # already setup
+        logger = logging.getLogger(self.get_job_scheduler_id(job_id))
 
         try:
             # user from login
             user = UserContext(0, frozenset({ADMIN_ROLE}))
-            ctx = cls.create_ctx(user, package)
-            render_function = cls.make_render(plugin, ctx)
+            ctx = self.create_ctx(user, package)
+            render_function = self.make_render(plugin, ctx)
             # do not validate because already save from db
-            job_config = config_cache.get(job_id)
+            job_config = self.dao.job_config_cache.get(job_id)
             config = plugin.config(ctx, job_config)
             retval = await plugin.run(ctx, config, logger, render_function)
             # logger.info(f"Job executed successfully (return value: {retval})")
@@ -296,46 +282,44 @@ class PluginManager:
         except Exception as e:
             logger.exception(f"Job failed with exception: {e}")
 
-    @classmethod
-    def unload_plugin(cls, package: str):
-        cls._failed_plugins.pop(package, None)
+    def unload_plugin(self, package: str):
+        self._failed_plugins.pop(package, None)
 
-        existing_plugin = cls.manager.get_plugin(package)
+        existing_plugin = self.manager.get_plugin(package)
         if existing_plugin:
             # clear data
-            cls.unregister_plugin_permissions(package, existing_plugin)
-            cls.routes_cache.pop(package, None)
-            cls.manager.unregister(existing_plugin, package)
+            self.unregister_plugin_permissions(package, existing_plugin)
+            self.routes_cache.pop(package, None)
+            self.manager.unregister(existing_plugin, package)
 
-    @classmethod
-    def create_ctx(cls, user: UserContext, package: Optional[str] = None):
-        return ExecutionContext(user, package, cls.enforcer.enforce if cls.enforcer else None)
+    def create_ctx(self, user: UserContext, package: Optional[str] = None):
+        return ExecutionContext(user, package, self.enforcer.enforce if self.enforcer else None)
 
-    @classmethod
-    def load_plugin(cls, package: str, override: bool = False):
+    def load_plugin(self, package: str, override: bool = False):
 
         module_path, _, class_name = package.rpartition(".")
 
         if override:
-            cls.unload_plugin(package)
-            cls.reload_module(module_path)
+            self.unload_plugin(package)
+            self.reload_module(module_path)
 
         # 🚫 Fast-fail if previously broken, when override it will reset fail plugin
-        elif package in cls._failed_plugins:
-            raise cls._failed_plugins[package]
+        elif package in self._failed_plugins:
+            raise self._failed_plugins[package]
 
-        plugin: PluginSpec | None = cls.manager.get_plugin(package)
+        plugin: PluginSpec | None = self.manager.get_plugin(package)
         if plugin is not None:
             return plugin
 
         try:
             module = importlib.import_module(module_path)
-            plugin = getattr(module, class_name)
-            assert plugin
+            plugin = getattr(module, class_name, None)
+            if plugin is None:
+                raise RuntimeError(f"Plugin class '{class_name}' not found in '{module_path}'")
             if module.__file__:
                 plugin.dir = Path(module.__file__).resolve().parent
-            cls.manager.register(plugin, package)
-            cls.register_plugin_permissions(package, plugin)
+            self.manager.register(plugin, package)
+            self.register_plugin_permissions(package, plugin)
 
             # update routes cache
             routes: set[str] = set()
@@ -347,13 +331,13 @@ class PluginManager:
                     else:
                         routes.add(key)
 
-            cls.routes_cache[package] = (routes, portal_code)
+            self.routes_cache[package] = (routes, portal_code)
 
             return plugin
 
         except Exception as e:
             err = RuntimeError(f"Failed to load plugin '{package}': {e}")
-            cls._failed_plugins[package] = err
+            self._failed_plugins[package] = err
             # show error to terminal to check but keep running
             scheduler_logger.exception(err)
             # Raise exception to prevent saving invalid plugin to database
@@ -410,7 +394,6 @@ class PluginManager:
             args=[
                 package,
                 job_id,
-                self.dao.job_config_cache,
             ],
             next_run_time=undefined if active else None,
             id=job_scheduler_id,
@@ -430,16 +413,6 @@ class PluginManager:
             # remove all handlers for this logger to save memory
             logger = logging.getLogger(job_scheduler_id)
             logger.handlers.clear()
-
-    def remove_jobs(self, job_ids: list[int]):
-        """Batch remove multiple jobs from database and scheduler."""
-        if not job_ids:
-            return
-        # Remove jobs from scheduler
-        for job_id in job_ids:
-            job_scheduler_id = self.get_job_scheduler_id(job_id)
-            if self.scheduler.get_job(job_scheduler_id) is not None:
-                self.scheduler.remove_job(job_scheduler_id)
 
     async def activate_job(self, job_id: int):
         if not await self.dao.activate_job(job_id):

@@ -19,9 +19,6 @@ logger = logging.getLogger(__name__)
 
 class TestPluginManager(IsolatedAsyncioTestCase):
     def setUp(self):
-        # Clear registered plugins before each test
-        for name, plugin in list(PluginManager.manager.list_name_plugin()):
-            PluginManager.manager.unregister(plugin, name)
 
         self.db_url = "sqlite+aiosqlite:///:memory:"
 
@@ -77,14 +74,14 @@ class TestPluginManager(IsolatedAsyncioTestCase):
         mock_import_module.return_value = module_mock
 
         package = "some.module.DummyPlugin"
-        plugin = PluginManager.load_plugin(package, override=False)
+        plugin = self.pm.load_plugin(package, override=False)
         self.assertEqual(plugin, DummyPlugin)
 
     @patch("plugin_manager.importlib.import_module", side_effect=ImportError("fail"))
     def test_load_plugin_fail(self, mock_import_module):
         package = "bad.module.Plugin"
         with self.assertRaises(RuntimeError):
-            PluginManager.load_plugin(package, override=False)
+            self.pm.load_plugin(package, override=False)
 
     @patch("plugin_manager.PluginManager.get_plugin_instance")
     async def test_run_plugin_job_success(self, mock_get_plugin):
@@ -102,12 +99,12 @@ class TestPluginManager(IsolatedAsyncioTestCase):
         dummy_plugin = DummyPlugin()
         mock_get_plugin.return_value = dummy_plugin
 
-        result = await PluginManager.run_plugin_job("some.plugin", 1, self.pm.dao.job_config_cache)
+        result = await self.pm.run_plugin_job("some.plugin", 1)
         self.assertEqual(result, "success")
 
     @patch("plugin_manager.PluginManager.get_plugin_instance", return_value=None)
     async def test_run_plugin_job_no_plugin(self, mock_get_plugin):
-        result = await PluginManager.run_plugin_job("no.plugin", 1, self.pm.dao.job_config_cache)
+        result = await self.pm.run_plugin_job("no.plugin", 1)
         self.assertIsNone(result)
 
     def test_get_plugin_names(self):
@@ -115,7 +112,7 @@ class TestPluginManager(IsolatedAsyncioTestCase):
         pm = self.pm
         pm.manager.register(object(), "pkg1")
         pm.manager.register(object(), "pkg2")
-        names = PluginManager.get_plugin_names()
+        names = self.pm.get_plugin_names()
         self.assertIn("pkg1", names)
         self.assertIn("pkg2", names)
 
@@ -123,9 +120,9 @@ class TestPluginManager(IsolatedAsyncioTestCase):
         pm = self.pm
         dummy_plugin = object()
         pm.manager.register(dummy_plugin, "pkg1")
-        self.assertIn("pkg1", PluginManager.get_plugin_names())
-        PluginManager.unload_plugin("pkg1")
-        self.assertNotIn("pkg1", PluginManager.get_plugin_names())
+        self.assertIn("pkg1", self.pm.get_plugin_names())
+        self.pm.unload_plugin("pkg1")
+        self.assertNotIn("pkg1", self.pm.get_plugin_names())
 
     # Add more tests for add_job_instance, reload_all_jobs, activate_job, deactivate_job, etc.
     # These require more setup with database mocking or actual test DB.

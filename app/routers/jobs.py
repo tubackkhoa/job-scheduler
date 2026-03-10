@@ -6,6 +6,21 @@ from schemas import ConfigPayload
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
+@router.get("/{job_id}/config")
+async def get_config(plugin_manager: PluginManagerState, user: UserState, job_id: int):
+    ctx = plugin_manager.create_ctx(user)
+    job_item = await plugin_manager.dao.get_job(job_id)
+    if not job_item:
+        return {}
+    plugin_item = plugin_manager.dao.plugin_cache.get(job_item.plugin_id)
+    if not plugin_item:
+        return {}
+    plugin = plugin_manager.get_plugin_instance(plugin_item[1])
+    if not plugin:
+        return {}
+    return plugin.config(ctx, job_item.config).model_dump(mode="json")
+
+
 @router.post("/{job_id}/activate")
 async def activate_job(plugin_manager: PluginManagerState, user: UserState, job_id: int):
 
