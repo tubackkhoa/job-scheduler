@@ -156,7 +156,8 @@ async def http_exception_handler(_: Request, exc: HTTPException):
 
 
 @app.exception_handler(TemplateError)
-async def undefined_handler(_: Request, exc: TemplateError):
+@app.exception_handler(RuntimeError)
+async def undefined_handler(_: Request, exc: Exception):
     return PlainTextResponse(
         status_code=400,
         content=str(exc),
