@@ -351,34 +351,6 @@ def build_signal_comparison_from_db(
     return pivot
 
 
-def build_stats_table_from_db(
-    stats: List[Dict[str, Any]],
-    jobs: Optional[List[Dict[str, Any]]] = None,
-) -> tuple[pd.DataFrame, dict]:
-    """
-    Build stats table from forward_test_performance database records.
-
-    This is a drop-in replacement for build_stats_table().
-    Uses the same output format.
-
-    Usage in Jinja2 (replaces old template):
-        Old: {% set stats = fetch_stats_running_models(webhook_url, webhook_api_key) %}
-             {% set df, summary = build_stats_table(stats, job_list) %}
-        New: {% set stats = fetch_performance_from_db() %}
-             {% set df, summary = build_stats_table_from_db(stats, job_list) %}
-
-    Args:
-        stats: List of performance records from fetch_performance_from_db()
-        jobs: Optional list of jobs for status mapping
-
-    Returns:
-        Tuple of (DataFrame with stats, summary dict)
-    """
-    # This function now works with the transformed records from fetch_performance_from_db
-    # which matches the API format, so we can reuse build_stats_table directly
-    return build_stats_table(stats, jobs or [])
-
-
 def get_models_from_db(
     status_filter: Optional[str] = "running",
 ) -> List[Dict[str, Any]]:
@@ -427,27 +399,6 @@ def get_models_from_db(
 
 
 # ============================================================================
-# Legacy functions (kept for backward compatibility)
-# ============================================================================
-
-
-async def fetch_signal_messages(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """
-    Legacy function: Fetch signal messages from DAO (log-based).
-    Kept for backward compatibility.
-    """
-    dao = GLOBAL_PERMISSION_REGISTRY.get("dao")
-    if not dao:
-        return []
-
-    model_keys = [m.get("identity") for m in models if m.get("identity")]
-    if not model_keys:
-        return []
-
-    return await dao.get_signal_messages_by_keys(model_keys, limit=1000)
-
-
-# ============================================================================
 # Plugin Class
 # ============================================================================
 
@@ -468,7 +419,6 @@ class ForwardTestDashboardPlugin:
         "fetch_signals_from_db": fetch_signals_from_db,
         "fetch_performance_from_db": fetch_performance_from_db,
         "build_signal_comparison_from_db": build_signal_comparison_from_db,
-        "build_stats_table_from_db": build_stats_table_from_db,
         "get_models_from_db": get_models_from_db,
         # Legacy functions (backward compatibility)
         "get_running_models": get_running_models,
@@ -476,7 +426,6 @@ class ForwardTestDashboardPlugin:
         # "build_pnl_table": build_pnl_table,
         # "build_stats_table": build_stats_table,
         # "build_signal_comparison": build_signal_comparison,
-        "fetch_signal_messages": fetch_signal_messages,
         "update_model_config": update_model_config,
         "register_model_config": register_model_config,
         "get_running_models": get_running_models,
