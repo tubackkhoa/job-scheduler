@@ -260,8 +260,11 @@ class PluginManager:
 
         return render
 
+    # pass reference to later retrieving back details
     @classmethod
-    async def run_plugin_job(cls, package: str, job_id: int, user: UserContext):
+    async def run_plugin_job(
+        cls, package: str, job_id: int, config_cache: dict[int, dict[str, Any]]
+    ):
         """
         Wrapper to run a plugin's 'run' method asynchronously,
         fetching config from the active job for the user/plugin.
@@ -281,10 +284,11 @@ class PluginManager:
 
         try:
             # user from login
+            user = UserContext(0, frozenset({ADMIN_ROLE}))
             ctx = cls.create_ctx(user, package)
             render_function = cls.make_render(plugin, ctx)
             # do not validate because already save from db
-            job_config = DAO.job_config_cache.get(job_id)
+            job_config = config_cache.get(job_id)
             config = plugin.config(ctx, job_config)
             retval = await plugin.run(ctx, config, logger, render_function)
             # logger.info(f"Job executed successfully (return value: {retval})")
@@ -403,7 +407,11 @@ class PluginManager:
             "interval",
             seconds=interval,
             # TODO: get user_id, and roles from database, the user of course owning the job
-            args=[package, job_id, UserContext(0, frozenset({ADMIN_ROLE}))],
+            args=[
+                package,
+                job_id,
+                self.dao.job_config_cache,
+            ],
             next_run_time=undefined if active else None,
             id=job_scheduler_id,
             name=job_scheduler_id,
