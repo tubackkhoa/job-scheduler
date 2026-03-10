@@ -1,3 +1,4 @@
+from unittest import IsolatedAsyncioTestCase
 import unittest
 from unittest.mock import patch, MagicMock
 from sqlalchemy.ext.asyncio import (
@@ -8,9 +9,7 @@ from sqlalchemy.ext.asyncio import (
 import logging
 
 # Import the PluginManager and extract_package_files
-from auth import UserContext
-from enforcer import ADMIN_ROLE
-from models import DAO, User
+from models import DAO
 from package_downloader import download_package, extract_package_files
 from plugin_manager import PluginManager
 
@@ -18,7 +17,7 @@ from plugin_manager import PluginManager
 logger = logging.getLogger(__name__)
 
 
-class TestPluginManager(unittest.TestCase):
+class TestPluginManager(IsolatedAsyncioTestCase):
     def setUp(self):
         # Clear registered plugins before each test
         for name, plugin in list(PluginManager.manager.list_name_plugin()):
@@ -39,8 +38,6 @@ class TestPluginManager(unittest.TestCase):
             module_paths=["tests.plugins"],
             plugin_path="plugins",
         )
-
-        self.admin = UserContext(0, frozenset({ADMIN_ROLE}))
 
     @patch("package_downloader.subprocess.run")
     @patch("package_downloader.extract_package_files")
@@ -76,6 +73,7 @@ class TestPluginManager(unittest.TestCase):
 
         module_mock = MagicMock()
         module_mock.DummyPlugin = DummyPlugin
+        module_mock.__file__ = "/tmp/dummy_plugin.py"
         mock_import_module.return_value = module_mock
 
         package = "some.module.DummyPlugin"
@@ -88,9 +86,8 @@ class TestPluginManager(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             PluginManager.load_plugin(package, override=False)
 
-    @patch("models.DAO.job_config_cache", {1: '{"key":"value"}'})
     @patch("plugin_manager.PluginManager.get_plugin_instance")
-    def test_run_plugin_job_success(self, mock_get_plugin):
+    async def test_run_plugin_job_success(self, mock_get_plugin):
         class DummyPlugin:
             def config(self, ctx, json):
                 self.config_obj = json
@@ -105,12 +102,12 @@ class TestPluginManager(unittest.TestCase):
         dummy_plugin = DummyPlugin()
         mock_get_plugin.return_value = dummy_plugin
 
-        result = PluginManager.run_plugin_job("some.plugin", 1, self.admin)
+        result = await PluginManager.run_plugin_job("some.plugin", 1, self.pm.dao.job_config_cache)
         self.assertEqual(result, "success")
 
     @patch("plugin_manager.PluginManager.get_plugin_instance", return_value=None)
-    def test_run_plugin_job_no_plugin(self, mock_get_plugin):
-        result = PluginManager.run_plugin_job("no.plugin", 1, self.admin)
+    async def test_run_plugin_job_no_plugin(self, mock_get_plugin):
+        result = await PluginManager.run_plugin_job("no.plugin", 1, self.pm.dao.job_config_cache)
         self.assertIsNone(result)
 
     def test_get_plugin_names(self):

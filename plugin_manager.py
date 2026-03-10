@@ -263,7 +263,7 @@ class PluginManager:
     # pass reference to later retrieving back details
     @classmethod
     async def run_plugin_job(
-        cls, package: str, job_id: int, config_cache: dict[int, dict[str, Any]]
+        cls, package: str, job_id: int, config_cache: dict[int, dict[str, Any] | None]
     ):
         """
         Wrapper to run a plugin's 'run' method asynchronously,

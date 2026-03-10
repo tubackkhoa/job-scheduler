@@ -12,12 +12,12 @@ timestamps = []
 
 
 class DummyDAO(DAO):
-    plugin_cache = {1: (3, "test_plugin.TestPlugin", None)}
-    job_config_cache = {1: {"key": "value"}}
 
     def __init__(self):
         mock_session_factory = MagicMock()
         super().__init__(mock_session_factory)
+        self.job_config_cache = {1: {"key": "value"}}
+        self.plugin_cache = {1: (3, "test_plugin.TestPlugin", None)}
 
     async def activate_job(self, job_id):
         return True

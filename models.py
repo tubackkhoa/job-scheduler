@@ -158,12 +158,12 @@ class SignalMessage(Base):
 
 
 class DAO:
-    plugin_cache: Dict[int, tuple[int, str, Optional[str]]] = {}
-    job_config_cache: Dict[int, Dict[str, Any] | None] = {}
-    user_cache: Dict[int, tuple[list[str], str]] = {}
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
         self.session_factory = session_factory
+        self.plugin_cache: Dict[int, tuple[int, str, Optional[str]]] = {}
+        self.job_config_cache: Dict[int, Dict[str, Any] | None] = {}
+        self.user_cache: Dict[int, tuple[list[str], str]] = {}
 
     # ---------- plugins ----------
 
