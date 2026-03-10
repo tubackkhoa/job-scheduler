@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Body, HTTPException
 
 from app.deps import PluginManagerState, UserState
+from app.routers.plugins import get_plugin
 from schemas import ConfigPayload
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -12,12 +13,8 @@ async def get_config(plugin_manager: PluginManagerState, user: UserState, job_id
     job_item = await plugin_manager.dao.get_job(job_id)
     if not job_item:
         return {}
-    plugin_item = plugin_manager.dao.plugin_cache.get(job_item.plugin_id)
-    if not plugin_item:
-        return {}
-    plugin = plugin_manager.get_plugin_instance(plugin_item[1])
-    if not plugin:
-        return {}
+
+    plugin, _ = get_plugin(plugin_manager, job_item.plugin_id)
     return plugin.config(ctx, job_item.config).model_dump(mode="json")
 
 
@@ -42,7 +39,6 @@ async def deactivate_job(plugin_manager: PluginManagerState, user: UserState, jo
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
     await plugin_manager.deactivate_job(job_id)
-
     ctx = plugin_manager.create_ctx(user)
 
     plugin_manager.hook.on_deactive_job(ctx=ctx, json=job_item.config)
@@ -78,13 +74,7 @@ async def update_job_config(
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
         plugin_id = job_item.plugin_id
 
-    plugin_item = plugin_manager.dao.plugin_cache.get(plugin_id)
-    if not plugin_item:
-        raise HTTPException(status_code=404, detail=f"Plugin {plugin_id} not found")
-    package = plugin_item[1]
-    plugin = plugin_manager.get_plugin_instance(package)
-    if not plugin:
-        raise HTTPException(status_code=404, detail="Plugin not found")
+    plugin, package = get_plugin(plugin_manager, job_item.plugin_id)
 
     ctx = plugin_manager.create_ctx(user, package)
     # validate before saving
