@@ -513,7 +513,8 @@ class ForwardTestDashboardPlugin:
         json: Optional[dict[str, Any]] = None,
         validate: Optional[bool] = False,
     ):
-        return Config.model_validate(json or {})
+        data = json or {}
+        return Config.model_validate(data) if validate else Config.model_construct(**data)
 
     @hookimpl
     @classmethod

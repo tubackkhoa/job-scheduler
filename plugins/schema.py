@@ -193,25 +193,27 @@ class SecureBaseModel(BaseModel):
         cls,
         ctx: ExecutionContext,
         obj: Any,
-        valiate: Optional[bool] = False,
+        validate: Optional[bool] = False,
         **kwargs,
     ):
+        data = obj if isinstance(obj, dict) else {}
         # do checking
-        if valiate and not ctx.is_admin():
+        if validate:
             # Enforce write permissions
-            if isinstance(obj, dict):
+            if not ctx.is_admin():
+                for name in data.keys() & cls.model_fields.keys():
+                    field = cls.model_fields[name]
+                    extra = field.json_schema_extra
+                    if not extra:
+                        continue
+                    perm_key = extra.get("write")
+                    if perm_key:
+                        ctx.require(f"{ctx.package}:{perm_key}")
 
-                for name, field in cls.model_fields.items():
-                    if name in obj:
-                        extra = field.json_schema_extra
-                        if not extra:
-                            continue
-                        perm_key = extra.get("write")
-                        if perm_key:
-                            ctx.require(f"{ctx.package}:{perm_key}")
-
-        # Delegate to Pydantic
-        instance = super().model_validate(obj, **kwargs)
+            # Delegate to Pydantic
+            instance = super().model_validate(obj, **kwargs)
+        else:
+            instance = super().model_construct(**data)
 
         # Attach ctx (instance-scoped)
         object.__setattr__(instance, "_ctx", ctx)
