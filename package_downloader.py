@@ -6,7 +6,6 @@ import subprocess
 import glob
 import tarfile
 import zipfile
-from typing import Iterable
 
 
 # ------------------------------------------------------------
