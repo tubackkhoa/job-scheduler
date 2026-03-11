@@ -210,10 +210,8 @@ class SecureBaseModel(BaseModel):
                     if perm_key:
                         ctx.require(f"{ctx.package}:{perm_key}")
 
-            # Delegate to Pydantic
-            instance = super().model_validate(obj, **kwargs)
-        else:
-            instance = super().model_construct(**data)
+        # Delegate to Pydantic
+        instance = super().model_validate(data, **kwargs, context={"validate": validate})
 
         # Attach ctx (instance-scoped)
         object.__setattr__(instance, "_ctx", ctx)

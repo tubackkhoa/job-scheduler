@@ -89,8 +89,7 @@ class Plugin:
         json: Optional[dict[str, Any]] = None,
         validate: Optional[bool] = False,
     ):
-        data = json or {}
-        return Config.model_validate(data) if validate else Config.model_construct(**data)
+        return Config.model_validate(json or {}, context={"validate": validate})
 
     @classmethod
     @hookimpl
