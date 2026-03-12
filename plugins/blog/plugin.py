@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from plugins.blog.dao import create_post, get_post, delete_post, get_posts, update_post
 from plugins.schema import ui_schema
 from schemas import settings
+from .models import init_db
 
 hookimpl = pluggy.HookimplMarker("job-scheduler")
 
@@ -79,7 +80,8 @@ class Plugin:
 
     @classmethod
     @hookimpl
-    def install(cls) -> bool:
+    async def install(cls) -> bool:
+        await init_db()
         return True
 
     @classmethod

@@ -15,7 +15,7 @@ from enforcer import (
     ADMIN_ROLE,
     ExecutionContext,
 )
-from models import DAO
+from dao import DAO
 from plugins import CodeSchema
 from renderer import Renderer
 

@@ -39,7 +39,7 @@ from enforcer import (
 )
 from log_handler import JobLogHandler
 from log_service import LogService
-from models import DAO
+from dao import DAO
 from plugin_manager import PROJECT_NAME, PluginManager
 from renderer import Renderer
 from schemas import settings

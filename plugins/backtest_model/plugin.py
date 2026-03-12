@@ -15,8 +15,8 @@ from plugins import ui_schema, CodeSchema
 # Pluggy setup
 # --------------------------------------------------
 
-PROJECT_NAME = "job-scheduler"
-hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
+
+hookimpl = pluggy.HookimplMarker("job-scheduler")
 
 # --------------------------------------------------
 # Fixed prices (mock market)

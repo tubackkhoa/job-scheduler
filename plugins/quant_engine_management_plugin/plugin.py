@@ -15,9 +15,8 @@ from .api import (
 
 from schemas import settings
 
-PROJECT_NAME = "job-scheduler"
 
-hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
+hookimpl = pluggy.HookimplMarker("job-scheduler")
 
 
 def ui_schema_crud(

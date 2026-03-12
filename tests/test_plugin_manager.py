@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import (
 import logging
 
 # Import the PluginManager and extract_package_files
-from models import DAO
+from dao import DAO
 from package_downloader import download_package, extract_package_files
 from plugin_manager import PluginManager
 

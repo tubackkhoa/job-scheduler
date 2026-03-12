@@ -2,9 +2,8 @@ import importlib
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from models import Base, Plugin, Job
-from plugin_manager import PluginManager
 from auth import UserContext
-from enforcer import ADMIN_ROLE
+from enforcer import ADMIN_ROLE, ExecutionContext
 from plugin_manager import PluginSpec
 
 PLUGIN_DATA = [
@@ -47,7 +46,7 @@ async def create_data(
                 module = importlib.import_module(module_path)
                 plugin_class: PluginSpec = getattr(module, class_name)
 
-                ctx = PluginManager.create_ctx(UserContext(0, frozenset({ADMIN_ROLE})))
+                ctx = ExecutionContext(UserContext(0, frozenset({ADMIN_ROLE})))
 
                 default_config = plugin_class.config(ctx)
 

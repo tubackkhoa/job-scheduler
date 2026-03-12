@@ -391,8 +391,7 @@ plugins/
 import pluggy
 from enforcer import ExecutionContext
 
-PROJECT_NAME = "job-scheduler"
-hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
+hookimpl = pluggy.HookimplMarker("job-scheduler")
 
 class Plugin:
     @classmethod

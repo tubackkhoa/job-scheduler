@@ -402,8 +402,7 @@ def get_models_from_db(
 # Plugin Class
 # ============================================================================
 
-PROJECT_NAME = "alpha-miner"
-hookimpl = pluggy.HookimplMarker(PROJECT_NAME)
+hookimpl = pluggy.HookimplMarker("job-scheduler")
 
 
 class ForwardTestDashboardPlugin:

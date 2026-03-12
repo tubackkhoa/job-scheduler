@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 from typing import Any, Callable, Optional
 from log_service import LogService
-from models import DAO
+from dao import DAO
 from helpers import extract_job_id_int
 
 

@@ -173,16 +173,14 @@ def download_module(
 
 
 @router.put("/install/{package}")
-def install_module(plugin_manager: PluginManagerState, package: str):
-
+async def install_module(plugin_manager: PluginManagerState, package: str):
     plugin = plugin_manager.get_plugin_instance(package)
     assert plugin
-    return {"success": plugin.install()}
+    return {"success": await plugin.install()}
 
 
 @router.put("/uninstall/{package}")
-def uninstall_module(plugin_manager: PluginManagerState, package: str):
-
+async def uninstall_module(plugin_manager: PluginManagerState, package: str):
     plugin = plugin_manager.get_plugin_instance(package)
     assert plugin
-    return {"success": plugin.uninstall()}
+    return {"success": await plugin.uninstall()}

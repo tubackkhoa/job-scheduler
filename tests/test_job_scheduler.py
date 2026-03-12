@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from models import DAO
+from dao import DAO
 from plugin_manager import PluginManager
 
 N_JOBS = 100
