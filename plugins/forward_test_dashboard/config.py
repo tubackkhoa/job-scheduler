@@ -36,7 +36,7 @@ class Config(BaseModel):
                 "ui:field": "Template",
                 "type": "markdown",
                 "url": (
-                    "PnlPreview.tsx"
+                    "forwardtest/PnlPreview.tsx"
                     if settings.env == "dev"
                     else "{base_url}/assets/{package}/pnl_preview.js"
                 ),
