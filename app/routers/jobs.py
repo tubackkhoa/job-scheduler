@@ -87,10 +87,10 @@ async def update_job_config(
             payload.description,
         )
     else:
-        re_scheduled = await plugin_manager.dao.update_job(
+        rescheduled = await plugin_manager.dao.update_job(
             job_id, config.model_dump(mode="json"), payload.description, payload.cron_expr
         )
-        if re_scheduled:
+        if rescheduled:
             await plugin_manager.reschedule_job(job_id, payload.cron_expr)
 
     return config

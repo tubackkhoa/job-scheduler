@@ -108,7 +108,7 @@ class DAO:
         description: Optional[str] = None,
         cron_expr: Optional[str] = None,
     ):
-        re_scheduled = False
+        rescheduled = False
         async with self.session_factory() as session:
             job = await session.get(Job, job_id)
             if not job:
@@ -120,14 +120,14 @@ class DAO:
             if cron_expr:
                 if job.cron_expr != cron_expr:
                     job.cron_expr = cron_expr
-                    re_scheduled = True
+                    rescheduled = True
 
             await session.commit()
 
             if job.active:
                 self.job_config_cache[job.id] = config
 
-        return re_scheduled
+        return rescheduled
 
     async def remove_job(self, job_id: int):
         async with self.session_factory() as session:
