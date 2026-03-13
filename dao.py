@@ -1,6 +1,5 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Iterable
-
 from sqlalchemy import (
     delete,
     or_,
@@ -22,26 +21,23 @@ class DAO:
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
         self.session_factory = session_factory
-        self.plugin_cache: Dict[int, tuple[int, str, Optional[str]]] = {}
+        self.plugin_cache: Dict[int, tuple[str, Optional[str]]] = {}
         self.job_config_cache: Dict[int, Dict[str, Any] | None] = {}
         self.user_cache: Dict[int, tuple[list[str], str]] = {}
 
     # ---------- plugins ----------
 
-    async def add_plugin(
-        self, package: str, interval: int, description: Optional[str] = None
-    ) -> int:
+    async def add_plugin(self, package: str, description: Optional[str] = None) -> int:
         async with self.session_factory() as session:
             plugin = Plugin(
                 package=package,
-                interval=interval,
                 description=description,
             )
             session.add(plugin)
             await session.flush()
             await session.commit()
             # add cache for plugin
-            self.plugin_cache[plugin.id] = (interval, package, description)
+            self.plugin_cache[plugin.id] = (package, description)
             return plugin.id
 
     async def get_plugin(self, plugin_id: int) -> Optional[Plugin]:
@@ -90,6 +86,7 @@ class DAO:
         plugin_id: int,
         config: Dict[str, Any],
         description: Optional[str] = None,
+        cron_expr: str = "*/5 * * * *",
     ) -> int:
         async with self.session_factory() as session:
             job = Job(
@@ -98,14 +95,20 @@ class DAO:
                 config=config,
                 active=False,
                 description=description,
+                cron_expr=cron_expr,
             )
             session.add(job)
             await session.commit()
             return job.id
 
     async def update_job(
-        self, job_id: int, config: Dict[str, Any], description: Optional[str] = None
+        self,
+        job_id: int,
+        config: Dict[str, Any],
+        description: Optional[str] = None,
+        cron_expr: Optional[str] = None,
     ):
+        re_scheduled = False
         async with self.session_factory() as session:
             job = await session.get(Job, job_id)
             if not job:
@@ -114,10 +117,17 @@ class DAO:
             job.config = config
             if description:
                 job.description = description
+            if cron_expr:
+                if job.cron_expr != cron_expr:
+                    job.cron_expr = cron_expr
+                    re_scheduled = True
+
             await session.commit()
 
             if job.active:
                 self.job_config_cache[job.id] = config
+
+        return re_scheduled
 
     async def remove_job(self, job_id: int):
         async with self.session_factory() as session:
@@ -250,7 +260,7 @@ class DAO:
             plugins = result.scalars().all()
             # cache plugin info
             for plugin in plugins:
-                self.plugin_cache[plugin.id] = (plugin.interval, plugin.package, plugin.description)
+                self.plugin_cache[plugin.id] = (plugin.package, plugin.description)
 
             return plugins
 

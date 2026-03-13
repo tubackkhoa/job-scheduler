@@ -11,9 +11,9 @@ This project is a **plugin‑based job scheduler** with:
 
 Conceptually:
 
-- The **`plugins` table** defines _what_ can run (Python plugin classes and their base interval).
+- The **`plugins` table** defines _what_ can run (Python plugin classes and their base code).
 - The **`jobs` table** defines _how_ each user runs a plugin (per‑user configs, one active at a time per (user, plugin)).
-- **APScheduler** drives execution on an interval, and logs are streamed to the browser over **WebSockets**.
+- **APScheduler** drives execution on an cron expr, and logs are streamed to the browser over **WebSockets**.
 
 For a deeper dive on authoring plugins, see **[Plugin Development](./PLUGIN_DEVELOPMENT.md)**.
 
@@ -51,8 +51,8 @@ For full details, see **[Authorization](./AUTHORIZATION.md)**, which covers:
     - `GET /ws/logs/{plugin_id}/{session_id}` – WebSocket streaming of job logs.
   - `plugin_manager.py` – loads plugins from the DB, manages pluggy registration, sets up APScheduler jobs, activates/deactivates jobs, and forwards scheduler events to the logging system.
   - `models.py` – SQLAlchemy models:
-    - `Plugin(id, package, interval, description)`
-    - `Job(id, session_id, plugin_id, config, description, active)`
+    - `Plugin(id, package, description)`
+    - `Job(id, session_id, plugin_id, config, description, active, cron_expr)`
   - `ws_manager.py` – manages WebSocket connections keyed by `"{plugin_id}/{session_id}"` and broadcasts logs.
   - `scripts/database.sql` – raw schema for the `plugins` and `jobs` tables.
 
@@ -192,7 +192,6 @@ At a high level:
    - a `Plugin` class with `@hookimpl`‑decorated `schema`, `config`, and async `run` methods.
 3. **Register the plugin** in the `plugins` table with:
    - `package` = the full import path to your `Plugin` class (for example, `plugins.my_plugin@v0_1_0.plugin.Plugin`),
-   - `interval` = how often to run in seconds,
    - `description` = human‑readable description.
 4. **Restart or reload**:
    - restart the backend, or

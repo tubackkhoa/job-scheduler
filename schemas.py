@@ -9,11 +9,11 @@ load_dotenv()
 
 
 class ConfigPayload(BaseModel):
-    plugin_id: Optional[int] = Field(None, alias="pluginId")
-    session_id: Optional[int] = Field(None, alias="sessionId")
+    plugin_id: Optional[int] = Field(None)
+    session_id: Optional[int] = Field(None)
     config: Optional[Dict[str, Any]] = None  # Use correct type if known
     description: Optional[str] = None
-
+    cron_expr: str = Field("")
     model_config = ConfigDict(validate_by_name=True, extra="forbid")
 
 
@@ -36,7 +36,6 @@ class DownloadPayload(BaseModel):
 
 class PluginCreatePayload(BaseModel):
     package: str
-    interval: PositiveInt = Field(60)
     description: Optional[str] = None
 
     model_config = ConfigDict(extra="forbid")

@@ -4,7 +4,6 @@ from typing import Any, List
 from sqlalchemy import (
     JSON,
     Boolean,
-    CheckConstraint,
     DateTime,
     Integer,
     String,
@@ -23,21 +22,12 @@ class Plugin(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     package: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
-    interval: Mapped[int] = mapped_column(Integer, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
-
-    __table_args__ = (
-        CheckConstraint(
-            "interval > 0",
-            name="ck_plugins_interval_positive",
-        ),
-    )
 
     def to_dict(self):
         return {
             "id": self.id,
             "package": self.package,
-            "interval": self.interval,
             "description": self.description,
         }
 
@@ -51,6 +41,7 @@ class Job(Base):
     description: Mapped[str | None] = mapped_column(Text)
     config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    cron_expr: Mapped[str] = mapped_column(String(100), server_default=text("'*/5 * * * * *'"))
 
     def to_dict(self):
 
@@ -61,6 +52,7 @@ class Job(Base):
             "config": self.config or {},
             "description": self.description,
             "active": self.active,
+            "cron_expr": self.cron_expr,
         }
 
 

@@ -14,7 +14,7 @@ def get_plugin(plugin_manager: PluginManagerState, plugin_id: int):
     plugin_item = plugin_manager.dao.plugin_cache.get(plugin_id)
     if not plugin_item:
         raise HTTPException(status_code=404, detail="Plugin not found")
-    package = plugin_item[1]
+    package = plugin_item[0]
     plugin = plugin_manager.get_plugin_instance(package)
     if not plugin:
         raise HTTPException(status_code=404, detail="Plugin instance not found")
@@ -27,8 +27,8 @@ def plugins(
 ):
 
     return [
-        {"id": id, "interval": interval, "package": package, "description": description}
-        for id, (interval, package, description) in plugin_manager.dao.plugin_cache.items()
+        {"id": id, "package": package, "description": description}
+        for id, (package, description) in plugin_manager.dao.plugin_cache.items()
     ]
 
 
@@ -42,15 +42,12 @@ async def create_plugin(
     Expected payload:
     {
       "package": "plugins.sample_plugin@v0_1_0.Plugin",
-      "interval": 60,
       "description": "Sample plugin"
     }
     """
     # Load into manager
 
-    plugin_id = await plugin_manager.add_plugin(
-        payload.package, payload.interval, payload.description
-    )
+    plugin_id = await plugin_manager.add_plugin(payload.package, payload.description)
     return {
         "id": plugin_id,
     }
@@ -132,7 +129,10 @@ async def schema(
 
     ctx = plugin_manager.create_ctx(user, package)
     jobs = await plugin_manager.dao.get_jobs_by_plugin_and_session(
-        ctx, plugin_id, session_id, include_fields=[Job.id, Job.active, Job.description]
+        ctx,
+        plugin_id,
+        session_id,
+        include_fields=[Job.id, Job.active, Job.description, Job.cron_expr],
     )
 
     if len(jobs) == 0:
@@ -140,7 +140,8 @@ async def schema(
         jobs.append(
             Job(
                 active=False,
-                description="",
+                description="Unnamed Job",
+                cron_expr="*/5 * * * * *",
                 id=0,
                 config=plugin.config(ctx).model_dump(mode="json"),
             )

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable, Mapping, Optional, cast
 
 import pluggy
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.util import undefined
 from casbin.enforcer import Enforcer
@@ -143,9 +144,9 @@ class PluginManager:
         for job in all_jobs:
             if not job.plugin_id in self.dao.plugin_cache:
                 continue
-            interval, package, _ = self.dao.plugin_cache[job.plugin_id]
+            package, _ = self.dao.plugin_cache[job.plugin_id]
             # Plugin will be lazy load so that can reload and fix
-            self.add_job_instance(job.id, job.active, interval, package)
+            self.add_job_instance(job.id, job.active, job.cron_expr, package)
 
     def start(self):
         self.scheduler.start()
@@ -244,7 +245,6 @@ class PluginManager:
     # def run_plugin_job(self, job_id: int):
     #     lock = self.redis_client.lock(
     #         f"lock:{PROJECT_NAME}:{job_id}",
-    #         timeout=plugin.interval * 2,
     #         blocking=False,
     #     )
     #     if not lock.acquire():
@@ -343,13 +343,23 @@ class PluginManager:
             # Raise exception to prevent saving invalid plugin to database
             raise err
 
-    async def add_plugin(
-        self, package: str, interval: int, description: Optional[str] = None
-    ) -> int:
+    async def add_plugin(self, package: str, description: Optional[str] = None) -> int:
         # load plugin override module to make sure new code if sharing the same module
         self.load_plugin(package, True)
         # Insert into DB
-        return await self.dao.add_plugin(package, interval, description)
+        return await self.dao.add_plugin(package, description)
+
+    @staticmethod
+    def create_trigger(cron_expr: str) -> CronTrigger:
+        sec, minute, hour, dom, month, dow = cron_expr.split()
+        return CronTrigger(
+            second=sec,
+            minute=minute,
+            hour=hour,
+            day=dom,
+            month=month,
+            day_of_week=dow,
+        )
 
     async def add_job(
         self,
@@ -357,15 +367,16 @@ class PluginManager:
         plugin_id: int,
         config: dict[str, Any],
         description: Optional[str] = None,
+        cron_expr: str = "*/5 * * * *",
     ):
         # Get plugin to check for validation, will call assert internal
-        interval, package, _ = self.dao.plugin_cache[plugin_id]
+        package, _ = self.dao.plugin_cache[plugin_id]
 
         # Proceed with saving job
         job_id = await self.dao.add_job(session_id, plugin_id, config, description)
-        self.add_job_instance(job_id, False, interval, package)
+        self.add_job_instance(job_id, False, cron_expr, package)
 
-    def add_job_instance(self, job_id: int, active: bool, interval: int, package: str):
+    def add_job_instance(self, job_id: int, active: bool, cron_expr: str, package: str):
 
         job_scheduler_id = self.get_job_scheduler_id(job_id)
         if self.scheduler.get_job(job_scheduler_id) is not None:
@@ -388,8 +399,7 @@ class PluginManager:
         # replace_existing allow override
         self.scheduler.add_job(
             self.run_plugin_job,
-            "interval",
-            seconds=interval,
+            trigger=self.create_trigger(cron_expr),
             # TODO: get user_id, and roles from database, the user of course owning the job
             args=[
                 package,
@@ -421,6 +431,10 @@ class PluginManager:
         # Resume the job
         job_scheduler_id = self.get_job_scheduler_id(job_id)
         self.scheduler.resume_job(job_scheduler_id)
+
+    async def reschedule_job(self, job_id: int, cron_expr: str):
+        job_scheduler_id = self.get_job_scheduler_id(job_id)
+        self.scheduler.reschedule_job(job_scheduler_id, trigger=self.create_trigger(cron_expr))
 
     async def deactivate_job(self, job_id: int):
         if not await self.dao.deactivate_job(job_id):

@@ -26,11 +26,9 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("package", sa.Text(), nullable=False),
-        sa.Column("interval", sa.Integer(), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("package"),
-        sa.CheckConstraint("interval > 0", name="ck_plugins_interval_positive"),
     )
 
     # Create jobs table
@@ -47,6 +45,7 @@ def upgrade() -> None:
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("config", sa.Text(), nullable=True),
         sa.Column("active", sa.Integer(), nullable=False, server_default=text("1")),
+        sa.Column("cron_expr", sa.Text(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
         sa.CheckConstraint("active IN (0,1)", name="ck_jobs_active_bool"),
     )

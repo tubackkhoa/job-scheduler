@@ -74,7 +74,7 @@ async def update_job_config(
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
         plugin_id = job_item.plugin_id
 
-    plugin, package = get_plugin(plugin_manager, job_item.plugin_id)
+    plugin, package = get_plugin(plugin_manager, plugin_id)
 
     ctx = plugin_manager.create_ctx(user, package)
     # validate before saving
@@ -87,8 +87,10 @@ async def update_job_config(
             payload.description,
         )
     else:
-        await plugin_manager.dao.update_job(
-            job_id, config.model_dump(mode="json"), payload.description
+        re_scheduled = await plugin_manager.dao.update_job(
+            job_id, config.model_dump(mode="json"), payload.description, payload.cron_expr
         )
+        if re_scheduled:
+            await plugin_manager.reschedule_job(job_id, payload.cron_expr)
 
     return config

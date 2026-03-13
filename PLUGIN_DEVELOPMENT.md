@@ -306,9 +306,8 @@ This allows dynamic UI loading.
 Insert into DB:
 
 | Field       | Value                                                         |
-| ----------- | ------------------------------------------------------------- |
-| package     | [plugins.blog@0_1_0.Plugin](mailto:plugins.blog@0_1_0.Plugin) |
-| interval    | 60                                                            |
+| ----------- | ------------------------------------------------------------- | --- |
+| package     | [plugins.blog@0_1_0.Plugin](mailto:plugins.blog@0_1_0.Plugin) |     |
 | description | Blog system                                                   |
 
 Then restart server or reload plugin.

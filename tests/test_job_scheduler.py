@@ -17,7 +17,7 @@ class DummyDAO(DAO):
         mock_session_factory = MagicMock()
         super().__init__(mock_session_factory)
         self.job_config_cache = {1: {"key": "value"}}
-        self.plugin_cache = {1: (3, "test_plugin.TestPlugin", None)}
+        self.plugin_cache = {1: ("test_plugin.TestPlugin", None)}
 
     async def activate_job(self, job_id):
         return True
@@ -74,7 +74,7 @@ async def test_scheduler_executes_jobs_concurrently():
     pm.manager.register(TestPlugin, "test_plugin.TestPlugin")
 
     for i in range(N_JOBS):
-        pm.add_job_instance(i, False, 3, "test_plugin.TestPlugin")
+        pm.add_job_instance(i, False, "*/5 * * * * *", "test_plugin.TestPlugin")
 
     pm.start()
 
