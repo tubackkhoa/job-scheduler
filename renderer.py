@@ -115,6 +115,7 @@ def orjson_dumps(obj, **kwargs):
 class Renderer:
     _templates = LRUDict()
     _sandbox = SandboxedEnvironment(
+        extensions=["jinja2.ext.loopcontrols", "jinja2.ext.do"],
         enable_async=True,
         autoescape=False,
         trim_blocks=True,
