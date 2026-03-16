@@ -1,8 +1,11 @@
 # Plugin Development Guide
 
-This document explains how to create, structure, and secure plugins for the Job-Scheduler system.
+This document explains how to create, structure, and secure plugins for
+the Job-Scheduler system.
 
-Plugins are modular extensions loaded via Pluggy and registered in the database. Each plugin lives in its own folder and exposes a `Plugin` class implementing the required hooks.
+Plugins are modular extensions loaded via Pluggy and registered in the
+database. Each plugin lives in its own folder and exposes a `Plugin`
+class implementing the required hooks.
 
 ---
 
@@ -22,15 +25,15 @@ Plugins are:
 - Loaded dynamically using Pluggy
 - Referenced in DB using:
 
-  ```
-  plugins.<plugin_name>@<version>.Plugin
-  ```
+```{=html}
+<!-- -->
+```
+
+    plugins.<plugin_name>@<version>.Plugin
 
 Example:
 
-```
-plugins/blog@0_1_0.Plugin
-```
+    plugins/blog@0_1_0.Plugin
 
 ---
 
@@ -38,19 +41,15 @@ plugins/blog@0_1_0.Plugin
 
 Each plugin must be placed under:
 
-```
-plugins/<plugin_name>@<version>/
-```
+    plugins/<plugin_name>@<version>/
 
 Example:
 
-```
-plugins/blog@0_1_0/
-├── __init__.py
-├── dao.py
-├── model.py
-└── plugin.py
-```
+    plugins/blog@0_1_0/
+    ├── __init__.py
+    ├── dao.py
+    ├── model.py
+    └── plugin.py
 
 Naming rules:
 
@@ -58,7 +57,6 @@ Naming rules:
 - version suffix with underscores:
   - `0_1_0`
   - `1_2_3`
-
 - Avoid dots in folder names
 
 ---
@@ -91,11 +89,13 @@ It must define:
 
 ### Optional files
 
-| File       | Purpose           |
-| ---------- | ----------------- |
-| `dao.py`   | DB logic          |
-| `model.py` | SQLAlchemy models |
-| `data.py`  | Helpers/constants |
+File Purpose
+
+---
+
+`dao.py` DB logic
+`model.py` SQLAlchemy models
+`data.py` Helpers/constants
 
 ---
 
@@ -115,17 +115,13 @@ def routes(cls) -> list[tuple[str, Any]]:
 
 Each tuple:
 
-```
-(route_path, metadata)
-```
+    (route_path, metadata)
 
 Example:
 
-```
-("", portal_config)
-("dashboard", dashboard_config)
-("blog/:id", blog_page_config)
-```
+    ("", portal_config)
+    ("dashboard", dashboard_config)
+    ("blog/:id", blog_page_config)
 
 ---
 
@@ -264,9 +260,7 @@ Key rules:
 
 Always enforce permissions on write operations:
 
-```
-@job_permission("blog")
-```
+    @job_permission("blog")
 
 Use ExecutionContext:
 
@@ -287,15 +281,11 @@ Routes return metadata describing where UI is located:
 
 Dev:
 
-```
-blog/Home.tsx
-```
+    blog/Home.tsx
 
 Prod:
 
-```
-{base_url}/assets/{package}/home.js
-```
+    {base_url}/assets/{package}/home.js
 
 This allows dynamic UI loading.
 
@@ -305,10 +295,12 @@ This allows dynamic UI loading.
 
 Insert into DB:
 
-| Field       | Value                                                         |
-| ----------- | ------------------------------------------------------------- | --- |
-| package     | [plugins.blog@0_1_0.Plugin](mailto:plugins.blog@0_1_0.Plugin) |     |
-| description | Blog system                                                   |
+Field Value
+
+---
+
+package plugins.blog@0_1_0.Plugin
+description Blog system
 
 Then restart server or reload plugin.
 
@@ -318,11 +310,9 @@ Then restart server or reload plugin.
 
 Use semantic-style versions:
 
-```
-@0_1_0
-@0_2_0
-@1_0_0
-```
+    @0_1_0
+    @0_2_0
+    @1_0_0
 
 Never modify old versions.
 

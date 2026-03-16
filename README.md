@@ -1,205 +1,312 @@
-## Overview
+# Job Scheduler
 
-This project is a **plugin‑based job scheduler** with:
-
-- **FastAPI backend** for job and plugin management, scheduling, and log streaming.
-- **React + Vite frontend** (Material UI + React JSON Schema Form) for configuring jobs per user.
-- A **pluggable extension system** (via `pluggy`) where each plugin defines:
-  - a JSON schema for its configuration,
-  - a Pydantic config model, and
-  - an async `run` method that executes on a schedule.
-
-Conceptually:
-
-- The **`plugins` table** defines _what_ can run (Python plugin classes and their base code).
-- The **`jobs` table** defines _how_ each user runs a plugin (per‑user configs, one active at a time per (user, plugin)).
-- **APScheduler** drives execution on an cron expr, and logs are streamed to the browser over **WebSockets**.
-
-For a deeper dive on authoring plugins, see **[Plugin Development](./PLUGIN_DEVELOPMENT.md)**.
+A modular **job scheduling and plugin execution platform** built with
+**Python, FastAPI, SQLAlchemy, and Alembic**.\
+The system allows dynamic installation of plugins, scheduling jobs via
+cron expressions, executing them asynchronously, and storing logs and
+signals for monitoring.
 
 ---
 
-## Security & Authorization
+# Features
 
-This system includes a built-in authorization layer to ensure that plugins, jobs, and data access are executed safely and within defined permissions. It provides:
-
-- Authenticated user context propagation via `ExecutionContext`
-- Per-job and per-action permission enforcement
-- Field-level protection for sensitive configuration values
-- Policy-based access control powered by Casbin
-
-For full details, see **[Authorization](./AUTHORIZATION.md)**, which covers:
-
-- ExecutionContext design and lifecycle
-- Permission decorators (e.g. `@job_permission`)
-- SecureField usage patterns
-- Role and policy configuration
-- Enforcement flow and examples
+- Plugin-based job execution
+- Cron-based job scheduling
+- WebSocket support for real-time communication
+- Job logging and indexing
+- Authentication and user management
+- Template rendering system
+- Signal messaging between components
+- Database migrations with Alembic
+- Test suite for core components
 
 ---
 
-## Project structure
+# Architecture Overview
 
-- **Backend (FastAPI)**
-  - `server.py` – creates the FastAPI app, configures the DB engine, starts/stops the `PluginManager`, and exposes:
-    - `GET /plugins` – list all plugins.
-    - `GET /schema/{session_id}/{plugin_id}` – plugin JSON schema + all saved configs for that user/plugin.
-    - `POST /config/{job_id}` – create/update a job config.
-    - `POST /activate/{job_id}/{activation}` – activate/deactivate a job.
-    - `POST /delete/{job_id}` – delete a job.
-    - `POST /reload/{package}` – hot‑reload a plugin class.
-    - `GET /ws/logs/{plugin_id}/{session_id}` – WebSocket streaming of job logs.
-  - `plugin_manager.py` – loads plugins from the DB, manages pluggy registration, sets up APScheduler jobs, activates/deactivates jobs, and forwards scheduler events to the logging system.
-  - `models.py` – SQLAlchemy models:
-    - `Plugin(id, package, description)`
-    - `Job(id, session_id, plugin_id, config, description, active, cron_expr)`
-  - `ws_manager.py` – manages WebSocket connections keyed by `"{plugin_id}/{session_id}"` and broadcasts logs.
-  - `scripts/database.sql` – raw schema for the `plugins` and `jobs` tables.
-
-- **Plugins (Python)**
-  - Located under `plugins/`, usually with versioned folders, for example:
-    - `plugins/sample_plugin@v0_1_0/`
-    - `plugins/sample_plugin@v0_2_0/`
-    - `plugins/lab_plugin@v0_1_0/`
-    - `plugins/stable_plugin@v0_1_0/`
-    - `plugins/prod_plugin@v0_1_0/`
-  - Each exposes a `Plugin`‑like class implementing the shared pluggy spec (`schema`, `config`, `run`).
-
-- **Frontend (React + Vite)**
-  - `frontend/src/App.jsx` – main UI:
-    - Fetches plugins from `/plugins`.
-    - Loads schema + configs from `/schema/{session_id}/{plugin_id}`.
-    - Renders a JSON‑schema form for the selected job.
-    - Lets you save, clone, activate, and delete jobs.
-    - Shows live logs via `LogViewer`.
-  - `frontend/src/LogViewer.jsx` – connects to `/ws/logs/{plugin_id}/{session_id}`, renders colored, streaming logs.
-  - `frontend/src/api.ts` – small API wrapper around backend endpoints (see file for exact signatures).
+The system consists of several main components:
 
 ---
 
-## Prerequisites
-
-- **Python** 3.10+ (recommended)
-- **Node.js** 18+ and **yarn** (or npm) for the frontend
-- A database supported by SQLAlchemy; examples include:
-  - SQLite (easiest to start, including in‑memory)
-  - PostgreSQL, MySQL, etc.
+Component Description
 
 ---
 
-## Running the application
+FastAPI API Layer REST endpoints for managing jobs,
+plugins, logs, users, etc
 
-### 1. Configure environment
+Plugin Manager Dynamically loads and manages
+external plugin packages
 
-Create a `.env` file in the project root (or export variables another way), for example:
+Job Scheduler Executes scheduled jobs based on
+cron expressions
+
+Log Service Handles log storage, indexing, and
+retrieval
+
+WebSocket Manager Handles real-time client
+communication
+
+Database Layer SQLAlchemy models with Alembic
+migrations
+
+---
+
+---
+
+# Project Structure
+
+    job-scheduler
+    │
+    ├── alembic/                # Database migration scripts
+    │   ├── env.py
+    │   └── versions/
+    │
+    ├── app/                    # FastAPI application
+    │   ├── main.py             # API entrypoint
+    │   ├── deps.py             # Dependency injection
+    │   └── routers/            # API endpoints
+    │
+    ├── models.py               # SQLAlchemy models
+    ├── schemas.py              # Pydantic schemas
+    ├── dao.py                  # Data access layer
+    │
+    ├── plugin_manager.py       # Plugin installation and lifecycle
+    ├── template_plugin.py      # Template plugin base
+    ├── renderer.py             # Template rendering engine
+    │
+    ├── log_service.py          # Log storage service
+    ├── log_handler.py          # Job log processing
+    ├── log_indexer.py          # Log indexing
+    │
+    ├── ws_manager.py           # WebSocket connection manager
+    ├── server.py               # Server runtime entry
+    │
+    ├── helpers.py              # Utility helpers
+    ├── auth.py                 # Authentication logic
+    ├── enforcer.py             # Access enforcement
+    │
+    ├── package_downloader.py   # Download plugin packages
+    │
+    ├── scripts/                # Admin and migration utilities
+    │
+    ├── tests/                  # Test suite
+    │
+    └── README.md
+
+---
+
+# Database
+
+Database migrations are managed using **Alembic**.
+
+Key tables:
+
+Table Purpose
+
+---
+
+plugins Stores installed plugin packages
+jobs Stores scheduled jobs
+users Application users
+signals Event messaging system
+logs Job execution logs
+
+Run migrations:
 
 ```bash
-DB_CONNECTION=sqlite:///./jobs.db
-# Optional: allow PluginManager to import plugins from extra folders
-MODULE_PATH=
-# Optional: serve the built frontend from FastAPI
-STATIC_FILES=./frontend/dist
+alembic upgrade head
 ```
 
-The backend assumes `DB_CONNECTION` is set and will assert if it is missing.
+---
 
-### 2. Run the frontend (client)
+# Installation
 
-From the `frontend` folder:
+### 1. Clone repository
 
 ```bash
-cd frontend
-yarn
-VITE_API_BASE_URL=http://localhost:8000 yarn dev
-
-# build for backend
-yarn build
+git clone <repo>
+cd job-scheduler
 ```
 
-By default Vite will start on `http://localhost:5173` (or the next available port).
+### 2. Install dependencies
 
-### 3. Run the backend (server)
+```bash
+pip install -r requirements.txt
+```
 
-In the project root:
+### 3. Configure environment variables
+
+Create a `.env` file:
+
+    DB_CONNECTION=postgresql://user:password@localhost:5432/jobs
+    SECRET_KEY=your_secret
+
+### 4. Run database migrations
+
+```bash
+alembic upgrade head
+```
+
+---
+
+# Running the Server
+
+Start the API server:
 
 ```bash
 python server.py
 ```
 
-This:
-
-- Creates a SQLAlchemy engine from `DB_CONNECTION`.
-- Seeds the DB with example plugins and jobs when using an in‑memory SQLite connection.
-- Starts the `PluginManager` with an `AsyncIOScheduler`.
-- Exposes the FastAPI app (you can point a process manager like `uvicorn` at `server:app` if preferred).
-
-If you have already built the frontend (`yarn build`) and set `STATIC_FILES` to `frontend/dist`, the backend will also serve the compiled SPA at `/`.
-
----
-
-## Developing and testing
-
-- **Backend**: run `python server.py` directly for local development, or use:
+Or using uvicorn:
 
 ```bash
-uvicorn server:app --reload
+uvicorn app.main:app --reload
 ```
-
-- **Frontend**: run `yarn dev` in `frontend` and configure `API_BASE_URL` (in `frontend/src/api.ts`) to point at your backend (for example `http://localhost:8000` when using uvicorn defaults).
 
 ---
 
-## Horizontal scaling (multi‑node setup)
+# API Modules
 
-For true horizontal scaling across multiple nodes, use a shared persistent job store like **Redis** (or PostgreSQL/MySQL via `SQLAlchemyJobStore`). This allows multiple `PluginManager` instances to coordinate safely, ensuring jobs run only once even with redundant schedulers.
+Main API routers:
 
-Example (conceptual) configuration:
-
-```python
-from apscheduler.jobstores.redis import RedisJobStore
-
-plugin_manager = PluginManager(
-    db_engine,  # your SQLAlchemy engine
-    scheduler_kwargs={
-        "jobstores": {
-            "default": RedisJobStore(
-                host="redis-host",
-                port=6379,
-                db=2,
-            )
-        },
-        "job_defaults": {
-            "coalesce": True,   # Merge missed runs into one
-            "max_instances": 1  # Prevent duplicate executions across nodes
-        },
-    },
-)
-
-plugin_manager.start()
-```
-
-Each node shares the same job store; APScheduler ensures jobs respect `max_instances` across the cluster.
+Router Description
 
 ---
 
-## Writing a new plugin (short version)
+/auth Authentication endpoints
+/users User management
+/plugins Plugin installation and management
+/jobs Job scheduling
+/logs Job logs
+/signals Messaging between services
+/stats System statistics
+/templates Template management
+/chatbot Chatbot interaction
+/ws WebSocket communication
 
-At a high level:
+---
 
-1. **Create a plugin package** under `plugins/`, e.g. `plugins/my_plugin@v0_1_0/`, with `__init__.py` and `plugin.py`.
-2. In `plugin.py`, define:
-   - a Pydantic `Config` model,
-   - a `Plugin` class with `@hookimpl`‑decorated `schema`, `config`, and async `run` methods.
-3. **Register the plugin** in the `plugins` table with:
-   - `package` = the full import path to your `Plugin` class (for example, `plugins.my_plugin@v0_1_0.plugin.Plugin`),
-   - `description` = human‑readable description.
-4. **Restart or reload**:
-   - restart the backend, or
-   - call `POST /reload/{package}` with the same `package` string to hot‑reload during development.
-5. Use the **frontend UI** to:
-   - select your plugin,
-   - configure one or more jobs per user,
-   - activate a job (only one active per (user, plugin) at a time),
-   - watch logs in real time.
+# Plugin System
 
-For a complete walkthrough (including example code and SQL), see **[Plugin Development](./PLUGIN_DEVELOPMENT.md)**.
+Plugins are Python packages that define executable jobs.
+
+Responsibilities:
+
+- Provide job execution logic
+- Define configuration schema
+- Emit logs and signals
+
+The **Plugin Manager** handles:
+
+- Downloading plugin packages
+- Loading them dynamically
+- Registering plugin metadata
+
+---
+
+# Job Scheduling
+
+Jobs are stored in the `jobs` table and executed using cron expressions.
+
+Example cron expression:
+
+    */5 * * * *
+
+Meaning: **Run every 5 minutes**
+
+Each job references:
+
+- `plugin_id`
+- `session_id`
+- `cron_expr`
+- configuration data
+
+---
+
+# Logging System
+
+The logging subsystem consists of:
+
+- `log_handler.py` -- job log processing
+- `log_service.py` -- log storage
+- `log_indexer.py` -- search indexing
+
+Logs allow:
+
+- monitoring job execution
+- debugging plugin behavior
+- building analytics
+
+---
+
+# WebSocket System
+
+Real-time features are handled through:
+
+    ws_manager.py
+
+Capabilities:
+
+- client connection management
+- event broadcasting
+- real-time log streaming
+
+---
+
+# Scripts
+
+Utility scripts for maintenance:
+
+Script Purpose
+
+---
+
+seed_admin.py Create admin user
+deactivate_models.py Disable models
+migrate_sql_to_value_versions.py Migration utility
+
+---
+
+# Testing
+
+Run tests using:
+
+```bash
+pytest
+```
+
+Test coverage includes:
+
+- job scheduler
+- plugin manager
+- logging
+- WebSocket manager
+
+---
+
+# Technologies Used
+
+- Python
+- FastAPI
+- SQLAlchemy
+- Alembic
+- PostgreSQL
+- WebSockets
+- Pytest
+
+---
+
+# Future Improvements
+
+- Distributed job execution
+- Plugin sandboxing
+- Job retry mechanisms
+- Dashboard UI
+- Advanced log analytics
+
+---
+
+# License
+
+MIT License
