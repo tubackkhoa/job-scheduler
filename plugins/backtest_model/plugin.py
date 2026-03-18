@@ -133,7 +133,7 @@ return [
                 "ui:field": "Template",
                 "type": "markdown",
                 "url": (
-                    "LightweighChart.tsx"
+                    "backtest/LightweighChart.tsx"
                     if settings.env == "dev"
                     else "{base_url}/assets/{package}/lightweight_chart.js"
                 ),

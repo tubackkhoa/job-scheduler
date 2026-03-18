@@ -72,7 +72,6 @@ async def all_routes(plugin_manager: PluginManagerState):
 @router.get("/routes/{plugin_id}")
 async def routes(
     plugin_manager: PluginManagerState,
-    user: UserState,
     plugin_id: int,
 ):
     _, package = get_plugin(plugin_manager, plugin_id)
@@ -83,7 +82,6 @@ async def routes(
 @router.get("/routes/{plugin_id}/schema")
 async def route_schema(
     plugin_manager: PluginManagerState,
-    user: UserState,
     plugin_id: int,
     route: str,
 ):
@@ -149,7 +147,6 @@ async def schema(
 
     # Built-in Jinja tags are provided by extensions
     return {
-        "user": ctx.user,
         "schema": plugin.schema(ctx),
         "jobs": jobs,
         "globals": Renderer.get_globals_doc(plugin.env()),
