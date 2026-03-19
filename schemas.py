@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-class ConfigPayload(BaseModel):
+class JobPayload(BaseModel):
     plugin_id: Optional[int] = Field(None)
     session_id: Optional[int] = Field(None)
     config: Optional[Dict[str, Any]] = None  # Use correct type if known

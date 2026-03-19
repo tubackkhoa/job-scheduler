@@ -2,7 +2,7 @@ from fastapi import APIRouter, Body, HTTPException
 
 from app.deps import PluginManagerState, UserState
 from app.routers.plugins import get_plugin
-from schemas import ConfigPayload
+from schemas import JobPayload
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -52,12 +52,12 @@ async def delete_job(plugin_manager: PluginManagerState, job_id: int):
     return {"success": True}
 
 
-@router.post("/{job_id}/config")
-async def update_job_config(
+@router.post("/{job_id}")
+async def save_job(
     plugin_manager: PluginManagerState,
     user: UserState,
     job_id: int,
-    payload: ConfigPayload = Body(...),
+    payload: JobPayload = Body(...),
 ):
 
     if job_id == 0:
@@ -85,6 +85,7 @@ async def update_job_config(
             plugin_id,
             config.model_dump(mode="json"),
             payload.description,
+            payload.cron_expr,
         )
     else:
         rescheduled = await plugin_manager.dao.update_job(

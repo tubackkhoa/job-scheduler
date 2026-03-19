@@ -351,7 +351,11 @@ class PluginManager:
 
     @staticmethod
     def create_trigger(cron_expr: str) -> CronTrigger:
-        sec, minute, hour, dom, month, dow = cron_expr.split()
+        values: list = cron_expr.split()
+        # default second is None
+        if len(values) == 5:
+            values.insert(0, None)
+        sec, minute, hour, dom, month, dow = values
         return CronTrigger(
             second=sec,
             minute=minute,

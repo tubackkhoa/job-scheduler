@@ -2,7 +2,7 @@ from fastapi import APIRouter, Body, Response
 from fastapi.responses import PlainTextResponse
 from app.deps import PluginManagerState, UserState
 from renderer import Renderer
-from schemas import ConfigPayload, TemplateCodePayload, TemplatePayload, settings
+from schemas import JobPayload, TemplateCodePayload, TemplatePayload, settings
 from template_plugin import TemplatePlugin
 from models import Job
 
@@ -83,7 +83,7 @@ def update_user_template(
     plugin_manager: PluginManagerState,
     user: UserState,
     package: str,
-    payload: ConfigPayload = Body(...),
+    payload: JobPayload = Body(...),
 ):
 
     tpl_plugin = TemplatePlugin(f"{settings.user_plugin_path}/{package}")
