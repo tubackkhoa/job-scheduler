@@ -10,6 +10,21 @@ from .models import init_db
 hookimpl = pluggy.HookimplMarker("job-scheduler")
 
 
+class CrawlConfig(BaseModel):
+    url: str = Field(
+        "",
+        description="web page",
+        json_schema_extra=ui_schema({"ui:options": {"size": 12}}),
+    )
+    extractor: str = Field(
+        "",
+        description="js extractor",
+        json_schema_extra=ui_schema(
+            {"ui:field": "Template", "type": "js", "ui:options": {"size": 12, "preview": False}}
+        ),
+    )
+
+
 class Config(BaseModel):
     model_config = ConfigDict(
         json_schema_extra=ui_schema(
@@ -23,9 +38,9 @@ class Config(BaseModel):
         )
     )
 
-    md_template: str = Field(
-        "",
-        json_schema_extra=ui_schema({"ui:field": "Template", "type": "markdown"}),
+    crawls: list[CrawlConfig] = Field(
+        [],
+        json_schema_extra=ui_schema({"ui:options": {"size": 12}}),
     )
 
 

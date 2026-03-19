@@ -86,7 +86,7 @@ class DAO:
         plugin_id: int,
         config: Dict[str, Any],
         description: Optional[str] = None,
-        cron_expr: str = "*/5 * * * *",
+        cron_expr: str = "*/5 * * * * *",
     ) -> int:
         async with self.session_factory() as session:
             job = Job(

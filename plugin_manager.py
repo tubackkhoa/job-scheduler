@@ -371,7 +371,7 @@ class PluginManager:
         plugin_id: int,
         config: dict[str, Any],
         description: Optional[str] = None,
-        cron_expr: str = "*/5 * * * *",
+        cron_expr: str = "*/5 * * * * *",
     ):
         # Get plugin to check for validation, will call assert internal
         package, _ = self.dao.plugin_cache[plugin_id]
