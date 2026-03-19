@@ -11,6 +11,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from schemas import settings
 
 
 class Base(DeclarativeBase):
@@ -41,7 +42,9 @@ class Job(Base):
     description: Mapped[str | None] = mapped_column(Text)
     config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
-    cron_expr: Mapped[str] = mapped_column(String(100), server_default=text("'*/5 * * * * *'"))
+    cron_expr: Mapped[str] = mapped_column(
+        String(100), server_default=text(f"'{settings.default_cron}'")
+    )
 
     def to_dict(self):
 

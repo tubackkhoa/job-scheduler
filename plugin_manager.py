@@ -19,6 +19,7 @@ from enforcer import (
 from dao import DAO
 from plugins import CodeSchema
 from renderer import Renderer
+from schemas import settings
 
 
 PROJECT_NAME = "job-scheduler"
@@ -350,8 +351,8 @@ class PluginManager:
         return await self.dao.add_plugin(package, description)
 
     @staticmethod
-    def create_trigger(cron_expr: str) -> CronTrigger:
-        values: list = cron_expr.split()
+    def create_trigger(cron_expr: Optional[str]) -> CronTrigger:
+        values: list = (cron_expr or settings.default_cron).split()
         # default second is None
         if len(values) == 5:
             values.insert(0, None)
@@ -371,7 +372,7 @@ class PluginManager:
         plugin_id: int,
         config: dict[str, Any],
         description: Optional[str] = None,
-        cron_expr: str = "*/5 * * * * *",
+        cron_expr: str = settings.default_cron,
     ):
         # Get plugin to check for validation, will call assert internal
         package, _ = self.dao.plugin_cache[plugin_id]

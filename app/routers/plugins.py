@@ -4,7 +4,7 @@ from app.deps import PluginManagerState, UserState
 from models import Job
 from package_downloader import download_package
 from renderer import Renderer
-from schemas import DownloadPayload, PluginCreatePayload
+from schemas import DownloadPayload, PluginCreatePayload, settings
 from plugin_manager import scheduler_logger
 
 router = APIRouter(prefix="/plugins", tags=["plugins"])
@@ -139,7 +139,7 @@ async def schema(
             Job(
                 active=False,
                 description="Unnamed Job",
-                cron_expr="*/5 * * * * *",
+                cron_expr=settings.default_cron,
                 id=0,
                 config=plugin.config(ctx).model_dump(mode="json"),
             )

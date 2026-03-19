@@ -97,5 +97,7 @@ class Settings(BaseSettings):
     test_system_api_key: str = ""
     env: Literal["prod", "dev"] = "prod"
 
+    default_cron: str = "*/5 * * * * *"
+
 
 settings = Settings()

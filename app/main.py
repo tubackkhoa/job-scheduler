@@ -155,6 +155,8 @@ async def http_exception_handler(_: Request, exc: HTTPException):
     )
 
 
+# handle for some Error extends from Exception
+@app.exception_handler(OSError)
 @app.exception_handler(TemplateError)
 @app.exception_handler(RuntimeError)
 async def other_exception_handler(_: Request, exc: Exception):

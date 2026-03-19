@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from enforcer import ADMIN_ROLE, ExecutionContext, global_permission
-from schemas import JobQuery
+from schemas import JobQuery, settings
 from models import Plugin, Job, ValueVersion, User, SignalMessage
 
 
@@ -86,7 +86,7 @@ class DAO:
         plugin_id: int,
         config: Dict[str, Any],
         description: Optional[str] = None,
-        cron_expr: str = "*/5 * * * * *",
+        cron_expr: str = settings.default_cron,
     ) -> int:
         async with self.session_factory() as session:
             job = Job(
