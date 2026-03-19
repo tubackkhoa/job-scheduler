@@ -211,7 +211,7 @@ Jobs are stored in the `jobs` table and executed using cron expressions.
 
 Example cron expression:
 
-    */5 * * * *
+    */5 * * * * *
 
 Meaning: **Run every 5 minutes**
 
