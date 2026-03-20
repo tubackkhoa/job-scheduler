@@ -1,12 +1,10 @@
 name: hello_plugin
 version: 1
 description: hello_plugin
-
 roles:
   run:
-    - user
-    - admin
-
+  - user
+  - admin
 schema:
   type: object
   title: Config
@@ -17,7 +15,6 @@ schema:
       default: demohottab@hottab.net
       ui:options:
         size: 6
-
     webhook_api_key:
       type: string
       title: Webhook API Key
@@ -25,73 +22,44 @@ schema:
       ui:widget: password
       ui:options:
         size: 6
-
     env:
       type: string
       title: Env
       enum:
-        - staging
-        - production
-        - uat
-        - uat_testing_multiple_models
+      - staging
+      - production
+      - uat
+      - uat_testing_multiple_models
       default: staging
-
     model_type:
       type: string
       title: Model Type
-      default: ''
+      default: adadad
       ui:field: Dynamic
-      code: |
-        export default function ({
-          onChange,
-          formData,
-          fieldPathId,
-          React: { useState },
-          Mui: { Box, Button, TextField, Typography }
-        }) {
-          const [input, setInput] = useState(formData);          
-          const handleRun = async () => {
-            onChange(input, fieldPathId.path);
-          };
-
-          return (
-            <Box display="flex" flexDirection="column" gap={2}>
-              <Typography variant="subtitle1">
-                Compiled123 react component
-              </Typography>
-
-              <TextField
-                multiline
-                minRows={4}
-                maxRows={10}
-                value={input}
-                onBlur={() => {
-                  onChange(input, fieldPathId.path);
-                }}
-                onChange={(e) => setInput(e.target.value)}
-                fullWidth
-              />
-
-              <Button variant="contained" onClick={handleRun}>
-                Compile
-              </Button>
-            </Box>
-          );
-        }
-
+      code: "export default function ({\n  onChange,\n  formData,\n  fieldPathId,\
+        \          \n}) {\n  const { useState } = React;\n  const { Box, Button, TextField,\
+        \ Typography } = Mui;\n  const [input, setInput] = useState(formData);\n \
+        \ \n  const handleRun = async () => {\n    alert(fieldPathId.path + ':' +\
+        \ input);\n  };\n\n  return (\n    <Box display=\"flex\" flexDirection=\"\
+        column\" gap={2}>\n      <Typography variant=\"subtitle1\">\n        Compiled\
+        \ react component\n      </Typography>\n\n      <TextField\n        multiline\n\
+        \        minRows={4}\n        maxRows={10}\n        value={input}\n      \
+        \  onBlur={() => {\n          onChange(input, fieldPathId.path);\n       \
+        \ }}\n        onChange={(e) => setInput(e.target.value)}\n        fullWidth\n\
+        \      />\n\n      <Button variant=\"contained\" onClick={handleRun}>\n  \
+        \      Compile\n      </Button>\n    </Box>\n  );\n}\n"
       model:binding:
-        - model_type
-
+      - model_type
       model:expr:
         list: '{{ list_trade_models(env, webhook_url, webhook_api_key) | tojson }}'
-        create: '{{ create_trade_model(payload, webhook_url, webhook_api_key, env) | tojson }}'
-        delete: '{{ deactivate_trade_model(key, webhook_url, webhook_api_key, env) | tojson }}'
-
+        create: '{{ create_trade_model(payload, webhook_url, webhook_api_key, env)
+          | tojson }}'
+        delete: '{{ deactivate_trade_model(key, webhook_url, webhook_api_key, env)
+          | tojson }}'
       model:deps:
-        - webhook_url
-        - webhook_api_key
-        - env
-
+      - webhook_url
+      - webhook_api_key
+      - env
       ui:options:
         size: 12
         createSchema:
@@ -113,10 +81,8 @@ schema:
               type: string
               title: Detail (JSON)
           required:
-            - key
-            - name
-
+          - key
+          - name
   required: []
-
 env:
   greeting: Hello

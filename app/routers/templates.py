@@ -47,7 +47,6 @@ def get_user_template(plugin_manager: PluginManagerState, user: UserState, packa
                 plugin_id=package,
             )
         ],
-        "user": ctx.user,
         "globals": Renderer.get_globals_doc(tpl_plugin.env()),
     }
 
