@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from enforcer import ADMIN_ROLE, ExecutionContext, global_permission
+from log_handler import LogEvent
 from schemas import JobQuery, settings
 from models import Plugin, Job, ValueVersion, User, SignalMessage
 
@@ -581,13 +582,8 @@ class DAO:
                 "version_id": version_id,
             }
 
-    async def save_signal_message(
-        self,
-        job_id: int,
-        message: str,
-        created_at: datetime,
-    ) -> int:
-
+    async def save_signal_message(self, event: LogEvent) -> int:
+        job_id, message, created_at = event["job_id"], event["message"], event["created_at"]
         async with self.session_factory() as session:
             try:
                 job = await session.get(Job, job_id)

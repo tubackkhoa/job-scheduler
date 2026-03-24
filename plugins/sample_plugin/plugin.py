@@ -3,6 +3,7 @@ import pluggy
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Any, Awaitable, Callable, List, Optional, ParamSpec
 from enforcer import ExecutionContext, job_permission
+from plugin_manager import PluginManager
 from plugins import ui_schema
 from plugins.schema import CodeSchema, SecureBaseModel, SecureField
 from schemas import settings
@@ -241,10 +242,16 @@ async def fetch_data(ctx: ExecutionContext):
     return ctx.user
 
 
+def post_signal(job_id: int, json: dict):
+    logger = logging.getLogger(PluginManager.get_job_scheduler_id(job_id))
+    logger.info(json)
+
+
 class Plugin:
 
     _env = {
         "fetch_data": fetch_data,
+        "post_signal": post_signal,
         "MyClass": MyClass,
         "get_users": lambda: ["tupt", "cuongnv"],
         "get_cities_by_country": lambda country_name: countries.get(country_name, []),
@@ -308,6 +315,7 @@ class Plugin:
         #     "{{ dao.get_value_version(id).value }}",
         #     {"id": config.sql_id},
         # )
+        logger.info("hello")
 
         # print(version)
         import asyncio

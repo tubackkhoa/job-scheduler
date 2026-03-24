@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from log_handler import JobLogHandler  # Replace with your actual module name
 from log_service import LogService  # Your LogService import
@@ -13,7 +13,9 @@ async def test_job_log_handler_emit_and_drain_calls_callback_and_log_service():
     log_callback = AsyncMock()
     log_service = MagicMock(spec=LogService)
 
-    handler = JobLogHandler(log_callback=log_callback, loop=loop, log_service=log_service)
+    handler = JobLogHandler()
+    handler.add_hook(log_callback)
+    handler.add_hook(log_service.write_log)
 
     # Prepare a log record
     record = logging.LogRecord(
@@ -34,7 +36,11 @@ async def test_job_log_handler_emit_and_drain_calls_callback_and_log_service():
     await asyncio.sleep(0.1)
 
     # Check that log_service.write_log was called correctly
-    log_service.write_log.assert_called_once_with("job123", "INFO", handler.format(record))
+    log_service.write_log.assert_called_once()
+    called_arg = log_service.write_log.call_args[0][0]  # first positional argument
+    assert called_arg["job_id"] == "job123"
+    assert called_arg["level"] == "INFO"
+    assert called_arg["message"] == handler.format(record)
 
     # Check that the async log_callback was awaited with the correct log event
     log_callback.assert_awaited_once()
@@ -52,7 +58,9 @@ async def test_job_log_handler_handles_log_service_exception_gracefully():
     # Raise exception on write_log to simulate failure
     log_service.write_log.side_effect = Exception("write failure")
 
-    handler = JobLogHandler(log_callback=log_callback, loop=loop, log_service=log_service)
+    handler = JobLogHandler()
+    handler.add_hook(log_callback)
+    handler.add_hook(log_service.write_log)
 
     record = logging.LogRecord(
         name="job456",
@@ -79,7 +87,8 @@ async def test_job_log_handler_emit_without_log_service():
     loop = asyncio.get_event_loop()
     log_callback = AsyncMock()
 
-    handler = JobLogHandler(log_callback=log_callback, loop=loop, log_service=None)
+    handler = JobLogHandler()
+    handler.add_hook(log_callback)
 
     record = logging.LogRecord(
         name="job789",

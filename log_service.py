@@ -13,6 +13,7 @@ from threading import Lock
 
 logger = logging.getLogger(__name__)
 
+from log_handler import LogEvent
 from log_indexer import LogIndexer, extract_job_id, JOB_ID_RE
 
 LOG_HEADER_RE = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(\w+)\]\s*(.*)$")
@@ -182,16 +183,14 @@ class LogService:
                     log_line = f"{entry['timestamp']} [{entry['level']}] {entry['message']}\n"
                     f.write(log_line)
 
-    def write_log(self, job_id: str, level: str, message: str, timestamp: Optional[str] = None):
-        if timestamp is None:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
+    def write_log(self, event: LogEvent):
+        job_id, message, level, timestamp = (
+            event["job_id"],
+            event["message"],
+            event["level"],
+            event["created_at"].strftime("%Y-%m-%d %H:%M:%S"),
+        )
         log_line = f"{timestamp} [{level}] {message}\n"
-        log_entry = {
-            "timestamp": timestamp,
-            "level": level,
-            "message": message,
-        }
 
         # Write to SQLite if useIndexer is enabled, otherwise write to file
         if self.useIndexer:

@@ -1,13 +1,14 @@
 import os
 import shutil
 import tempfile
-import gzip
 import time
 from pathlib import Path
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
+from datetime import datetime
 
 from log_service import LogService  # Replace with your module import
+from log_handler import LogEvent
 
 
 @pytest.fixture
@@ -20,7 +21,14 @@ def temp_log_dir():
 def test_write_log_creates_log_file(temp_log_dir):
     service = LogService(log_dir=temp_log_dir, max_file_size=1024, max_files=2, useIndexer=False)
     job_id = "job1"
-    service.write_log(job_id, "INFO", "Test message")
+    event: LogEvent = {
+        "job_id": job_id,
+        "level": "INFO",
+        "message": "Test message",
+        "created_at": datetime.now(),
+        "type": "log",
+    }
+    service.write_log(event)
 
     log_file = Path(temp_log_dir) / f"{job_id}.log"
     assert log_file.exists()
@@ -29,24 +37,32 @@ def test_write_log_creates_log_file(temp_log_dir):
 
 
 def test_log_rotation_triggered(temp_log_dir):
-    max_size = 100  # Set small max_file_size for test
+    max_size = 100
     service = LogService(
         log_dir=temp_log_dir, max_file_size=max_size, max_files=2, useIndexer=False
     )
     job_id = "job2"
 
-    # Write a single large message to exceed max_file_size in one write
-    large_message = "X" * (max_size + 10)  # Larger than max_file_size
-    service.write_log(job_id, "INFO", large_message)
+    large_event: LogEvent = {
+        "job_id": job_id,
+        "level": "INFO",
+        "message": "X" * (max_size + 10),
+        "created_at": datetime.now(),
+        "type": "log",
+    }
+    service.write_log(large_event)
 
-    # Write another message to trigger rotation on this write call
-    service.write_log(job_id, "INFO", "Trigger rotation")
+    trigger_event: LogEvent = {
+        "job_id": job_id,
+        "level": "INFO",
+        "message": "Trigger rotation",
+        "created_at": datetime.now(),
+        "type": "log",
+    }
+    service.write_log(trigger_event)
 
     rotated_files = list(Path(temp_log_dir).glob(f"{job_id}.*.log.gz"))
-    print(f"Rotated files: {rotated_files}")
     assert rotated_files, "Rotation files should exist"
-
-    # Ensure number of rotated files does not exceed max_files
     assert len(rotated_files) <= service.max_files
 
 
@@ -86,7 +102,6 @@ def test_search_logs_file_mode(temp_log_dir):
     assert result["filtered"] == 1
     assert "Warning message" in result["logs"][0]["message"]
 
-    # Test no search_text returns all
     result_all = service.search_logs(job_id, limit=10)
     assert result_all["filtered"] == 3
 
@@ -97,7 +112,6 @@ def test_cleanup_old_logs(temp_log_dir):
     log_file = Path(temp_log_dir) / f"{job_id}.log"
     log_file.write_text("Some log data")
 
-    # Modify mtime to past
     old_time = time.time() - (2 * 24 * 60 * 60)  # 2 days ago
     os.utime(log_file, (old_time, old_time))
 
@@ -108,7 +122,6 @@ def test_cleanup_old_logs(temp_log_dir):
 
 @patch("log_service.LogIndexer")
 def test_clear_logs_file_mode(mock_log_indexer, temp_log_dir):
-    # useIndexer = False mode clears the file content
     service = LogService(log_dir=temp_log_dir, useIndexer=False)
     job_id = "job6"
     log_file = Path(temp_log_dir) / f"{job_id}.log"
@@ -116,13 +129,11 @@ def test_clear_logs_file_mode(mock_log_indexer, temp_log_dir):
 
     result = service.clear_logs(job_id)
     assert result["success"] is True
-    # File should now be empty
     assert log_file.read_text() == ""
 
 
 @patch("log_service.LogIndexer")
 def test_clear_logs_use_indexer_success(mock_log_indexer):
-    # useIndexer = True mode calls log_indexer rotate_job_logs_by_count
     instance = mock_log_indexer.return_value
     instance.rotate_job_logs_by_count.return_value = None
 

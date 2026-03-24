@@ -1,7 +1,9 @@
 import asyncio
+from datetime import datetime
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from fastapi import WebSocket
+from log_handler import LogEvent
 from ws_manager import WSConnectionManager  # Replace with your module import
 
 
@@ -53,10 +55,12 @@ async def test_send_log_sends_to_all_and_disconnects_on_exception():
     ws1.send_json.return_value.set_result(None)
     ws2.send_json.side_effect = Exception("send failure")
 
-    message = {
+    message: LogEvent = {
+        "type": "log",
         "job_id": job_id,
         "level": "INFO",
         "message": "Test log message",
+        "created_at": datetime.now(),
     }
 
     await manager.send_log(message)
@@ -78,10 +82,12 @@ async def test_send_log_sends_to_all_and_disconnects_on_exception():
 @pytest.mark.asyncio
 async def test_send_log_no_connections():
     manager = WSConnectionManager()
-    message = {
+    message: LogEvent = {
+        "type": "log",
         "job_id": "nonexistent_job",
         "level": "INFO",
         "message": "No connections here",
+        "created_at": datetime.now(),
     }
 
     # Should not raise error or do anything

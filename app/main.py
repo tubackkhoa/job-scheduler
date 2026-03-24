@@ -77,8 +77,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     dao = DAO(session_factory)
 
-    loop = asyncio.get_running_loop()
-    log_handler = JobLogHandler(ws_manager.send_log, loop, log_service=log_service, dao=dao)
+    log_handler = JobLogHandler()
+    log_handler.add_hook(ws_manager.send_log)  # websocket broad cast
+    log_handler.add_hook(log_service.write_log)  # write log to file
+    log_handler.add_hook(dao.save_signal_message)  # save to db
 
     adapter = None
     if settings.redis_host:
