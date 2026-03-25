@@ -4,6 +4,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 from fastapi import WebSocket
 from log_handler import LogEvent
+from plugin_manager import PluginManager
 from ws_manager import WSConnectionManager  # Replace with your module import
 
 
@@ -12,7 +13,7 @@ async def test_connect_adds_websocket_and_accepts():
     manager = WSConnectionManager()
     websocket = AsyncMock(spec=WebSocket)
 
-    job_id = "job1"
+    job_id = 1
     await manager.connect(websocket, job_id)
 
     # websocket.accept should be called
@@ -24,7 +25,7 @@ async def test_connect_adds_websocket_and_accepts():
 def test_disconnect_removes_websocket_and_cleans_empty_list():
     manager = WSConnectionManager()
     websocket = MagicMock(spec=WebSocket)
-    job_id = "job2"
+    job_id = 2
 
     # Add websocket manually
     manager.active_connections[job_id].append(websocket)
@@ -42,7 +43,7 @@ def test_disconnect_removes_websocket_and_cleans_empty_list():
 @pytest.mark.asyncio
 async def test_send_log_sends_to_all_and_disconnects_on_exception():
     manager = WSConnectionManager()
-    job_id = "job3"
+    job_id = 3
 
     # Create two mock websockets
     ws1 = AsyncMock(spec=WebSocket)
@@ -57,7 +58,7 @@ async def test_send_log_sends_to_all_and_disconnects_on_exception():
 
     message: LogEvent = {
         "type": "log",
-        "job_id": job_id,
+        "job_id": PluginManager.get_job_scheduler_id(job_id),
         "level": "INFO",
         "message": "Test log message",
         "created_at": datetime.now(),

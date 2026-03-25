@@ -20,7 +20,7 @@ def temp_log_dir():
 
 def test_write_log_creates_log_file(temp_log_dir):
     service = LogService(log_dir=temp_log_dir, max_file_size=1024, max_files=2, useIndexer=False)
-    job_id = "job1"
+    job_id = "job.1"
     event: LogEvent = {
         "job_id": job_id,
         "level": "INFO",
@@ -41,7 +41,7 @@ def test_log_rotation_triggered(temp_log_dir):
     service = LogService(
         log_dir=temp_log_dir, max_file_size=max_size, max_files=2, useIndexer=False
     )
-    job_id = "job2"
+    job_id = "job.2"
 
     large_event: LogEvent = {
         "job_id": job_id,
@@ -68,7 +68,7 @@ def test_log_rotation_triggered(temp_log_dir):
 
 def test_read_log_file_multiline(temp_log_dir):
     service = LogService(log_dir=temp_log_dir)
-    job_id = "job3"
+    job_id = "job.3"
     log_file = Path(temp_log_dir) / f"{job_id}.log"
     log_content = (
         "2026-01-12 15:00:00 [INFO] First line\n"
@@ -86,7 +86,7 @@ def test_read_log_file_multiline(temp_log_dir):
 
 def test_search_logs_file_mode(temp_log_dir):
     service = LogService(log_dir=temp_log_dir, useIndexer=False)
-    job_id = "job4"
+    job_id = "job.4"
     log_file = Path(temp_log_dir) / f"{job_id}.log"
 
     log_lines = "\n".join(
@@ -108,7 +108,7 @@ def test_search_logs_file_mode(temp_log_dir):
 
 def test_cleanup_old_logs(temp_log_dir):
     service = LogService(log_dir=temp_log_dir, retention_days=0)
-    job_id = "job5"
+    job_id = "job.5"
     log_file = Path(temp_log_dir) / f"{job_id}.log"
     log_file.write_text("Some log data")
 
@@ -123,7 +123,7 @@ def test_cleanup_old_logs(temp_log_dir):
 @patch("log_service.LogIndexer")
 def test_clear_logs_file_mode(mock_log_indexer, temp_log_dir):
     service = LogService(log_dir=temp_log_dir, useIndexer=False)
-    job_id = "job6"
+    job_id = "job.6"
     log_file = Path(temp_log_dir) / f"{job_id}.log"
     log_file.write_text("Old log data")
 
@@ -140,7 +140,7 @@ def test_clear_logs_use_indexer_success(mock_log_indexer):
     service = LogService(useIndexer=True)
     service.log_indexer = instance
 
-    result = service.clear_logs("job7")
+    result = service.clear_logs("job.7")
     instance.rotate_job_logs_by_count.assert_called_once()
     assert result["success"] is True
 
@@ -153,6 +153,6 @@ def test_clear_logs_use_indexer_error(mock_log_indexer):
     service = LogService(useIndexer=True)
     service.log_indexer = instance
 
-    result = service.clear_logs("job8")
+    result = service.clear_logs("job.8")
     assert result["success"] is False
     assert result["error"]

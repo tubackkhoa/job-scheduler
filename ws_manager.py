@@ -30,7 +30,11 @@ class WSConnectionManager:
             self.active_connections.pop(job_id, None)
 
     async def send_log(self, event: LogEvent):
-        job_id = extract_job_id(event["job_id"])
+        try:
+            job_id = extract_job_id(event["job_id"])
+        except:
+            return
+
         conns = self.active_connections.get(job_id)
         if not conns:
             return

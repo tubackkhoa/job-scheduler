@@ -259,7 +259,7 @@ class LogIndexer:
     def import_log_files(self, filename: str):
         path = Path(filename)
 
-        job_id = extract_job_id(path.name)
+        job_id = extract_job_id(path.name.removesuffix(".log"))
 
         for line in iter_log_lines(path):
             m = LOG_LINE_RE.match(line)
