@@ -42,19 +42,18 @@ class JobLogHandler(logging.Handler):
 
     async def _run_hooks(self, log_event: LogEvent):
         for cb in self.log_callbacks:
-            try:
-                result = cb(log_event)
-                if asyncio.iscoroutine(result):
-                    await result
-            except Exception:
-                # never break logging flow
-                pass
+            result = cb(log_event)
+            if asyncio.iscoroutine(result):
+                await result
 
     async def _drain(self):
         while True:
             log_event = await self.queue.get()
             try:
                 await self._run_hooks(log_event)
+            except Exception:
+                # never break logging flow
+                pass
             finally:
                 self.queue.task_done()
 

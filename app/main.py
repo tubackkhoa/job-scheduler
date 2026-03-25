@@ -1,4 +1,5 @@
 from typing import AsyncIterator
+import redis.asyncio as aioredis
 from jinja2 import TemplateError
 from app.deps import PluginManagerState
 from app.routers import (
@@ -115,17 +116,36 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await plugin_manager.reload_all_jobs()
 
     # ---- STARTUP ----
-    plugin_manager.start()
+    if settings.scheduler_enabled:
+        plugin_manager.start()
 
     # store in app state
     app.state.plugin_manager = plugin_manager
     app.state.log_service = log_service
     app.state.ws_manager = ws_manager
 
+    # === NEW: Redis subscriber for logs from workers ===
+    redis_sub_task = None
+    if settings.redis_host and not settings.scheduler_enabled:  # only master subscribes
+        redis_sub = aioredis.from_url(
+            f"redis://{settings.redis_host}:{settings.redis_port}/{settings.redis_db or 0}",
+            decode_responses=True,
+        )
+        redis_sub_task = asyncio.create_task(ws_manager.log_subscriber(redis_sub))
+
     yield
 
     # ---- SHUTDOWN ----
-    plugin_manager.stop()
+    if settings.scheduler_enabled:
+        plugin_manager.stop()
+
+    if redis_sub_task:
+        redis_sub_task.cancel()
+        try:
+            await redis_sub_task
+        except asyncio.CancelledError:
+            pass
+        await redis_sub.aclose()
 
     # Immediate hard exit after 1 second for cleaning up
     await asyncio.sleep(1)

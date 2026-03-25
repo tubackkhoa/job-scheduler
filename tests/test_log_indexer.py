@@ -1,11 +1,9 @@
 import textwrap
 import pytest
-import tempfile
+from helper import extract_job_id
 import gzip
-from pathlib import Path
 from log_indexer import (
     LogIndexer,
-    extract_job_id,
     iter_log_lines,
 )  # replace your_module accordingly
 

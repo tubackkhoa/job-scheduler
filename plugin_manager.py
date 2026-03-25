@@ -20,7 +20,7 @@ from dao import DAO
 from plugins import CodeSchema
 from renderer import Renderer
 from schemas import settings
-
+import redis.asyncio as aioredis
 
 PROJECT_NAME = "job-scheduler"
 
@@ -106,8 +106,10 @@ class PluginManager:
         plugin_path="plugins",
         log_handler: Optional[logging.Handler] = None,
         scheduler_kwargs: Optional[dict] = None,
+        redis_client: Optional[aioredis.Redis] = None,
     ) -> None:
 
+        self.redis_client = redis_client
         # add module path to sys.path to load more plugins
         if module_paths:
             for path in module_paths:
@@ -241,47 +243,43 @@ class PluginManager:
 
         return render
 
-    # static cache of job configs, to remove access to database
-    # TODO: because schedule only make sure 1 job is added to queue, but can not verify job is done on a machine
-    # def run_plugin_job(self, job_id: int):
-    #     lock = self.redis_client.lock(
-    #         f"lock:{PROJECT_NAME}:{job_id}",
-    #         blocking=False,
-    #     )
-    #     if not lock.acquire():
-    #         return
-    #     try:
-    #         return asyncio.run(plugin.run(config, logger))
-    #     finally:
-    #         lock.release()
-
-    # pass reference to later retrieving back details
     async def run_plugin_job(self, package: str, job_id: int):
-        """
-        Wrapper to run a plugin's 'run' method asynchronously,
-        fetching config from the active job for the user/plugin.
-        """
         plugin = self.get_plugin_instance(package)
 
         if plugin is None:
             return None
 
-        # already setup
-        logger = logging.getLogger(self.get_job_scheduler_id(job_id))
+        lock = None
+        acquired = False
+
+        # === REDIS LOCK ===
+        if self.redis_client:
+            lock = self.redis_client.lock(f"job:lock:{job_id}", timeout=settings.job_lock_timeout)
+            acquired = await lock.acquire(blocking=False)
+
+            if not acquired:
+                return
 
         try:
-            # user from login
             user = UserContext(0, frozenset({ADMIN_ROLE}))
             ctx = self.create_ctx(user, package)
             render_function = self.make_render(plugin, ctx)
-            # do not validate because already save from db
+
             job_config = self.dao.job_config_cache.get(job_id)
             config = plugin.config(ctx, job_config)
-            retval = await plugin.run(ctx, config, logger, render_function)
-            # logger.info(f"Job executed successfully (return value: {retval})")
-            return retval
+            logger = logging.getLogger(self.get_job_scheduler_id(job_id))
+            return await plugin.run(ctx, config, logger, render_function)
+
         except Exception as e:
-            logger.exception(f"Job failed with exception: {e}")
+            scheduler_logger.exception(f"Job {job_id} failed: {e}")
+
+        finally:
+            # ✅ ALWAYS release lock
+            if lock:
+                try:
+                    await lock.release()
+                except Exception as e:
+                    scheduler_logger.error(f"Job {job_id} failed to release lock: {e}")
 
     def unload_plugin(self, package: str):
         self._failed_plugins.pop(package, None)

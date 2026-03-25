@@ -97,6 +97,8 @@ class Settings(BaseSettings):
     test_system_api_key: str = ""
     env: Literal["prod", "dev"] = "prod"
 
+    job_lock_timeout: int = 150
+    scheduler_enabled: bool = True
     default_cron: str = "*/5 * * * * *"
 
 

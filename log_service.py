@@ -14,7 +14,8 @@ from threading import Lock
 logger = logging.getLogger(__name__)
 
 from log_handler import LogEvent
-from log_indexer import LogIndexer, extract_job_id, JOB_ID_RE
+from log_indexer import LogIndexer
+from helper import extract_job_id
 
 LOG_HEADER_RE = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(\w+)\]\s*(.*)$")
 
@@ -46,18 +47,6 @@ class LogService:
         self.useIndexer = useIndexer
         if self.useIndexer:
             self.log_indexer = LogIndexer(f"{log_dir}/log_indexer.db")
-
-    def _extract_job_id_int(self, job_id: str) -> int:
-        """Extract numeric job_id from string format (e.g., 'job-scheduler.job.123' -> 123)."""
-        m = JOB_ID_RE.search(job_id)
-        if m:
-            return int(m.group(1))
-        # Fallback: try to extract any number from the string
-        numbers = re.findall(r"\d+", job_id)
-        if numbers:
-            return int(numbers[-1])  # Use last number found
-        # Last resort: use hash of string (not ideal but works)
-        return abs(hash(job_id)) % (10**9)
 
     def _get_lock(self, job_id: str) -> Lock:
         """Get or create a lock for a job_id."""
@@ -195,7 +184,7 @@ class LogService:
         # Write to SQLite if useIndexer is enabled, otherwise write to file
         if self.useIndexer:
             try:
-                job_id_int = self._extract_job_id_int(job_id)
+                job_id_int = extract_job_id(job_id)
                 self.log_indexer.insert_log(
                     job_id=job_id_int,
                     level=level,
@@ -302,7 +291,7 @@ class LogService:
         # Use SQLite if useIndexer is enabled
         if self.useIndexer:
             try:
-                job_id_int = self._extract_job_id_int(job_id)
+                job_id_int = extract_job_id(job_id)
 
                 if search_text:
                     # Use FTS search from log_indexer
@@ -433,7 +422,7 @@ class LogService:
         # print("useIndexer", self.useIndexer)
         if self.useIndexer:
             try:
-                job_id_int = self._extract_job_id_int(job_id)
+                job_id_int = extract_job_id(job_id)
 
                 # Use search_logs_with_following from log_indexer
                 groups = self.log_indexer.search_logs_with_following(
@@ -585,7 +574,7 @@ class LogService:
         return deleted_count
 
     def clear_logs(self, job_id: str):
-        job_id_int = self._extract_job_id_int(job_id)
+        job_id_int = extract_job_id(job_id)
         if self.useIndexer:
             try:
                 self.log_indexer.rotate_job_logs_by_count(job_id_int, 0)

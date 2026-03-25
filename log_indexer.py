@@ -4,6 +4,8 @@ import sqlite3
 from pathlib import Path
 from datetime import datetime
 from typing import Iterable, Optional
+from helper import extract_job_id
+
 
 # Match log lines:
 LOG_LINE_RE = re.compile(
@@ -17,9 +19,6 @@ LOG_LINE_RE = re.compile(
     re.VERBOSE,
 )
 
-# Extract numeric job_id from filename, e.g. job-scheduler.job.123 → 123
-JOB_ID_RE = re.compile(r"job-scheduler\.job\.(\d+)")
-
 
 def iter_log_lines(path: Path) -> Iterable[str]:
     opener = gzip.open if path.suffix == ".gz" else open
@@ -28,13 +27,6 @@ def iter_log_lines(path: Path) -> Iterable[str]:
             line = line.rstrip("\n")
             if line:
                 yield line
-
-
-def extract_job_id(filename: str) -> int:
-    m = JOB_ID_RE.search(filename)
-    if not m:
-        raise ValueError(f"Cannot extract job_id from filename: {filename}")
-    return int(m.group(1))
 
 
 class LogIndexer:
