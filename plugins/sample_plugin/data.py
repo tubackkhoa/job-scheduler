@@ -1,3 +1,8 @@
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
+from sqlalchemy import inspect, text
+import pandas as pd
+from sqlalchemy.engine.url import make_url
+
 countries = {
     "USA": [
         "New York",
@@ -105,45 +110,121 @@ base_assets:
 """
 
 MD_TPL = """
-{% set data = {
-  "labels": ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
-  "datasets": [
-    {
-      "label": "top_5",
-      "data": [500,300,-200,400,-100,600,700,-300,200,400,-150,500],
-      "borderColor": "blue",
-      "backgroundColor": "rgba(0,0,255,0.1)",
-      "tension": 0.3
-    },
-    {
-      "label": "top_10",
-      "data": [700,-400,350,600,-500,700,800,-200,400,300,-250,700],
-      "borderColor": "orange",
-      "backgroundColor": "rgba(255,165,0,0.1)",
-      "tension": 0.3
-    },
-    {
-      "label": "top_41",
-      "data": [1000,500,-700,900,-600,1100,1200,-400,800,700,-300,1000],
-      "borderColor": "purple",
-      "backgroundColor": "rgba(128,0,128,0.1)",
-      "tension": 0.3
+{{ run_sql(sql_connection, sql).to_markdown(index=False) }}
+"""
+
+DYNAMIC_CODE = """
+import { FieldProps } from '@rjsf/utils';
+
+const { useCallback, useState } = React;
+const { Box, Button, TextField, Typography } = Mui;
+const { buildJinjaContext } = Utils;
+
+export default function ({
+  registry,
+  onChange,
+  formData,
+  fieldPathId,
+}: FieldProps<string>) {
+  const render = useCallback(
+    buildJinjaContext(
+      registry.formContext.pluginPackage,
+      registry.formContext.formData,
+    ),
+    [registry.formContext],
+  );
+
+  const [input, setInput] = useState(
+    formData || `{{ dao.get_all_plugins() | pick("title","description") | tojson }}`,
+  );
+  const [output, setOutput] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleRun = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await render(input, {});
+      setOutput(JSON.stringify(result, null, 2));
+    } catch (err: any) {
+      setError(err?.message ?? 'Execution failed');
+      setOutput('');
+    } finally {
+      setLoading(false);
     }
-  ]
-} %}
-  
-```chart
-{
-  "type": "line",
-  "data": {{ data }},
-  "options": {
-    "responsive": true,
-    "plugins": {
-      "title": {
-        "display": true,
-        "text": "Chatbots PNL Comparison Over Months"
-      }
-    }
-  }
+  };
+
+  return (
+    <Box display="flex" flexDirection="column" gap={2}>
+      <Typography variant="subtitle1">Jinja Input</Typography>
+
+      <TextField
+        multiline
+        minRows={4}
+        value={input}
+        onBlur={() => {
+          onChange(input, fieldPathId.path);
+        }}
+        onChange={(e) => setInput(e.target.value)}
+        fullWidth
+      />
+
+      <Button variant="contained" onClick={handleRun} disabled={loading}>
+        {loading ? 'Running…' : 'Run'}
+      </Button>
+
+      <Typography variant="subtitle1">Output (JSON)</Typography>
+
+      <TextField
+        multiline
+        minRows={6}
+        maxRows={10}
+        value={output}
+        fullWidth
+        InputProps={{ readOnly: true }}
+      />
+
+      {error && <Typography color="error">{error}</Typography>}
+    </Box>
+  );
 }
 """
+
+
+async def get_namespace(engine: AsyncEngine) -> dict:
+    async with engine.begin() as conn:
+
+        def _inspect(sync_conn):
+            inspector = inspect(sync_conn)
+            namespace = {}
+            for table_name in inspector.get_table_names():
+                # (optional) skip sqlite internal tables
+                if table_name.startswith("sqlite_"):
+                    continue
+
+                columns = inspector.get_columns(table_name)
+                namespace[table_name] = [col["name"] for col in columns]
+
+            return namespace
+
+        return await conn.run_sync(_inspect)
+
+
+async def get_db_info(sql_connection: str):
+    engine = create_async_engine(sql_connection)
+
+    dialect = make_url(sql_connection).get_backend_name()
+    namespace = await get_namespace(engine)
+
+    return {"dialect": dialect, "namespace": namespace}
+
+
+async def run_sql(sql_connection: str, sql: str) -> pd.DataFrame:
+    engine = create_async_engine(sql_connection)
+    async with engine.connect() as conn:
+        result = await conn.execute(text(sql))
+
+        rows = result.fetchall()
+        return pd.DataFrame(rows, columns=list(result.keys()))

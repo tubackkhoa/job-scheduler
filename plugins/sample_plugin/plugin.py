@@ -7,7 +7,7 @@ from plugin_manager import PluginManager
 from plugins import ui_schema
 from plugins.schema import CodeSchema, SecureBaseModel, SecureField
 from schemas import settings
-from .data import JSON_TPL, SQL_TPL, YAML_TPL, MD_TPL, countries
+from .data import DYNAMIC_CODE, JSON_TPL, SQL_TPL, YAML_TPL, MD_TPL, countries, get_db_info, run_sql
 
 
 hookimpl = pluggy.HookimplMarker("job-scheduler")
@@ -31,84 +31,7 @@ def ui_schema_binding(field_path: list[str]):
 
 class DynamicCode(BaseModel):
     code: str = Field(
-        """
-import { FieldProps } from '@rjsf/utils';
-
-const { useCallback, useState } = React;
-const { Box, Button, TextField, Typography } = Mui;
-const { buildJinjaContext } = Utils;
-
-export default function ({
-  registry,
-  onChange,
-  formData,
-  fieldPathId,
-}: FieldProps<string>) {
-  const render = useCallback(
-    buildJinjaContext(
-      registry.formContext.pluginPackage,
-      registry.formContext.formData,
-    ),
-    [registry.formContext],
-  );
-
-  const [input, setInput] = useState(
-    formData || `{{ dao.get_all_plugins() | pick("title","description") | tojson }}`,
-  );
-  const [output, setOutput] = useState<string>('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleRun = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const result = await render(input, {});
-      setOutput(JSON.stringify(result, null, 2));
-    } catch (err: any) {
-      setError(err?.message ?? 'Execution failed');
-      setOutput('');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <Box display="flex" flexDirection="column" gap={2}>
-      <Typography variant="subtitle1">Jinja Input</Typography>
-
-      <TextField
-        multiline
-        minRows={4}
-        value={input}
-        onBlur={() => {
-          onChange(input, fieldPathId.path);
-        }}
-        onChange={(e) => setInput(e.target.value)}
-        fullWidth
-      />
-
-      <Button variant="contained" onClick={handleRun} disabled={loading}>
-        {loading ? 'Running…' : 'Run'}
-      </Button>
-
-      <Typography variant="subtitle1">Output (JSON)</Typography>
-
-      <TextField
-        multiline
-        minRows={6}
-        maxRows={10}
-        value={output}
-        fullWidth
-        InputProps={{ readOnly: true }}
-      />
-
-      {error && <Typography color="error">{error}</Typography>}
-    </Box>
-  );
-}
-        """,
+        DYNAMIC_CODE,
         json_schema_extra=ui_schema(
             {
                 "ui:field": "Dynamic",
@@ -199,6 +122,10 @@ class Config(SecureBaseModel):
         write="code_write",
         json_schema_extra=ui_schema({"ui:field": "Template", "type": "js"}),
     )
+    sql_connection: str = Field(
+        "",
+        json_schema_extra=ui_schema({"ui:options": {"size": 12}}),
+    )
     sql_id: int = Field(
         0,
         title="Search / Select SQL Version",
@@ -206,15 +133,16 @@ class Config(SecureBaseModel):
     )
     sql: str = Field(
         SQL_TPL,
-        json_schema_extra=ui_schema({"ui:field": "Template", "type": "sql"}),
-    )
-    json_template: str = Field(
-        JSON_TPL,
-        json_schema_extra=ui_schema({"ui:field": "Template", "type": "json"}),
-    )
-    yaml_template: str = Field(
-        YAML_TPL,
-        json_schema_extra=ui_schema({"ui:field": "Template", "type": "yaml"}),
+        json_schema_extra=ui_schema(
+            {
+                "ui:field": "Template",
+                "type": "sql",
+                "ui:expr": (
+                    "{{ get_db_info(sql_connection) }}",
+                    ["sql_connection"],
+                ),
+            }
+        ),
     )
     md_id: int = Field(
         0,
@@ -224,6 +152,14 @@ class Config(SecureBaseModel):
     md_template: str = Field(
         MD_TPL,
         json_schema_extra=ui_schema({"ui:field": "Template", "type": "markdown"}),
+    )
+    json_template: str = Field(
+        JSON_TPL,
+        json_schema_extra=ui_schema({"ui:field": "Template", "type": "json"}),
+    )
+    yaml_template: str = Field(
+        YAML_TPL,
+        json_schema_extra=ui_schema({"ui:field": "Template", "type": "yaml"}),
     )
 
 
@@ -252,6 +188,8 @@ class Plugin:
     _env = {
         "fetch_data": fetch_data,
         "post_signal": post_signal,
+        "run_sql": run_sql,
+        "get_db_info": get_db_info,
         "MyClass": MyClass,
         "get_users": lambda: ["tupt", "cuongnv"],
         "get_cities_by_country": lambda country_name: countries.get(country_name, []),
